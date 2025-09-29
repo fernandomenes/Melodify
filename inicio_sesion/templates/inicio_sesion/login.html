@@ -1,0 +1,94 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Melodify</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet"> <!-- Ejemplo con Pacifico -->
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            background-color: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+
+        }
+
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 7em;
+        }
+        .logo-image {
+            width: 150px;
+            height: auto;
+        }
+        .logo-text {
+            font-size: 4em;
+            color: #ffffff;
+            margin-left: 1em;
+            font-family: 'Pacifico', cursive; /* Fuente personalizada */
+        }
+
+
+
+        .login-container {
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 10px;
+            width: 300px;
+            text-align: center;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            font-family: Arial, sans-serif;
+        }
+        .login-container h2 {
+            margin: 0 0 20px 0;
+            color: white;
+        }
+        .login-container input {
+            display: block;
+            width: 80%;
+            margin: 10px auto;
+            padding: 10px;
+            background-color: #3a3a3a;
+            border: none;
+            color: white;
+            border-radius: 5px;
+        }
+        .button {
+            width: 100px;
+            padding: 10px;
+            margin-top: 20px;
+            background-color:#ff0066;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 1em;
+            cursor: pointer;
+        }
+        .button:hover {
+            background-color: #ff2a7f;
+        }
+    </style>
+</head>
+<body>
+
+
+    <div class="logo-container">
+        <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
+        <span class="logo-text">Melodify</span>
+    </div>
+    <div class="login-container">
+        <h2>Iniciar Sesión</h2>
+        <input type="text" placeholder="Id" />
+        <input type="password" placeholder="Pass" />
+        <a href="{% url 'home' %}" class="button">Confirmar</a>
+    </div>
+</body>
+</html>

@@ -1,0 +1,123 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Melodify</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet"> <!-- Ejemplo con Pacifico -->
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            background-color: #1a1a1a;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        .sidebar {
+            height: calc(100% - 60px);
+            width: 250px;
+            position: fixed;
+            top: 70px;
+            left: -250px;
+            background-color: #2a2a2a;
+            padding-top: 20px;
+            transition: 0.3s;
+            z-index: 1;
+        }
+        .sidebar.active {
+            left: 0;
+        }
+        .sidebar a {
+            padding: 15px 20px;
+            text-decoration: none;
+            font-size: 18px;
+            color: white;
+            display: block;
+        }
+        .sidebar a:hover {
+            background-color: #333;
+        }
+        .sidebar .active-menu {
+            background-color:#6600ff;
+        }
+
+        .logo {
+            font-size: 2em;
+            color: #ff4d94;
+            padding: 20px;
+            cursor: pointer;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 250px;
+            background-color: #1a1a1a;
+            z-index: 2;
+
+        }
+        .logo-image {
+            width: 40px;
+            align-items: center;
+        }
+        .logo-text {
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: 'Pacifico', cursive;
+        }
+
+
+        .content {
+            margin-left: 0;
+            transition: margin-left 0.3s;
+            height: 100vh;
+            background-color: #1a1a1a;
+            position: relative;
+            margin-top: 16px;
+            z-index: 0;
+        }
+        .content.shifted {
+            margin-left: 250px;
+        }
+        .user-icon {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div class="logo" onclick="toggleSidebar()">
+        <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
+        <span class="logo-text">Melodify</span>
+    </div>
+    <div class="sidebar" id="sidebar">
+        <a href="#" class="active-menu">Gestión</a>
+        <a href="#">Perfil</a>
+        <a href="#">PlayList</a>
+    </div>
+    <div class="content" id="content" onclick="hideSidebar(event)">
+        <div class="user-icon">👤 user</div>
+    </div>
+
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const content = document.getElementById('content');
+            sidebar.classList.toggle('active');
+            content.classList.toggle('shifted');
+        }
+
+        function hideSidebar(event) {
+            const sidebar = document.getElementById('sidebar');
+            const content = document.getElementById('content');
+            if (!sidebar.contains(event.target) && sidebar.classList.contains('active')) {
+                sidebar.classList.remove('active');
+                content.classList.remove('shifted');
+            }
+        }
+    </script>
+</body>
+</html>
