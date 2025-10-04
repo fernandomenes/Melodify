@@ -6,57 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Melodify</title>
     <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet"> <!-- Ejemplo con Pacifico -->
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            height: 100vh;
-            background-color: #1a1a1a;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-family: Arial, sans-serif;
-        }
-        .logo-container {
-            display: flex;
-            align-items: center;
-            margin-bottom: 7em;
-        }
-        .logo-image {
-            width: 150px;
-            height: auto;
-        }
-        .logo-text {
-            font-size: 4em;
-            color: #ffffff;
-            margin-left: 1em;
-            font-family: 'Pacifico', cursive; /* Fuente personalizada */
-        }
-        .button {
-            display: block;
-            width: 250px;
-            padding: 15px; 
-            margin: 10px 0;
-            background-color:#ff0066;
-            color: white;
-            text-align: center;
-            text-decoration: none;
-            border-radius: 10px;
-            font-size: 1.5em;
-            margin-bottom: 1em;
-        }
-        .button:hover {
-            background-color: #ff2a7f;
-        }
-    </style>
+    <link rel="stylesheet"  href="{% static 'inicio_sesion/GlobalStyles.css' %}">
+    <link rel="stylesheet"  href="{% static 'inicio_sesion/ComponentStyles.css' %}">
+
 </head>
 <body>
     <div class="logo-container">
         <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
         <span class="logo-text">Melodify</span>
     </div>
-    <a href="{% url 'login' %}" class="button">Iniciar Sesión</a>
-    <a href="#" class="button">Registrarse</a>
+    <a href="{% url 'login' %}" class="btnRect">Iniciar Sesión</a>
+    <a href="#" class="btnRect">Registrarse</a>
 </body>
 </html>

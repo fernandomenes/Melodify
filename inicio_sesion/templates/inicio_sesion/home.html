@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Melodify</title>
     <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet"> <!-- Ejemplo con Pacifico -->
+    <script src="{% static 'inicio_sesion/homeScript.js' %}"></script>
+
     <style>
         body {
             margin: 0;
@@ -15,6 +17,37 @@
             font-family: Arial, sans-serif;
             overflow: hidden;
         }
+        .user-icon {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-size: 24px;
+        }
+        .logo {
+            font-size: 2em;
+            color: #ff4d94;
+            padding: 20px;
+            cursor: pointer;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 250px;
+            background-color: #1a1a1a;
+            z-index: 2;
+
+        }
+        .logo-image {
+            width: 40px;
+            align-items: center;
+        }
+        .logo-text {
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: 'Pacifico', cursive;
+        }
+
+
         .sidebar {
             height: calc(100% - 60px);
             width: 250px;
@@ -43,29 +76,6 @@
             background-color:#6600ff;
         }
 
-        .logo {
-            font-size: 2em;
-            color: #ff4d94;
-            padding: 20px;
-            cursor: pointer;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 250px;
-            background-color: #1a1a1a;
-            z-index: 2;
-
-        }
-        .logo-image {
-            width: 40px;
-            align-items: center;
-        }
-        .logo-text {
-            background-color: #1a1a1a;
-            color: #ffffff;
-            font-family: 'Pacifico', cursive;
-        }
-
 
         .content {
             margin-left: 0;
@@ -79,13 +89,7 @@
         .content.shifted {
             margin-left: 250px;
         }
-        .user-icon {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            color: white;
-            font-size: 24px;
-        }
+
     </style>
 </head>
 <body>
@@ -102,22 +106,6 @@
         <div class="user-icon">👤 user</div>
     </div>
 
-    <script>
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const content = document.getElementById('content');
-            sidebar.classList.toggle('active');
-            content.classList.toggle('shifted');
-        }
 
-        function hideSidebar(event) {
-            const sidebar = document.getElementById('sidebar');
-            const content = document.getElementById('content');
-            if (!sidebar.contains(event.target) && sidebar.classList.contains('active')) {
-                sidebar.classList.remove('active');
-                content.classList.remove('shifted');
-            }
-        }
-    </script>
 </body>
 </html>

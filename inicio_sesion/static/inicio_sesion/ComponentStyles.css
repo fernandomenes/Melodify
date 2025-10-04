@@ -1,0 +1,35 @@
+
+.btnRound {
+    width: 120px;
+    padding: 10px;
+    margin-top: 20px;
+    background-color: #ff0066;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    font-size: 1em;
+    cursor: pointer;
+}
+.btnRound:hover {
+    background-color: #ff2a7f;
+}
+
+
+
+.btnRect {
+    display: block;
+    width: 250px;
+    padding: 15px;
+    margin: 10px 0;
+    background-color:#ff0066;
+    color: white;
+    text-align: center;
+    text-decoration: none;
+    border-radius: 10px;
+    font-size: 1.5em;
+    margin-bottom: 1em;
+    font-family: Arial, sans-serif;
+}
+.btnRect:hover {
+    background-color: #ff2a7f;
+}
