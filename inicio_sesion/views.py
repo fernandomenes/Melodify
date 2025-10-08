@@ -9,7 +9,9 @@ def pantallaPrincipal(request):
     return render(request, 'inicio_sesion/principal.html')
 
 def pantallaHome(request):
-    print("<--- pantallaHome--->") 
+    print("<--- pantallaHome--->")
+    if 'user' not in request.session:
+        return redirect('login')  # Redirige si no ha iniciado sesión
     return render(request, 'inicio_sesion/home.html')
 
 
@@ -19,12 +21,10 @@ def pantallaLogin(request):
         user = request.POST.get('user')
         password = request.POST.get('password') # Debe coincidir con el nombre en login.html
         try:
-            # Buscar el usuario y validar la contraseña (¡Inseguro!)
-            print("Usuario y Pass Correctos....") 
             usuario_db = Users.objects.get(user=user, password=password)
-            # Si se encuentra el usuario con esa contraseña
-            # NO estamos usando sesiones de Django, solo redirigiendo
-            return redirect('home') 
+            request.session['user'] = usuario_db.user
+            print("Usuario y Pass Correctos...."+request.session['user'])
+            return redirect('home')
 
         except Users.DoesNotExist:
             # Si el usuario o la contraseña no coinciden

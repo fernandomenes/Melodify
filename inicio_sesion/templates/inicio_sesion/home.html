@@ -5,107 +5,50 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Melodify</title>
-    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet"> <!-- Ejemplo con Pacifico -->
-    <script src="{% static 'inicio_sesion/homeScript.js' %}"></script>
-
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            height: 100vh;
-            background-color: #1a1a1a;
-            font-family: Arial, sans-serif;
-            overflow: hidden;
-        }
-        .user-icon {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            color: white;
-            font-size: 24px;
-        }
-        .logo {
-            font-size: 2em;
-            color: #ff4d94;
-            padding: 20px;
-            cursor: pointer;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 250px;
-            background-color: #1a1a1a;
-            z-index: 2;
-
-        }
-        .logo-image {
-            width: 40px;
-            align-items: center;
-        }
-        .logo-text {
-            background-color: #1a1a1a;
-            color: #ffffff;
-            font-family: 'Pacifico', cursive;
-        }
-
-
-        .sidebar {
-            height: calc(100% - 60px);
-            width: 250px;
-            position: fixed;
-            top: 70px;
-            left: -250px;
-            background-color: #2a2a2a;
-            padding-top: 20px;
-            transition: 0.3s;
-            z-index: 1;
-        }
-        .sidebar.active {
-            left: 0;
-        }
-        .sidebar a {
-            padding: 15px 20px;
-            text-decoration: none;
-            font-size: 18px;
-            color: white;
-            display: block;
-        }
-        .sidebar a:hover {
-            background-color: #333;
-        }
-        .sidebar .active-menu {
-            background-color:#6600ff;
-        }
-
-
-        .content {
-            margin-left: 0;
-            transition: margin-left 0.3s;
-            height: 100vh;
-            background-color: #1a1a1a;
-            position: relative;
-            margin-top: 16px;
-            z-index: 0;
-        }
-        .content.shifted {
-            margin-left: 250px;
-        }
-
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+    <link rel="stylesheet"  href="{% static 'inicio_sesion/homeStyle.css' %}">
 </head>
 <body>
-    <div class="logo" onclick="toggleSidebar()">
+
+<!-- Encabezado superior -->
+<div id="header">
+    <div class="user-info" id="user-trigger">
+        <div class="user-icon">U</div>
+        <span id="username">Usuario</span>
+
+        <!-- Menú desplegable -->
+        <div id="user-menu">
+            <a href="#" id="menu-perfil">Perfil</a>
+            <a href="#" id="menu-logout">Cerrar sesión</a>
+        </div>
+    </div>
+</div>
+
+<!-- menu lateral-->
+<div id="menuLateral">
+
+    <div class="logo" id="toggle-menu">
         <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
         <span class="logo-text">Melodify</span>
     </div>
-    <div class="sidebar" id="sidebar">
-        <a href="#" class="active-menu">Gestión</a>
-        <a href="#">Perfil</a>
-        <a href="#">PlayList</a>
-    </div>
-    <div class="content" id="content" onclick="hideSidebar(event)">
-        <div class="user-icon">👤 user</div>
-    </div>
 
+    <div class="menu-item" data-view="home">Home</div>
+    <div class="menu-item" data-view="gestion">Gestión</div>
+    <div class="menu-item" data-view="playlist">PlayList</div>
+    <div class="menu-item" data-view="perfil">Perfil</div>
+</div>
+
+<!-- Contenido principal -->
+<div id="main-content">
+    <button id="menu-toggle-btn">☰</button>
+    <button class="back-btn" id="back-btn">←</button>
+    <div id="content">
+
+    </div>
+</div>
+
+
+<script src="{% static 'inicio_sesion/homeScript.js' %}"></script>
 
 </body>
 </html>
