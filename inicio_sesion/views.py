@@ -12,7 +12,7 @@ def pantallaHome(request):
     print("<--- pantallaHome--->")
     if 'user' not in request.session:
         return redirect('login')  # Redirige si no ha iniciado sesión
-    return render(request, 'inicio_sesion/home.html')
+    return render(request, 'inicio_sesion/../home/templates/home/home.html')
 
 
 def pantallaLogin(request):
@@ -24,7 +24,8 @@ def pantallaLogin(request):
             usuario_db = Users.objects.get(user=user, password=password)
             request.session['user'] = usuario_db.user
             print("Usuario y Pass Correctos...."+request.session['user'])
-            return redirect('home')
+            #return redirect('home')
+            return render(request, 'home/home.html')
 
         except Users.DoesNotExist:
             # Si el usuario o la contraseña no coinciden
@@ -33,7 +34,6 @@ def pantallaLogin(request):
 
     print("<--- Pantalla Login --->") 
     return render(request, 'inicio_sesion/login.html')
-
 
 
 # (Opcional) Puedes renombrar tu vista principal.html si quieres que sea el login por defecto
