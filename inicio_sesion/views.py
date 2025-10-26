@@ -8,12 +8,6 @@ def pantallaPrincipal(request):
     print("<--- pantallaPrincipal --->") 
     return render(request, 'inicio_sesion/principal.html')
 
-def pantallaHome(request):
-    print("<--- pantallaHome--->")
-    if 'user' not in request.session:
-        return redirect('login')  # Redirige si no ha iniciado sesión
-    return render(request, 'inicio_sesion/../home/templates/home/home.html')
-
 
 def pantallaLogin(request):
     if request.method == 'POST':
