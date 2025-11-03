@@ -1,0 +1,52 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Subir canción • Melodify</title>
+  <link rel="stylesheet" href="{% static 'inicio_sesion/GlobalStyles.css' %}">
+  <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}">
+</head>
+<body style="padding:32px;">
+
+  <h1 style="color:#fff;">Subir canción</h1>
+
+  {% if messages %}
+    <ul>
+      {% for m in messages %}
+        <li style="color:#9fe89f;">{{ m }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  {% if error %}
+    <p style="color:#ff7b7b;">{{ error }}</p>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" style="color:#fff;" action="{% url 'subir_cancion_en_muro' %}">
+    {% csrf_token %}
+
+    <div style="margin-bottom:12px;">
+      <label for="title">Título</label><br>
+      <input id="title" name="title" type="text" required style="width:320px;">
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <label for="artist_display_name">Autor / Intérprete</label><br>
+      <input id="artist_display_name" name="artist_display_name" type="text" required style="width:320px;">
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <label for="audio_file">Archivo de audio</label><br>
+      <input id="audio_file" name="audio_file" type="file" accept=".mp3,.wav,.ogg,.m4a,.flac" required>
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <label for="cover_image">Portada (opcional)</label><br>
+      <input id="cover_image" name="cover_image" type="file" accept=".png,.jpg,.jpeg,.webp">
+    </div>
+
+    <button class="btnRound" type="submit">Subir</button>
+    <a class="btnRect" href="{% url 'mi_muro' %}" style="display:inline-block;width:auto;padding:10px 16px;font-size:1em;margin-left:8px;">Ir a Mi música</a>
+  </form>
+</body>
+</html>

@@ -1,0 +1,110 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Editar usuario</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background:#121212; color:#eee; margin:0; padding:24px; }
+    header { display:flex; align-items:center; gap:12px; margin: -8px 0 16px; max-width: 720px; margin-left:auto; margin-right:auto; }
+    .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border:1px solid #3a3a3a; background:#2a2a2a; color:#eee; border-radius:8px; text-decoration:none; line-height:1; }
+    .icon-btn:hover { background:#333; }
+    .card { background:#1e1e1e; border:1px solid #2b2b2b; border-radius:12px; padding:16px; max-width: 720px; margin: 0 auto; }
+    h2 { margin: 0 0 12px; }
+    label { display:block; margin:10px 0 4px; font-size:14px; color:#bbb; }
+    input, textarea, select { width:100%; padding:10px; border-radius:8px; border:1px solid #333; background:#191919; color:#eee; }
+    textarea { resize: vertical; min-height: 72px; }
+    .row { display:flex; gap:12px; }
+    .row > div { flex:1; }
+    button { margin-top:12px; padding:10px 14px; border-radius:8px; border:1px solid #3a3a3a; background:#2a2a2a; color:#eee; cursor:pointer; }
+    button:hover { background:#333; }
+    .muted { color:#9aa0a6; font-size:12px; }
+    .avatar { width:64px; height:64px; border-radius:50%; object-fit:cover; background:#2b2b2b; display:inline-block; }
+    .messages { list-style:none; padding:0; margin:0 0 12px; }
+    .messages li { background:#222; border:1px solid #333; padding:8px 10px; border-radius:8px; margin:6px 0; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #534610; font-size:12px; color:#f6e08c; background:#2a250e; margin-left:8px; }
+    .gold-input { color:#f6e08c; border-color:#534610; background:#1b1708; }
+    a { color:#9ad; text-decoration:none; margin-left: 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="icon-btn" href="{% url 'gestion' %}" aria-label="Volver a gestión" title="Volver a gestión">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </a>
+    <h2 style="margin:0;">
+      Editar usuario
+      {% if user_obj.is_superadmin %}<span class="badge">Superadmin</span>{% endif %}
+    </h2>
+  </header>
+
+  <div class="card">
+    {% if messages %}
+      <ul class="messages">
+        {% for m in messages %}<li>{{ m }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+
+      <label>Usuario (ID)</label>
+      <input name="user" value="{{ user_obj.user }}" required
+             {% if user_obj.is_superadmin %}class="gold-input"{% endif %}>
+
+      {% if not user_obj.is_superadmin %}
+        <label>Rol</label>
+        <select name="role" required>
+          {% with current=user_obj.type|lower %}
+            <option value="administrador" {% if current == "administrador" %}selected{% endif %}>Administrador</option>
+            <option value="artista" {% if current == "artista" %}selected{% endif %}>Artista</option>
+            <option value="usuario" {% if current == "usuario" %}selected{% endif %}>Usuario</option>
+          {% endwith %}
+        </select>
+      {% else %}
+        <!-- Rol fijo para superadmin -->
+        <input type="hidden" name="role" value="{{ user_obj.type|lower }}">
+      {% endif %}
+
+      <label>Contraseña (dejar en blanco para mantener)</label>
+      <input name="password" type="password" placeholder="••••••••"
+             {% if user_obj.is_superadmin and not session_is_superadmin %}disabled{% endif %}>
+
+      {% if user_obj.type|lower == "artista" and not user_obj.is_superadmin %}
+        <label>Descripción</label>
+        <textarea name="description" maxlength="200" required>{{ user_obj.artist_profile.description|default_if_none:"" }}</textarea>
+      {% else %}
+        <input type="hidden" name="description" value="">
+      {% endif %}
+
+      <div class="row">
+        <div>
+          <label>Avatar</label>
+          <input name="avatar" type="file" accept="image/*">
+          <div class="muted">Sube una nueva imagen para reemplazarla.</div>
+          <label style="margin-top:10px;">
+            <input type="checkbox" name="remove_avatar" value="1"> Eliminar avatar
+          </label>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:flex-end;">
+          {% if user_obj.avatar %}
+            <img src="{{ user_obj.avatar.url }}" alt="{{ user_obj.user }}" class="avatar">
+          {% else %}
+            <span class="avatar"></span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <button type="submit">Guardar cambios</button>
+        <a href="{% url 'gestion' %}">Cancelar</a>
+      </div>
+      <div class="muted" style="margin-top:6px;">Rol actual: {{ user_obj.type }}</div>
+    </form>
+  </div>
+</body>
+</html>

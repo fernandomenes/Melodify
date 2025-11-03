@@ -1,0 +1,237 @@
+/* ==========================================================================
+   Melodify Player
+   Variables de tema y colores base
+   ========================================================================== */
+:root {
+  --bg:#121212; --card:#1b1b1b; --line:#2a2a2a; --muted:#9aa0a6;
+  --accent:#7a3cff; --accent-2:#8b5dff; --text:#efeeee; --sidebar-w:220px;
+  --glow-bg-1:#221a36;
+  --glow-bg-2:#191627;
+  --glow-border:#6f58ff;
+  --glow-outer:rgba(122,60,255,.25);
+}
+
+/* ==========================================================================
+   Barra del reproductor (fija inferior)
+   ========================================================================== */
+._mdf-player-bar {
+  position: fixed;
+  left: var(--sidebar-w) !important;
+  right: 0;
+  bottom: 0;
+  height: 76px;
+  background: rgba(18,18,18,.96);
+  backdrop-filter: saturate(120%) blur(6px);
+  border-top: 1px solid var(--line);
+  display: none;                 /* visible sólo con .is-visible */
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 0 18px;
+  z-index: 500;
+  color: var(--text);
+}
+._mdf-player-bar.is-visible { display: grid; }
+._mdf-player-bar.menuLateral-collapsed { left: 0 !important; }
+
+/* Columna izquierda: portada + metadatos */
+._mdf-now { display: flex; align-items: center; gap: 12px; min-width: 0; }
+._mdf-cover {
+  width: 48px; height: 48px; border-radius: 10px; background: #222; object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.35);
+}
+._mdf-meta { display: flex; flex-direction: column; min-width: 0; }
+._mdf-player-title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+._mdf-player-artist { font-size: .9rem; color: #b3b3b3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Columna central: controles */
+._mdf-ctrls { display: flex; align-items: center; gap: 10px; }
+._mdf-btn {
+  width: 40px; height: 40px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); background: #1a1a1a; color: #fff; cursor: pointer;
+  transition: background .2s, transform .08s, border-color .2s;
+  -webkit-appearance: none; appearance: none;
+}
+._mdf-btn:hover { background: #242424; }
+._mdf-btn:active { transform: translateY(1px); }
+
+/* Botón principal (play/pause) con acento de marca */
+._mdf-btn--primary {
+  background: var(--accent) !important;
+  border-color: var(--accent-2) !important;
+  color: #fff;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,.2) inset,
+    0 0 12px rgba(122,60,255,.25);
+}
+._mdf-btn--primary:hover { background: var(--accent-2) !important; }
+._mdf-btn--primary:focus { outline: none; }
+
+/* Columna derecha: tiempo, seek y volumen */
+._mdf-right { display: flex; align-items: center; gap: 12px; justify-content: flex-end; min-width: 360px; }
+._mdf-time { font-size: 12px; color: #bbb; min-width: 92px; text-align: right; }
+._mdf-player-seek { flex: 1 1 360px; width: auto; min-width: 180px; }
+._mdf-vol { width: 120px; display: inline-block; }
+
+/* ==========================================================================
+   Listado de canciones
+   ========================================================================== */
+.songs-wrap { width: min(980px, 92vw); margin: 8px 0 120px; }
+.song-item {
+  display: grid; grid-template-columns: 72px 1fr auto; align-items: center; gap: 14px;
+  padding: 12px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  margin: 10px 0; transition: background .2s, border-color .2s, transform .12s, box-shadow .2s; cursor: pointer;
+}
+.song-item:hover { background: #232323; border-color: #333; box-shadow: 0 2px 14px rgba(0,0,0,.25); }
+.song-cover {
+  width: 56px; height: 56px; border-radius: 10px; background: #2a2a2a; object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.25);
+}
+.song-cover--placeholder { display: block; }
+.song-info { min-width: 0; }
+.song-title { font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.song-author { color: var(--muted); font-size: .9rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.song-actions { display: flex; align-items: center; gap: 10px; justify-self: end; }
+
+/* Acción “reproducir” en pastilla */
+.song-actions .play-pill {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-radius: 999px; background: #232323; border: 1px solid var(--line); color: #ddd; font-size: .9rem;
+}
+.song-actions .play-pill::before { content: "▶"; font-size: .85rem; }
+
+/* Estado resaltado cuando se está reproduciendo */
+.song-item.is-playing {
+  background: linear-gradient(180deg, var(--glow-bg-1), var(--glow-bg-2));
+  border-color: var(--glow-border);
+  box-shadow:
+    0 0 0 1px rgba(122,60,255,.35) inset,
+    0 0 18px var(--glow-outer);
+}
+
+/* Cabecera auxiliar (opcional) */
+.header-row { display: flex; align-items: center; gap: 12px; margin: 2px 0 12px; }
+.header-artist { color: #b3b3b3; font-size: 1rem; }
+
+/* Botón atrás dentro del layout del player */
+a.back,
+a.back:link,
+a.back:visited {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 999px; border: 1px solid var(--line);
+  background: #1f1f1f; color: #fff; text-decoration: none; font-weight: 700; font-size: 18px;
+}
+a.back:hover { background: #2a2a2a; }
+
+/* Ocultar “back” cuando la página marcada es Home */
+body[data-page="home"] a.back { display: none !important; }
+
+/* ==========================================================================
+   Vista Reproductor: layout de dos paneles (izquierdo/visor — derecho/listas)
+   ========================================================================== */
+.rep-grid { display: grid; grid-template-columns: 1fr 360px; gap: 16px; }
+@media (max-width:960px) {
+  .rep-grid { grid-template-columns: 1fr; }
+  .rep-right { order: -1; }
+}
+.rep-left { min-width: 0; }
+.rep-right { min-width: 0; }
+
+.rep-panel {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px; margin-bottom: 12px; overflow: hidden;
+}
+
+.rep-head { display: flex; align-items: center; justify-content: space-between; margin: 8px 0; }
+.rep-scope { color: #bbb; font-size: 12px; }
+.rep-badge {
+  display: inline-block; min-width: 22px; padding: 0 6px; border-radius: 999px;
+  border: 1px solid var(--line); font-size: 12px; text-align: center;
+}
+
+/* ==========================================================================
+   Chips de género
+   ========================================================================== */
+#rep-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+/* Chip base */
+.rep-chip {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  line-height: 1;
+  padding: 6px 10px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px !important;
+  background: #181818;
+  color: #ddd;
+  cursor: pointer;
+  white-space: nowrap;
+  font: inherit;
+  transition: background .2s, border-color .2s, box-shadow .2s, transform .08s;
+}
+.rep-chip:hover {
+  background: linear-gradient(180deg, #1e1e29, #191922);
+  border-color: #3a345c;
+  box-shadow: 0 0 10px rgba(122,60,255,.15);
+  border-radius: 999px !important;
+}
+.rep-chip:active { transform: translateY(1px); }
+
+/* Chip activo (glow consistente con el player) */
+.rep-chip.active,
+.rep-chip[aria-selected="true"],
+.rep-chip[aria-pressed="true"] {
+  background:
+    radial-gradient(120% 120% at 10% 10%, var(--glow-bg-1) 0%, var(--glow-bg-2) 60%),
+    #1a1726;
+  border-color: var(--glow-border);
+  box-shadow:
+    0 0 0 1px rgba(122,60,255,.35) inset,
+    inset 0 0 18px rgba(122,60,255,.35),
+    0 0 18px var(--glow-outer);
+  color: #fff;
+  border-radius: 999px !important;
+}
+.rep-chip:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
+/* ==========================================================================
+   Listas del panel derecho
+   ========================================================================== */
+.rep-list { list-style: none; margin: 0; padding: 0; }
+.rep-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: #181818; border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; margin: 6px 0; cursor: pointer;
+}
+.rep-list li:hover { background: #232323; }
+.rep-list li.active { outline: 1px solid #3a3a3a; }
+
+/* ==========================================================================
+   Estado vacío del panel
+   ========================================================================== */
+.rep-empty {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 32px 24px; color: #b3b3b3; min-height: 240px;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+}
+
+/* Evita desbordes del listado en el layout de 2 paneles */
+.rep-left .songs-wrap { width: 100%; max-width: none; margin: 8px 0 120px; }
+
+/* Glow para playlist seleccionada (exclusivo con géneros) */
+.rep-list li.active {
+  background: linear-gradient(180deg, var(--glow-bg-1), var(--glow-bg-2));
+  border-color: var(--glow-border);
+  box-shadow:
+    0 0 0 1px rgba(122,60,255,.35) inset,
+    inset 0 0 18px rgba(122,60,255,.35),
+    0 0 18px var(--glow-outer);
+  color: #fff;
+}

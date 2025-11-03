@@ -1,0 +1,446 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Muro del artista — {{ artist.user }} | Melodify</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet" href="{% static 'inicio_sesion/reproductor.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
+
+  <style>
+    :root{--bg:#121212;--card:#1e1e1e;--line:#2b2b2b;--muted:#9aa0a6;--btn:#2a2a2a;--btnb:#3a3a3a;--accent:#9ad}
+    *{box-sizing:border-box}
+    body{background:var(--bg);color:#eee;margin:0}
+    .page{padding:16px 24px;max-width:1800px;margin:0 auto}
+    header.muro{display:flex;align-items:center;gap:12px;margin:0 0 16px}
+    .back{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:999px;border:1px solid var(--line);background:#181818;color:#fff;text-decoration:none;font-weight:700;font-size:18px}
+    .back:hover{background:#222}
+    .avatar{width:64px;height:64px;border-radius:50%;background:#2a2a2a;object-fit:cover}
+    .btn{padding:10px 14px;border-radius:8px;border:1px solid var(--btnb);background:var(--btn);color:#eee;cursor:pointer;text-decoration:none;display:inline-block}
+    .btn:hover{background:#333}
+    .btn.primary{border-color:#4b72ff;background:#3a50b3}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:16px 0}
+    label{display:block;margin:10px 0 6px;font-size:14px;color:#bbb}
+    input[type="text"],input[type="file"],select{width:100%;max-width:520px;padding:10px;border-radius:8px;border:1px solid #333;background:#191919;color:#eee}
+    .tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin:8px 0 0}
+    .tab-btn{appearance:none;border:1px solid var(--line);border-bottom:none;background:#181818;color:#ddd;padding:10px 14px;border-top-left-radius:10px;border-top-right-radius:10px;cursor:pointer}
+    .tab-btn.active{background:#232323;color:#fff}
+    .tab{display:none;background:#232323;border:1px solid var(--line);border-radius:0 12px 12px 12px;padding:16px}
+    .tab.active{display:block}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+    .song{background:#1b1b1b;border:1px solid #2b2b2b;border-radius:10px;padding:12px}
+    .row{display:flex;gap:12px;align-items:center}
+    .preview{width:112px;height:112px;border-radius:8px;background:#2a2a2a;object-fit:cover;box-shadow:0 0 0 1px rgba(0,0,0,.2)}
+    .muted{color:var(--muted);font-size:12px}
+    .hidden{display:none}
+    .undo-bar{display:flex;align-items:center;gap:10px;background:#202020;border:1px solid #2c2c2c;padding:10px;border-radius:10px;margin:12px 0}
+    .msg{background:#202020;border:1px solid #333;color:#eee;border-radius:8px;padding:8px 10px;margin:10px 0;display:none}
+    .msg.error{border-color:#743d3d;background:#2a1818}
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999;opacity:0;pointer-events:none;transition:opacity .15s}
+    .modal.show{opacity:1;pointer-events:auto}
+    .modal .dialog{background:#1f1f1f;border:1px solid #2b2b2b;border-radius:12px;padding:16px;max-width:420px;width:92%}
+    .modal .title{margin:0 0 8px;font-weight:600}
+    .modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+  </style>
+
+  <style id="muro-hotfix">
+    html, body{background:#121212 !important; color:#eee}
+    #main-content, #content{position:static !important;transform:none !important;left:auto !important; right:auto !important; top:auto !important;min-height:100vh;}
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <div class="user-info" id="user-trigger">
+    <div class="user-icon">U</div>
+    <span id="username">{{ session_user|default:"Usuario" }}</span>
+    <div id="user-menu">
+      <a href="#" id="menu-perfil">Perfil</a>
+      <a href="#" id="menu-logout">Cerrar sesión</a>
+    </div>
+  </div>
+</div>
+
+<div id="menuLateral">
+  <div class="logo" id="toggle-menu">
+    <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
+    <span class="logo-text">Melodify</span>
+  </div>
+
+  <a class="menu-item" data-view="home" href="{% url 'home' %}">Home</a>
+  <div class="menu-item" data-view="gestion">Gestión</div>
+  <div class="menu-item" data-view="playlist">PlayList</div>
+  <div class="menu-item" data-view="reproductor">Reproductor</div>
+  <div class="menu-item" data-view="mi-muro">Muro del artista</div>
+  <div class="menu-item" data-view="perfil">Perfil</div>
+</div>
+
+<div id="main-content"
+     data-initial-view="mi-muro"
+     data-username="{{ session_user }}"
+     data-role="{{ session_role|default:'Artista' }}"
+     data-avatar="{{ session_avatar_url }}"
+     data-description="{{ session_description|default:'artista default' }}"
+     data-created-at="{{ session_created_at|default:'—' }}"
+     data-url-mi-muro="{% url 'mi_muro' %}"
+     data-url-gestion="{% url 'gestion' %}"
+     data-url-revertir="{% url 'revertir' %}">
+  <button id="menu-toggle-btn">☰</button>
+
+  <a id="back-btn" class="back" href="{% url 'home' %}" title="Volver a inicio" aria-label="Regresar">←</a>
+
+  <div id="content">
+    <div class="page">
+      <header class="muro">
+        {% if artist.avatar %}
+          <img class="avatar" src="{{ artist.avatar.url }}" alt="{{ artist.user }}">
+        {% else %}
+          <div class="avatar"></div>
+        {% endif %}
+        <div style="flex:1;">
+          <h1 style="margin:0">{{ artist.user }}</h1>
+          {% if description %}<p class="muted" style="margin:6px 0 0">{{ description }}</p>{% endif %}
+        </div>
+      </header>
+
+      {% if undo_muro_data %}
+        <div class="undo-bar" id="undo-bar">
+          <form method="post" action="{% url 'revertir' %}">
+            {% csrf_token %}
+            <button class="btn" type="submit">Deshacer</button>
+          </form>
+          <div class="muted" id="undo-label">{{ undo_muro_label }}</div>
+        </div>
+      {% else %}
+        <div class="undo-bar" id="undo-bar" style="display:none">
+          <form method="post" action="{% url 'revertir' %}">
+            {% csrf_token %}
+            <button class="btn" type="submit">Deshacer</button>
+          </form>
+          <div class="muted" id="undo-label"></div>
+        </div>
+      {% endif %}
+
+      <div id="inline-msg" class="msg"></div>
+
+      {% if is_owner %}
+        <div class="card">
+          <h3 style="margin:0 0 12px">Subir canción</h3>
+          <form id="form-upload" method="post" enctype="multipart/form-data" action="{% url 'subir_cancion_en_muro' %}">
+            {% csrf_token %}
+            <label>Título</label>
+            <input name="title" type="text" required>
+
+            <label style="margin-top:10px">Autor / Intérprete</label>
+            <input name="artist_display_name" type="text" required value="{{ artist.user }}">
+
+            <label style="margin-top:10px">Género</label>
+            <select name="genre" id="genre" required>
+  <option value="" disabled selected>Selecciona un género</option>
+  <option value="pop">Pop</option>
+  <option value="rock">Rock</option>
+  <option value="electronica">Electrónica</option>
+  <option value="hiphop">Hip-Hop</option>
+  <option value="reggaeton">Reggaetón</option>
+  <option value="regional">Regional Mexicano</option>
+  <option value="balada">Balada</option>
+  <option value="indie">Indie</option>
+  <option value="jazz">Jazz</option>
+  <option value="clasica">Clásica</option>
+  <option value="_other">Otro…</option>
+</select>
+<input id="genre-other" type="text" placeholder="Escribe el género" style="display:none;margin-top:8px">
+
+            <label style="margin-top:10px">Archivo de audio (.mp3, .wav, .ogg, .m4a, .flac)</label>
+            <input name="audio_file" type="file" accept=".mp3,.wav,.ogg,.m4a,.flac" required>
+
+            <label style="margin-top:10px">Portada (opcional)</label>
+            <input name="cover_image" type="file" accept=".png,.jpg,.jpeg,.webp">
+
+            <button class="btn" type="submit">Subir</button>
+          </form>
+        </div>
+      {% endif %}
+
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="songs">Canciones</button>
+        <button class="tab-btn" data-tab="playlists">Playlists</button>
+        <button class="tab-btn" data-tab="events">Eventos</button>
+        <button class="tab-btn" data-tab="posts">Publicaciones</button>
+      </div>
+
+      <section id="tab-songs" class="tab active">
+        <h3 style="margin:0 0 12px">Canciones</h3>
+        {% if songs %}
+          <div id="songs-grid" class="grid">
+            {% for s in songs %}
+              <div class="song">
+                <div class="row">
+                  {% if s.cover_image %}
+                    <img class="preview" src="{{ s.cover_image.url }}" alt="" onerror="this.style.visibility='hidden'">
+                  {% else %}
+                    <div class="preview"></div>
+                  {% endif %}
+                  <div>
+                    <div style="font-weight:600">{{ s.title }}</div>
+                    <div class="muted">{{ s.artist_display_name }}</div>
+                    <div class="muted">Género: {% firstof s.genre s.genero s.genre_name "—" %}</div>
+                    <div class="muted">Subida: {{ s.created_at|date:"Y-m-d H:i" }}</div>
+                  </div>
+                </div>
+                <div style="margin-top:8px">
+                  <audio controls style="width:100%">{% if s.audio_file %}<source src="{{ s.audio_file.url }}">{% endif %}</audio>
+                </div>
+                {% if is_owner %}
+                  <div style="margin-top:8px">
+                    <a class="btn" href="{% url 'editar_mi_cancion_en_muro' s.id %}">Editar</a>
+                    <form method="post" action="{% url 'eliminar_mi_cancion' s.id %}" class="js-delete-form" data-title="{{ s.title|escapejs }}" style="display:inline">
+                      {% csrf_token %}
+<button class="btn btnDanger" type="submit">Eliminar</button>
+                    </form>
+                  </div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+          <div style="margin-top:12px;text-align:center">
+            <button id="btn-show-all" class="btn" style="display:none">Mostrar todas</button>
+          </div>
+        {% else %}
+          <p id="no-songs-msg" class="muted">Aún no hay canciones públicas.</p>
+        {% endif %}
+      </section>
+
+      <section id="tab-playlists" class="tab">
+        <div class="card" style="margin:0"><p class="muted">Se mostrarán aquí cuando estén disponibles.</p></div>
+      </section>
+      <section id="tab-events" class="tab">
+        <div class="card" style="margin:0"><p class="muted">Eventos del artista.</p></div>
+      </section>
+      <section id="tab-posts" class="tab">
+        <div class="card" style="margin:0"><p class="muted">Publicaciones.</p></div>
+      </section>
+    </div>
+
+    <!-- Modal confirmación -->
+    <div id="confirm-modal" class="modal" aria-hidden="true">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+        <h4 class="title" id="confirm-title">Confirmar</h4>
+        <p id="confirm-text" class="muted" style="margin:0 0 8px">¿Eliminar este elemento?</p>
+        <div class="actions">
+          <button class="btn" id="confirm-cancel">Cancelar</button>
+<button class="btn" data-danger id="confirm-accept">Eliminar</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        // Tabs
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabs = document.querySelectorAll('.tab');
+        tabBtns.forEach(btn => {
+          btn.addEventListener('click', () => {
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabs.forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            const pane = document.getElementById('tab-' + btn.dataset.tab);
+            if (pane) pane.classList.add('active');
+          });
+        });
+
+        // Audio exclusivo
+        document.addEventListener('play', function (ev) {
+          const t = ev.target;
+          if (t?.tagName !== 'AUDIO') return;
+          document.querySelectorAll('audio').forEach(a => { if (a !== t) a.pause(); });
+        }, true);
+
+        // Mostrar todas
+        const grid = document.getElementById('songs-grid');
+        const btnAll = document.getElementById('btn-show-all');
+        const limit = 8;
+        if (grid) {
+          const cards = Array.from(grid.children);
+          if (cards.length > limit) {
+            cards.forEach((c, i) => { if (i >= limit) c.classList.add('hidden'); });
+            if (btnAll){
+              btnAll.style.display = 'inline-block';
+              btnAll.addEventListener('click', () => {
+                cards.forEach(c => c.classList.remove('hidden'));
+                btnAll.remove();
+              });
+            }
+          }
+        }
+
+        // UI helpers
+        const inlineMsg = document.getElementById('inline-msg');
+        function showError(text){ if (!inlineMsg) return; inlineMsg.textContent = text; inlineMsg.className = 'msg error'; inlineMsg.style.display = 'block'; }
+
+        // UNDO bar
+        const undoBar = document.getElementById('undo-bar');
+        const undoLbl = document.getElementById('undo-label');
+        const undoUrl = document.getElementById('main-content')?.dataset?.urlRevertir;
+        function renderUndo(label){
+          if (!undoBar || !undoLbl) return;
+          undoLbl.textContent = label || '';
+          undoBar.style.display = label ? 'flex' : 'none';
+          const form = undoBar.querySelector('form');
+          if (form && undoUrl) form.action = undoUrl;
+        }
+
+        // ======= Género: selector "Otro" =======
+        const genreSel = document.getElementById('genre');
+        const genreOther = document.getElementById('genre-other');
+        if (genreSel && genreOther){
+          genreSel.addEventListener('change', () => {
+            const useOther = genreSel.value === '_other';
+            genreOther.style.display = useOther ? 'block' : 'none';
+            if (!useOther) genreOther.value = '';
+          });
+        }
+
+        // ======= Subida por fetch =======
+        function fmt(dt){
+          if (!dt) return '';
+          const d = new Date(dt);
+          const p = n => String(n).padStart(2,'0');
+          return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+        }
+
+        function buildCard(s, csrf){
+          const cover = s.cover_url || s.cover_image || '';
+          const audio = s.audio_url || s.audio_file || '';
+          const genre = s.genre || s.genre_name || s.genero || '';
+
+          const card = document.createElement('div');
+          card.className = 'song';
+          card.innerHTML = `
+            <div class="row">
+              ${ cover ? `<img class="preview" src="${cover}" alt="" onerror="this.style.visibility='hidden'">`
+                       : `<div class="preview" style="background:#2a2a2a"></div>` }
+              <div>
+                <div style="font-weight:600">${s.title}</div>
+                <div class="muted">${s.artist_display_name}</div>
+                ${ genre ? `<div class="muted">Género: ${genre}</div>` : `` }
+                <div class="muted">Subida: ${fmt(s.created_at)}</div>
+              </div>
+            </div>
+            <div style="margin-top:8px">
+              <audio controls style="width:100%"><source src="${audio}"></audio>
+            </div>
+            <div style="margin-top:8px">
+              <a class="btn" href="${s.editar_url}">Editar</a>
+              <form method="post" action="${s.eliminar_url}" class="js-delete-form" data-title="${String(s.title||'').replaceAll('"','&quot;')}" style="display:inline">
+                <input type="hidden" name="csrfmiddlewaretoken" value="${csrf}">
+<button class="btn btnDanger" type="submit">Eliminar</button>
+              </form>
+            </div>`;
+          return card;
+        }
+
+        async function handleUpload(form){
+          const csrf = form.querySelector('input[name=csrfmiddlewaretoken]')?.value || '';
+          const fd = new FormData(form);
+
+          if (genreSel && genreSel.value === '_other'){
+            const val = (genreOther?.value || '').trim();
+            if (!val){ showError('Escribe un género.'); return; }
+            fd.set('genre', val);
+          }
+
+          const btn = form.querySelector('button[type=submit]');
+          inlineMsg && (inlineMsg.style.display='none');
+          if (btn) { btn.disabled = true; btn.textContent = 'Subiendo…'; }
+
+          try {
+            const res = await fetch(form.action, { method:'POST', body:fd, headers:{'X-Requested-With':'fetch'} });
+            const ct = res.headers.get('Content-Type') || '';
+            if (!ct.includes('application/json')) { showError('Respuesta inesperada del servidor.'); return; }
+            const data = await res.json();
+            if (!data.ok) { showError(data.error || 'No se pudo subir la canción.'); return; }
+
+            let gridEl = document.getElementById('songs-grid');
+            if (!gridEl) {
+              const wrapper = document.getElementById('tab-songs');
+              const empty = document.getElementById('no-songs-msg'); if (empty) empty.remove();
+              gridEl = document.createElement('div'); gridEl.id='songs-grid'; gridEl.className='grid'; wrapper.appendChild(gridEl);
+            }
+            const card = buildCard(data.song, csrf);
+            gridEl.prepend(card);
+
+            if (data.undo?.label) renderUndo(data.undo.label);
+            form.reset();
+            if (genreOther) genreOther.style.display = 'none';
+          } catch (e) {
+            showError('Error de red al subir la canción.');
+          } finally {
+            if (btn) { btn.disabled = false; btn.textContent = 'Subir'; }
+          }
+        }
+
+        document.addEventListener('submit', function (e) {
+          const target = e.target;
+          if (target && target.id === 'form-upload') {
+            e.preventDefault(); e.stopPropagation(); handleUpload(target);
+          }
+        }, true);
+
+        // ======= Modal de confirmación (Eliminar) =======
+        const modal = document.getElementById('confirm-modal');
+        const txt = document.getElementById('confirm-text');
+        const btnCancel = document.getElementById('confirm-cancel');
+        const btnAccept = document.getElementById('confirm-accept');
+        let pendingForm = null;
+
+        function openModal(message){ txt.textContent = message || '¿Eliminar este elemento?'; modal.classList.add('show'); modal.setAttribute('aria-hidden','false'); }
+        function closeModal(){ modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); pendingForm = null; }
+
+        btnCancel.addEventListener('click', (e)=>{ e.preventDefault(); closeModal(); });
+        modal.addEventListener('click', (e)=>{ if (e.target === modal) closeModal(); });
+
+        btnAccept.addEventListener('click', (e)=>{
+          e.preventDefault();
+          if (pendingForm){
+            pendingForm.dataset.confirmed = '1';
+            pendingForm.submit();
+            closeModal();
+          }
+        });
+
+        document.addEventListener('submit', function(e){
+          const f = e.target;
+          if (!f.classList || !f.classList.contains('js-delete-form')) return;
+          if (f.dataset.confirmed === '1') return;
+          e.preventDefault();
+          e.stopPropagation();
+          const t = f.dataset.title || 'esta canción';
+          pendingForm = f;        
+          openModal(`¿Eliminar “${t}”?`);
+        }, true);
+
+      })();
+    </script>
+  </div>
+</div>
+
+<script id="playlists-data-json" type="application/json">{{ playlists_json|default:"[]"|safe }}</script>
+<script>window.MELODIFY_HOME_URL = "{% url 'home' %}";</script>
+<script src="{% static 'inicio_sesion/backToHome.js' %}?v={% now 'U' %}"></script>
+<script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
+
+<script>
+(function(){
+  function clearInline(el){ if(!el) return; el.style.transform=''; el.style.left=''; el.style.right=''; el.style.top=''; el.style.position=''; }
+  function fixAll(){ clearInline(document.getElementById('main-content')); clearInline(document.getElementById('content')); document.documentElement.style.background='#121212'; document.body.style.background='#121212'; }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fixAll); else fixAll();
+})();
+</script>
+
+</body>
+</html>

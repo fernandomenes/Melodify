@@ -1,0 +1,79 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Melodify</title>
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
+<link rel="stylesheet" href="{% static 'inicio_sesion/reproductor.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
+
+</head>
+<body>
+
+  <!-- Header -->
+  <div id="header">
+    <div class="user-info" id="user-trigger">
+      <div class="user-icon">U</div>
+      <span id="username">Usuario</span>
+      <div id="user-menu">
+        <a href="#" id="menu-perfil">Perfil</a>
+        <a href="#" id="menu-logout">Cerrar sesión</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Menú lateral -->
+  <div id="menuLateral">
+    <div class="logo" id="toggle-menu">
+      <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
+      <span class="logo-text">Melodify</span>
+    </div>
+
+    <!-- Home: enlace directo -->
+    <a class="menu-item" data-view="home" href="{% url 'home' %}">Home</a>
+
+    <!-- Vistas internas del SPA (las renderiza homeScript.js) -->
+    <div class="menu-item" data-view="playlist">PlayList</div>
+    <div class="menu-item" data-view="reproductor">Reproductor</div>
+    <div class="menu-item" data-view="perfil">Perfil</div>
+
+    <!-- Vistas de servidor (navegación) -->
+    <div class="menu-item" data-view="mi-muro">Muro del artista</div>
+    <div class="menu-item" data-view="gestion">Gestión</div>
+  </div>
+
+  <!-- Contenido -->
+<div id="main-content"
+     data-initial-view="mi-muro"
+     data-username="{{ session_user }}"
+     data-role="{{ session_role }}"
+     data-avatar="{{ session_avatar_url }}"
+     data-description="{{ session_description }}"
+     data-created-at="{{ session_created_at }}"
+     data-url-mi-muro="{% url 'mi_muro' %}"
+     data-url-gestion="{% url 'gestion' %}"
+     data-url-revertir="{% url 'revertir' %}"
+     data-url-mi-musica-json="{% url 'mi_musica_json' %}">
+
+
+    <button id="menu-toggle-btn">☰</button>
+
+    <!-- Botón Back universal (se oculta en Home por CSS) -->
+    <a id="back-btn" class="back" href="{% url 'home' %}"
+       title="Volver a inicio" aria-label="Regresar">←</a>
+
+    <div id="content"></div>
+  </div>
+
+  <!-- Playlists para el reproductor/playlist -->
+  <script id="playlists-data-json" type="application/json">
+    {{ playlists_json|default:"[]"|safe }}
+  </script>
+
+  <script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
+
+</body>
+</html>

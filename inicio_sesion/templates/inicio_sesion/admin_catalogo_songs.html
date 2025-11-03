@@ -1,0 +1,45 @@
+{% comment %} Fragmento para la pestaña “Catálogo” del admin {% endcomment %}
+{% if songs %}
+  <div class="grid">
+    {% for s in songs %}
+      <div class="song">
+        <div class="row">
+          {% if s.cover_image %}
+            <img class="preview" src="{{ s.cover_image.url }}" alt="Portada de {{ s.title }}">
+          {% else %}
+            <div class="preview"></div>
+          {% endif %}
+          <div>
+            <div style="font-weight:600">{{ s.title }}</div>
+            <div class="muted">{{ s.artist_display_name }} <span style="opacity:.6;">({{ s.owner_user }})</span></div>
+            {% if s.genre %}<div class="muted">Género: {{ s.genre }}</div>{% endif %}
+
+            <div class="muted">Subida: {{ s.created_at|date:"Y-m-d H:i" }}</div>
+          </div>
+        </div>
+
+        <div style="margin-top:8px">
+          {% if s.audio_file %}
+            <audio controls style="width:100%">
+              <source src="{{ s.audio_file.url }}">
+            </audio>
+          {% endif %}
+        </div>
+
+        <div style="margin-top:8px">
+          <a class="btn" href="{% url 'editar_cancion' s.id %}">Editar</a>
+          <form method="post"
+                action="{% url 'eliminar_cancion' s.id %}"
+                style="display:inline"
+                class="js-delete-form"
+                data-title="{{ s.title }}">
+            {% csrf_token %}
+            <button class="btn" type="submit">Eliminar</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="muted" style="margin:0;">Sin canciones.</p>
+{% endif %}

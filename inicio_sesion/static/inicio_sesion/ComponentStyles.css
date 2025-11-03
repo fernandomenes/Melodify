@@ -1,35 +1,103 @@
-
-.btnRound {
-    width: 120px;
-    padding: 10px;
-    margin-top: 20px;
-    background-color: #ff0066;
-    color: white;
-    border: none;
-    border-radius: 20px;
-    font-size: 1em;
-    cursor: pointer;
+/* Botones reutilizables (rosa) */
+.btnRound{
+  width:120px;
+  padding:10px;
+  margin-top:20px;
+  background-color:#ff0066;
+  color:#fff;
+  border:none;
+  border-radius:20px;
+  font-size:1em;
+  cursor:pointer;
 }
-.btnRound:hover {
-    background-color: #ff2a7f;
+.btnRound:hover{ background-color:#ff2a7f; }
+
+.btnRect{
+  display:block;
+  width:250px;
+  padding:15px;
+  margin:10px 0;
+  background-color:#ff0066;
+  color:#fff;
+  text-align:center;
+  text-decoration:none;
+  border-radius:10px;
+  font-size:1.5em;
+  margin-bottom:1em;
+  font-family:Arial, sans-serif;
+}
+.btnRect:hover{ background-color:#ff2a7f; }
+
+:root{
+  --danger:#e32636;
+  --danger-2:#ff4d5e;
+  --danger-line:#6b1b21;
+  --danger-glow-inset:rgba(227,38,54,.35);
+  --danger-glow-outer:rgba(227,38,54,.25);
 }
 
-
-
-.btnRect {
-    display: block;
-    width: 250px;
-    padding: 15px;
-    margin: 10px 0;
-    background-color:#ff0066;
-    color: white;
-    text-align: center;
-    text-decoration: none;
-    border-radius: 10px;
-    font-size: 1.5em;
-    margin-bottom: 1em;
-    font-family: Arial, sans-serif;
+/* Botón Danger base (lleno) */
+.btnDanger,
+button.btnDanger,
+input[type="submit"].btnDanger,
+a.btnDanger{
+  display:inline-flex; align-items:center; justify-content:center;
+  gap:.5rem;
+  min-height:38px;
+  padding:10px 16px;
+  border-radius:12px;
+  border:1px solid var(--danger-2);
+  background: linear-gradient(180deg, #2a0f12, #1a0a0c);
+  color:#fff; text-decoration:none; font-weight:600; cursor:pointer;
+  box-shadow:
+    0 0 0 1px var(--danger-glow-inset) inset,
+    0 0 18px var(--danger-glow-outer);
+  transition: background .18s ease, box-shadow .18s ease, transform .06s;
 }
-.btnRect:hover {
-    background-color: #ff2a7f;
+.btnDanger:hover{
+  background: linear-gradient(180deg, #3a1317, #261012);
+  box-shadow:
+    0 0 0 1px var(--danger-2) inset,
+    0 0 22px var(--danger-glow-outer);
+}
+.btnDanger:active{ transform: translateY(1px); }
+.btnDanger:disabled{ opacity:.6; cursor:not-allowed; }
+
+/* Variante contorno */
+.btnDanger--outline{
+  background:transparent;
+  border:1px solid var(--danger-2);
+  color:#fff;
+}
+.btnDanger--outline:hover{
+  background: rgba(227,38,54,.08);
+  box-shadow: 0 0 14px var(--danger-glow-outer);
+}
+
+/* Selectores automáticos para “Eliminar” */
+button[name*="delete" i],
+button[id*="delete" i],
+button[data-action="delete"],
+button[data-danger],
+input[type="submit"][value*="eliminar" i],
+input[type="submit"][name*="delete" i],
+a[href*="eliminar" i].button,
+a[role="button"][data-danger]{
+  display:inline-flex; align-items:center; justify-content:center;
+  gap:.5rem; min-height:38px; padding:10px 16px; border-radius:12px;
+  border:1px solid var(--danger-2); color:#fff; text-decoration:none; font-weight:600; cursor:pointer;
+  background: linear-gradient(180deg, #2a0f12, #1a0a0c);
+  box-shadow: 0 0 0 1px var(--danger-glow-inset) inset, 0 0 18px var(--danger-glow-outer);
+  transition: background .18s ease, box-shadow .18s ease, transform .06s;
+}
+button[name*="delete" i]:hover,
+button[id*="delete" i]:hover,
+button[data-action="delete"]:hover,
+button[data-danger]:hover,
+input[type="submit"][value*="eliminar" i]:hover,
+input[type="submit"][name*="delete" i]:hover,
+a[href*="eliminar" i].button:hover,
+a[role="button"][data-danger]:hover{
+  background: linear-gradient(180deg, #3a1317, #261012);
+  box-shadow: 0 0 0 1px var(--danger-2) inset, 0 0 22px var(--danger-glow-outer);
 }
