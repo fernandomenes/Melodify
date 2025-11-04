@@ -1,4 +1,4 @@
-# inicio_sesion/vistas/views_artist.py
+# muro/views_artist.py
 """Vistas del muro del artista: pública, propia, CRUD de canciones y deshacer."""
 
 import json
@@ -15,9 +15,10 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
-from .. import base as base
-from ..auth_helpers import _get_user_role, _is_artist, _require_session_user
-from ..models import ArtistProfile, Song, Users
+# Imports del proyecto (absolutos a la app original)
+from inicio_sesion import base as base
+from inicio_sesion.auth_helpers import _get_user_role, _is_admin, _is_artist, _require_session_user
+from inicio_sesion.models import ArtistProfile, Song, Users
 
 # ================= Helpers de storage/archivos =================
 
@@ -111,13 +112,7 @@ def muro_publico(request, username: str):
         wall_description = ""
 
     songs = Song.objects.filter(owner_user=username, visibility="public").only(
-        "id",
-        "title",
-        "artist_display_name",
-        "created_at",
-        "cover_image",
-        "audio_file",
-        "genre",
+        "id", "title", "artist_display_name", "created_at", "cover_image", "audio_file", "genre"
     )
 
     session_user = request.session.get("user", "")
@@ -183,7 +178,7 @@ def muro_publico(request, username: str):
         "undo_muro_data": undo_muro_data,
         "undo_muro_label": undo_muro_label,
     }
-    return render(request, "inicio_sesion/muro_artista.html", ctx)
+    return render(request, "muro/muro_artista.html", ctx)
 
 
 @require_http_methods(["GET"])
@@ -375,14 +370,7 @@ def editar_mi_cancion_en_muro(request, song_id: int):
                     )
                     song.cover_image = saved
 
-                song.save(
-                    update_fields=[
-                        "title",
-                        "artist_display_name",
-                        "cover_image",
-                        "genre",
-                    ]
-                )
+                song.save(update_fields=["title", "artist_display_name", "cover_image", "genre"])
 
             messages.success(request, "Cambios guardados.")
             return redirect("mi_muro")
@@ -390,7 +378,9 @@ def editar_mi_cancion_en_muro(request, song_id: int):
             messages.error(request, "No se pudieron guardar los cambios.")
             return redirect("editar_mi_cancion_en_muro", song_id=song.id)
 
-    return render(request, "inicio_sesion/editar_mi_cancion.html", {"song": song})
+    # GET: render del formulario con contexto
+    ctx = {"song": song}
+    return render(request, "muro/editar_mi_cancion.html", ctx)
 
 
 # =============== Eliminar + Deshacer (muro) =====================
@@ -465,9 +455,6 @@ def revertir(request):
     return redirect("mi_muro")
 
 
-# ============= Alias de compatibilidad para tests ===============
-
-
 @require_http_methods(["GET", "POST"])
 def subir_cancion(request):
     """Alias de compatibilidad: delega en subir_cancion_en_muro y redirige al muro."""
@@ -484,17 +471,12 @@ def subir_cancion(request):
 
 @require_http_methods(["GET"])
 def mi_musica_json(request):
+    """Devuelve en JSON las canciones públicas del artista autenticado (para el reproductor)."""
     if "user" not in request.session:
         return JsonResponse({"ok": False, "error": "auth"}, status=401)
     username = request.session.get("user", "")
     qs = Song.objects.filter(owner_user=username, visibility="public").only(
-        "id",
-        "title",
-        "artist_display_name",
-        "audio_file",
-        "cover_image",
-        "visibility",
-        "genre",
+        "id", "title", "artist_display_name", "audio_file", "cover_image", "visibility", "genre"
     )
 
     songs = []

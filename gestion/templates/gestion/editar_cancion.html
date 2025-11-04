@@ -21,7 +21,6 @@
 
     .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
 
-    /* ===== layout uniforme ===== */
     .form-grid{
       display:grid;
       grid-template-columns: minmax(280px, 1fr) 220px;
@@ -67,7 +66,6 @@
     </header>
 
     <div class="card">
-      <!-- OJO: no renderizamos mensajes flash aquí -->
       <form method="post" enctype="multipart/form-data" action="{% url 'editar_cancion' song.id %}">
         {% csrf_token %}
 

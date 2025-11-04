@@ -13,8 +13,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="song",
             name="genre",
-            field=models.CharField(
-                blank=True, db_index=True, default="", max_length=40
-            ),
+            field=models.CharField(blank=True, db_index=True, default="", max_length=40),
         ),
     ]

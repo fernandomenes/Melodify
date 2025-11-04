@@ -5,12 +5,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Melodify</title>
-  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
-<link rel="stylesheet" href="{% static 'inicio_sesion/reproductor.css' %}?v={% now 'U' %}">
-  <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
-<link rel="stylesheet" href="{% static 'inicio_sesion/playlist.css' %}">
 
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+
+  <!-- Estilos generales de la app -->
+  <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
+
+  <!-- Reproductor movido a la app 'reproductor' -->
+  <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
+  <script>
+    // Ruta del módulo JS del reproductor (usada por homeScript.js para el import dinámico)
+    window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
+  </script>
 </head>
 <body>
 
@@ -47,18 +54,19 @@
   </div>
 
   <!-- Contenido -->
-<div id="main-content"
-     data-initial-view="mi-muro"
-     data-username="{{ session_user }}"
-     data-role="{{ session_role }}"
-     data-avatar="{{ session_avatar_url }}"
-     data-description="{{ session_description }}"
-     data-created-at="{{ session_created_at }}"
-     data-url-mi-muro="{% url 'mi_muro' %}"
-     data-url-gestion="{% url 'gestion' %}"
-     data-url-revertir="{% url 'revertir' %}"
-     data-url-mi-musica-json="{% url 'mi_musica_json' %}">
-
+  <div id="main-content"
+       data-initial-view="mi-muro"
+       data-username="{{ session_user }}"
+       data-role="{{ session_role }}"
+       data-avatar="{{ session_avatar_url }}"
+       data-description="{{ session_description }}"
+       data-created-at="{{ session_created_at }}"
+       data-url-home="{% url 'home' %}"
+data-url-musica="/musica/"
+       data-url-mi-muro="{% url 'mi_muro' %}"
+       data-url-gestion="{% url 'gestion' %}"
+       data-url-revertir="{% url 'revertir' %}"
+       data-url-mi-musica-json="{% url 'mi_musica_json' %}">
 
     <button id="menu-toggle-btn">☰</button>
 
@@ -69,11 +77,12 @@
     <div id="content"></div>
   </div>
 
-  <!-- Playlists para el reproductor/playlist -->
+  <!-- Playlists para el reproductor (solo “Mi música” para artistas, inyectado desde views.py) -->
   <script id="playlists-data-json" type="application/json">
     {{ playlists_json|default:"[]"|safe }}
   </script>
 
+  <!-- SPA principal -->
   <script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
 
 </body>

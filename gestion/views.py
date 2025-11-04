@@ -1,4 +1,5 @@
-# inicio_sesion/vistas/views_admin.py
+# gestion/views.py
+
 from django.contrib import messages
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -8,19 +9,19 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.http import require_http_methods
 
-from ..auth_helpers import _get_user_role, _is_admin, _require_session_user
-from ..models import ArtistProfile, Song, Users
+# Dependencias del proyecto
+from inicio_sesion.auth_helpers import _get_user_role, _is_admin, _require_session_user
+from inicio_sesion.models import ArtistProfile, Song, Users
 
-# Importaciones opcionales (si no existen los modelos, el dashboard los ignora).
+# Importaciones opcionales
 try:
-    from ..models import Album  # type: ignore
+    from inicio_sesion.models import Album
 except Exception:
-    Album = None  # type: ignore
-
+    Album = None
 try:
-    from ..models import Playlist  # type: ignore
+    from inicio_sesion.models import Playlist
 except Exception:
-    Playlist = None  # type: ignore
+    Playlist = None
 
 
 # =========================
@@ -43,6 +44,7 @@ def _clear_undo(request):
 def _require_admin(request):
     """
     Verifica que exista sesión y que el usuario tenga rol de administrador.
+    Devuelve (username, error_response|None).
     """
     username = _require_session_user(request)
     if not username:
@@ -63,7 +65,7 @@ def _require_admin(request):
 @require_http_methods(["GET"])
 def gestion_dashboard(request):
     """
-    Muestra el panel de administración:
+    Panel de administración:
       - Formularios de alta de artista/administrador.
       - Pestaña "Usuarios": admins, artistas y usuarios.
       - Pestaña "Catálogo": canciones públicas (y álbumes/playlists si existen).
@@ -143,7 +145,7 @@ def gestion_dashboard(request):
         "artist_description": artist_description,
         "created_at": created_at,
     }
-    return render(request, "inicio_sesion/gestion.html", ctx)
+    return render(request, "gestion/gestion.html", ctx)
 
 
 @require_http_methods(["POST"])
@@ -294,6 +296,7 @@ def editar_usuario(request, username: str):
         remove_avatar = (request.POST.get("remove_avatar") or "") == "1"
         avatar_file = request.FILES.get("avatar")
 
+        # Reglas para superadmin
         if target_is_super and not session_is_super:
             new_password = ""
             new_role = (u.type or "").lower()
@@ -316,6 +319,7 @@ def editar_usuario(request, username: str):
 
         try:
             with transaction.atomic():
+                # Cambio de username (propaga ownership)
                 if new_user != u.user:
                     if Users.objects.filter(user=new_user).exclude(pk=u.pk).exists():
                         messages.error(request, "Ese nombre de usuario ya existe.")
@@ -343,6 +347,7 @@ def editar_usuario(request, username: str):
 
                 u.save()
 
+                # Perfil de artista
                 if not target_is_super:
                     if (u.type or "").lower() == "artista":
                         try:
@@ -365,7 +370,7 @@ def editar_usuario(request, username: str):
             return redirect("editar_usuario", username=username)
 
     ctx = {"user_obj": u, "session_is_superadmin": session_is_super}
-    return render(request, "inicio_sesion/editar_usuario.html", ctx)
+    return render(request, "gestion/editar_usuario.html", ctx)
 
 
 @require_http_methods(["POST"])
@@ -490,6 +495,7 @@ def revertir_accion(request):
                     )
                     avatar = data.get("avatar")
                     if avatar:
+                        # Asignar name al FileField
                         u.avatar = avatar
                         u.save(update_fields=["avatar"])
 
@@ -560,7 +566,7 @@ def catalogo_admin_fragment(request):
 
     return render(
         request,
-        "inicio_sesion/admin_catalogo_songs.html",
+        "gestion/admin_catalogo_songs.html",
         {"songs": songs, "artist_filter": artist, "q": q},
     )
 
