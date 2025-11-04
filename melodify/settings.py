@@ -19,6 +19,10 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "inicio_sesion.apps.InicioSesionConfig",
+    'reproductor',
+    'muro',          
+    'gestion',       
+
 ]
 
 MIDDLEWARE = [

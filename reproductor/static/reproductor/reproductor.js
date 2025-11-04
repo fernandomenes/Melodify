@@ -1,4 +1,5 @@
-// inicio_sesion/static/inicio_sesion/reproductor.js
+// static/reproductor/reproductor.js
+
 let _state = {
   queue: [],
   index: -1,
@@ -21,8 +22,8 @@ const qa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 function slugify(s){
   return String(s || '')
     .toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // quita acentos
-    .replace(/[^a-z0-9]+/g,'')                       // solo a-z0-9
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]+/g,'')
     .trim();
 }
 function ensureAbs(u) {
@@ -516,4 +517,72 @@ export function rebindReproductor() {
   collectQueueFromDOM();
   bindClicks(isPlayableView());
   if (_state.audio?.src) showBar();
+}
+
+/* ===================== Integración SPA  ===================== */
+
+// Refresca "Mi música" SOLO para artistas, usando el endpoint ya existente
+async function _refreshMyMusic(ROLE, URL_MI_MUSICA_JSON) {
+  if (String(ROLE).toLowerCase() !== 'artista') return;
+  try {
+    const res = await fetch(URL_MI_MUSICA_JSON, { headers: { 'X-Requested-With': 'fetch' } });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data?.ok) return;
+
+    const songs = Array.isArray(data.songs) ? data.songs : [];
+    window._playlists = [{ id: 1, name: 'Mi música', songs }];
+  } catch {
+  }
+}
+
+// Renderiza la vista "reproductor" (rep-grid + panel derecho + lista izquierda)
+export async function renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON }) {
+  // Asegura ?view=reproductor en la URL
+  const u = new URL(location.href);
+  u.searchParams.set('view', 'reproductor');
+  history.replaceState(null, '', u.toString());
+  mainContent.dataset.view = 'reproductor';
+
+  // Carga/actualiza "Mi música" si aplica
+  await _refreshMyMusic(ROLE, URL_MI_MUSICA_JSON);
+
+  const P  = Array.isArray(window._playlists) ? window._playlists : [];
+  const pl = P[0] || { id: 1, name: 'Mi música', songs: [] };
+  const songs = Array.isArray(pl.songs) ? pl.songs : [];
+
+  const rightHTML = buildRightSidebarHTML({ playlists: P, genres: DEFAULT_GENRES || [] }) || '';
+  const html = `
+    <div class="rep-grid">
+      <div class="rep-left"></div>
+      <div class="rep-right">${rightHTML}</div>
+    </div>`;
+  contentDiv.innerHTML = html;
+
+  // Inicializa/engancha y pinta
+  inicializarReproductor();
+  renderLeftSongs(songs, pl.name || 'Mi música');
+  attachSidebarHandlers();
+}
+
+// Reacciona a cambios externos en playlist (delete/undo) SIN dependencias externas
+export function wireReproductorPlaylistEvents({ mainContent, ROLE, URL_MI_MUSICA_JSON }) {
+  window.addEventListener('melodify:playlistChanged', async () => {
+    if ((mainContent?.dataset.view || '') === 'reproductor') {
+      try {
+        await renderMenuReproductor({
+          mainContent,
+          contentDiv: document.getElementById('content'),
+          ROLE,
+          URL_MI_MUSICA_JSON
+        });
+      } catch {}
+    } else {
+      await _refreshMyMusic(ROLE, URL_MI_MUSICA_JSON);
+    }
+  });
+}
+
+export async function stopReproductorIfLoaded() {
+  try { stopReproductor(); } catch {}
 }

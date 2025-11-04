@@ -27,15 +27,16 @@
         </div>
 
         <div style="margin-top:8px">
-          <a class="btn" href="{% url 'editar_cancion' s.id %}">Editar</a>
-          <form method="post"
-                action="{% url 'eliminar_cancion' s.id %}"
-                style="display:inline"
-                class="js-delete-form"
-                data-title="{{ s.title }}">
-            {% csrf_token %}
-            <button class="btn" type="submit">Eliminar</button>
-          </form>
+         <a class="btn" href="{% url 'editar_cancion' s.id %}">Editar</a>
+<form method="post"
+      action="{% url 'eliminar_cancion' s.id %}"
+      style="display:inline"
+      class="js-delete-form"
+      data-title="{{ s.title }}">
+  {% csrf_token %}
+  <button class="btn" type="submit">Eliminar</button>
+</form>
+
         </div>
       </div>
     {% endfor %}

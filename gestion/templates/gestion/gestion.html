@@ -7,7 +7,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
-  <link rel="stylesheet" href="{% static 'inicio_sesion/reproductor.css' %}?v={% now 'U' %}">
     <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
 
   <style>
@@ -263,7 +262,7 @@
         </div>
 
         <div id="catalogo-songs" class="card" style="margin:0">
-          {% include "inicio_sesion/admin_catalogo_songs.html" with songs=songs %}
+{% include "gestion/admin_catalogo_songs.html" with songs=songs %}
         </div>
       </section>
     </div>

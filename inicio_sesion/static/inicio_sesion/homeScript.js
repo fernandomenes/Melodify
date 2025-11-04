@@ -1,22 +1,7 @@
-// inicio_sesion/static/inicio_sesion/homeScript.js
-/**
- * SPA del Home de Melodify (router y chrome de la app).
- * Todo lo visual/lógico del reproductor vive en reproductor.js.
- */
+// static/inicio_sesion/homeScript.js
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // ====== Módulo del reproductor (API pública) ======
-  let inicializarReproductor, stopReproductor, rebindReproductor;
-  let buildRightSidebarHTML, renderLeftSongs, attachSidebarHandlers, DEFAULT_GENRES;
-
-  try {
-    const mod = await import('./reproductor.js');
-    ({ inicializarReproductor, stopReproductor, rebindReproductor,
-       buildRightSidebarHTML, renderLeftSongs, attachSidebarHandlers,
-       DEFAULT_GENRES } = mod);
-  } catch (e) {
-    console.error('No se pudo cargar reproductor.js', e);
-  }
+const RP = await import('/static/reproductor/reproductor.js?v=1');
 
   // ====== Nodos base y dataset ======
   const menuLateral   = document.getElementById('menuLateral');
@@ -27,6 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const toggleLogo    = document.getElementById('toggle-menu');
   if (!mainContent || !contentDiv) return;
 
+  // Datos inyectados por plantilla
   let ROLE = (mainContent.dataset.role || '').toLowerCase();
   if (!ROLE) {
     const h1 = document.querySelector('.page h1')?.textContent?.toLowerCase() || '';
@@ -38,11 +24,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const DESCRIPTION = (mainContent.dataset.description || '').trim();
   const CREATED_AT  = (mainContent.dataset.createdAt || '').trim();
 
-  const URL_MI_MURO = mainContent.dataset.urlMiMuro   || '/mi-muro/';
-  const URL_MUSICA  = mainContent.dataset.urlMusica   || '/musica/';
-  const URL_GESTION = mainContent.dataset.urlGestion  || '/gestion/';
-  const URL_HOME    = mainContent.dataset.urlHome     || '/home/';
-  const URL_MI_MUSICA_JSON = mainContent.dataset.urlMiMusicaJson || '/mi-musica/json/';
+  const URL_MI_MURO        = mainContent.dataset.urlMiMuro        || '/mi-muro/';
+  const URL_MUSICA         = mainContent.dataset.urlMusica        || '/musica/';
+  const URL_GESTION        = mainContent.dataset.urlGestion       || '/gestion/';
+  const URL_HOME           = mainContent.dataset.urlHome          || '/home/';
+  const URL_MI_MUSICA_JSON = mainContent.dataset.urlMiMusicaJson  || '/mi-musica/json/';
 
   const urlParams    = new URLSearchParams(location.search);
   const hashView     = (location.hash || '').replace(/^#/, '');
@@ -52,7 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let historyStack = [];
   let currentView  = null;
 
-  // Playlists disponibles (servidor o mínima por rol)
+  // ====== Playlists iniciales (JSON embebido) ======
   let playlists = [];
   try {
     const jsonEl = document.getElementById('playlists-data-json');
@@ -62,18 +48,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     playlists = [{ id: 1, name: 'Mi música', songs: [] }];
   }
   window._playlists = playlists;
-
-  // Señal de cambios externos
-  let __dirtyPlaylists = false;
-  window.addEventListener('melodify:playlistChanged', async () => {
-    __dirtyPlaylists = true;
-    if ((mainContent?.dataset.view || '') === 'reproductor') {
-      await refreshMyMusic().catch(() => {});
-      const P  = Array.isArray(window._playlists) ? window._playlists : [];
-      const pl = P[0] || { id:1, name:'Mi música', songs:[] };
-      renderLeftSongs?.(Array.isArray(pl.songs) ? pl.songs : [], pl.name || 'Mi música');
-    }
-  });
 
   // ====== Utils de la SPA ======
   function showContent(html){ contentDiv.innerHTML = html; decorateDangerButtons(contentDiv); }
@@ -117,36 +91,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       show('.menu-item[data-view="perfil"]', true);
     }
   }
-  async function refreshMyMusic() {
-    if (ROLE !== 'artista') return;
-    try {
-      const res = await fetch(URL_MI_MUSICA_JSON, { headers:{ 'X-Requested-With':'fetch' } });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (!data.ok) return;
-      const songs = Array.isArray(data.songs) ? data.songs : [];
-      playlists = [{ id: 1, name: 'Mi música', songs }];
-      window._playlists = playlists;
-    } catch {}
-  }
 
   // ====== Vistas  ======
   function renderMenuHome() {
     mainContent.dataset.view = 'home';
-    const html = `<h2>HOME Bienvenido a Melodify</h2><p>Selecciona una opción del menú para comenzar.</p>`;
+    const html = `<h2>HOME • Bienvenido a Melodify</h2><p>Selecciona una opción del menú para comenzar.</p>`;
     pushHistory(html); showContent(html);
   }
 
   function renderMenuPlaylists() {
     mainContent.dataset.view = 'playlist';
     const isArtist = ROLE === 'artista';
-    let html = '<h2>Playlists</h2>';
+    const P = Array.isArray(window._playlists) ? window._playlists : [];
+    let html = '';
 
     if (isArtist) {
       html += '<ul class="item-list"><li data-playlist-id="1">Mi música</li></ul>';
-    } else if (Array.isArray(window._playlists) && window._playlists.length) {
+    } else if (P.length) {
       html += '<ul class="item-list">' +
-        window._playlists.map(pl => `<li data-playlist-id="${pl.id}">${escapeHtml(pl.name || '—')}</li>`).join('') +
+        P.map(pl => `<li data-playlist-id="${pl.id}">${escapeHtml(pl.name || '—')}</li>`).join('') +
       '</ul>';
     } else {
       html += '<p style="color:#b3b3b3;">No hay playlists.</p>';
@@ -154,45 +117,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     pushHistory(html); showContent(html);
     document.querySelectorAll('[data-playlist-id]').forEach(item => {
-      item.addEventListener('click', () => renderPlaylistPreview(item.getAttribute('data-playlist-id') || '1'));
+      item.addEventListener('click', () => console.log('Abrir playlist', item.getAttribute('data-playlist-id')));
     });
-  }
-
-  function renderPlaylistPreview(id) {
-    mainContent.dataset.view = 'playlist';
-    const P  = Array.isArray(window._playlists) ? window._playlists : [];
-    const pl = (P.find(p => String(p.id) === String(id)) || P[0] || { id: 1, name: 'Mi música', songs: [] });
-    const songs = Array.isArray(pl.songs) ? pl.songs : [];
-
-    const html = `
-      <div class="cabecera-lista"><h2 class="playlist-title" style="margin:0;">${escapeHtml(pl.name || 'Mi música')}</h2></div>
-      <div class="rep-grid">
-        <div class="rep-left"></div>
-        <div class="rep-right"></div>
-      </div>`;
-    pushHistory(html); showContent(html);
-
-    renderLeftSongs?.(songs, pl.name || 'Mi música'); // pinta filas
-    rebindReproductor?.();                              // asegura bindings
-  }
-
-  async function renderMenuReproductor() {
-    const u = new URL(location.href); u.searchParams.set('view', 'reproductor'); history.replaceState(null, '', u.toString());
-    mainContent.dataset.view = 'reproductor';
-
-    if (__dirtyPlaylists) { await refreshMyMusic().catch(() => {}); __dirtyPlaylists = false; }
-    else { await refreshMyMusic().catch(() => {}); }
-
-    const P  = Array.isArray(window._playlists) ? window._playlists : [];
-    const pl = P[0] || { id: 1, name: 'Mi música', songs: [] };
-    const songs = Array.isArray(pl.songs) ? pl.songs : [];
-
-    const rightHTML = buildRightSidebarHTML?.({ playlists: P, genres: DEFAULT_GENRES || [] }) || '';
-    const html = `<div class="rep-grid"><div class="rep-left"></div><div class="rep-right">${rightHTML}</div></div>`;
-    pushHistory(html); showContent(html);
-
-    renderLeftSongs?.(songs, pl.name || 'Mi música');
-    attachSidebarHandlers?.();
   }
 
   function renderMenuPerfil() {
@@ -200,7 +126,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const avatarHTML = AVATAR
       ? `<img src="${esc(AVATAR)}" alt="${esc(USERNAME)}" style="width:96px;height:96px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px #2b2b2b;">`
-      : `<div style="width:96px;height:96px;border-radius:50%;background:#2b2b2b;display:flex;align-items:center;justify-content:center;font-size:36px;">${esc((USERNAME || 'U').charAt(0).toUpperCase())}</div>`;
+      : `<div style="width:96px;height:96px;border-radius:50%;background:#2a2a2a;display:flex;align-items:center;justify-content:center;font-size:36px;">${esc((USERNAME || 'U').charAt(0).toUpperCase())}</div>`;
     const roleLabel = (ROLE ? ROLE.charAt(0).toUpperCase() + ROLE.slice(1) : '—');
     const descHTML  = (ROLE === 'artista') ? `<p style="margin:6px 0 0;color:#bbb;">Descripción: ${esc(DESCRIPTION || '—')}</p>` : '';
     const fechaHTML = `<p style="margin:0 0 4px;">Registrado: ${esc(CREATED_AT || '—')}</p>`;
@@ -259,29 +185,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  function navegarSPA(view) {
+  async function navegarSPA(view) {
     currentView = view;
     mainContent.dataset.view = view || '';
     historyStack = [];
 
     switch (view) {
       case 'home':
-        stopReproductor?.(); window.location.href = URL_HOME; break;
+        await RP.stopReproductorIfLoaded(); window.location.href = URL_HOME; break;
       case 'playlist':
-        stopReproductor?.(); renderMenuPlaylists(); break;
+        await RP.stopReproductorIfLoaded(); renderMenuPlaylists(); break;
       case 'reproductor':
-        renderMenuReproductor(); break;
+        await RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON }); break;
       case 'perfil':
-        stopReproductor?.(); renderMenuPerfil(); break;
+        await RP.stopReproductorIfLoaded(); renderMenuPerfil(); break;
       case 'gestion':
-        stopReproductor?.(); window.location.href = URL_GESTION; break;
+        await RP.stopReproductorIfLoaded(); window.location.href = URL_GESTION; break;
       case 'mi-muro':
       case 'mi-musica':
-        stopReproductor?.(); window.location.href = URL_MI_MURO; return;
+        await RP.stopReproductorIfLoaded(); window.location.href = URL_MI_MURO; return;
       case 'musica':
-        stopReproductor?.(); window.location.href = URL_MUSICA; break;
+        await RP.stopReproductorIfLoaded(); window.location.href = URL_MUSICA; break;
       default:
-        stopReproductor?.(); window.location.href = URL_HOME; break;
+        await RP.stopReproductorIfLoaded(); window.location.href = URL_HOME; break;
     }
   }
 
@@ -310,6 +236,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     aplicarAvatarHeader();
     aplicarPermisosMenu();
 
+    // Conectar eventos del reproductor 
+    RP.wireReproductorPlaylistEvents({ mainContent, ROLE, URL_MI_MUSICA_JSON });
+
     const first = INITIAL_VIEW || 'home';
     activarItemMenu(first);
     mainContent.dataset.view = first;
@@ -317,14 +246,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (first === 'home') renderMenuHome();
     else if (first === 'playlist') renderMenuPlaylists();
     else if (first === 'perfil') renderMenuPerfil();
-    else if (first === 'reproductor') renderMenuReproductor();
+    else if (first === 'reproductor') RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON });
 
     if (!contentDiv.innerHTML.trim()) { activarItemMenu('home'); mainContent.dataset.view = 'home'; renderMenuHome(); }
-    if (mainContent.dataset.view !== 'reproductor') stopReproductor?.();
   }
 
   inicializarApp();
-  decorateDangerButtons(document);
 
   // Mantiene data-view sincronizado durante navegación en el menu
   const main = document.getElementById('main-content');

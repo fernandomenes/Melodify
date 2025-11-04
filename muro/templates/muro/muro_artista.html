@@ -8,8 +8,11 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
-  <link rel="stylesheet" href="{% static 'inicio_sesion/reproductor.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
+  <script>
+    window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
+  </script>
 
   <style>
     :root{--bg:#121212;--card:#1e1e1e;--line:#2b2b2b;--muted:#9aa0a6;--btn:#2a2a2a;--btnb:#3a3a3a;--accent:#9ad}
@@ -86,6 +89,8 @@
      data-avatar="{{ session_avatar_url }}"
      data-description="{{ session_description|default:'artista default' }}"
      data-created-at="{{ session_created_at|default:'—' }}"
+     data-url-home="{% url 'home' %}"
+     data-url-mi-musica-json="{% url 'mi_musica_json' %}"
      data-url-mi-muro="{% url 'mi_muro' %}"
      data-url-gestion="{% url 'gestion' %}"
      data-url-revertir="{% url 'revertir' %}">
@@ -140,20 +145,20 @@
 
             <label style="margin-top:10px">Género</label>
             <select name="genre" id="genre" required>
-  <option value="" disabled selected>Selecciona un género</option>
-  <option value="pop">Pop</option>
-  <option value="rock">Rock</option>
-  <option value="electronica">Electrónica</option>
-  <option value="hiphop">Hip-Hop</option>
-  <option value="reggaeton">Reggaetón</option>
-  <option value="regional">Regional Mexicano</option>
-  <option value="balada">Balada</option>
-  <option value="indie">Indie</option>
-  <option value="jazz">Jazz</option>
-  <option value="clasica">Clásica</option>
-  <option value="_other">Otro…</option>
-</select>
-<input id="genre-other" type="text" placeholder="Escribe el género" style="display:none;margin-top:8px">
+              <option value="" disabled selected>Selecciona un género</option>
+              <option value="pop">Pop</option>
+              <option value="rock">Rock</option>
+              <option value="electronica">Electrónica</option>
+              <option value="hiphop">Hip-Hop</option>
+              <option value="reggaeton">Reggaetón</option>
+              <option value="regional">Regional Mexicano</option>
+              <option value="balada">Balada</option>
+              <option value="indie">Indie</option>
+              <option value="jazz">Jazz</option>
+              <option value="clasica">Clásica</option>
+              <option value="_other">Otro…</option>
+            </select>
+            <input id="genre-other" type="text" placeholder="Escribe el género" style="display:none;margin-top:8px">
 
             <label style="margin-top:10px">Archivo de audio (.mp3, .wav, .ogg, .m4a, .flac)</label>
             <input name="audio_file" type="file" accept=".mp3,.wav,.ogg,.m4a,.flac" required>
@@ -195,15 +200,20 @@
                 <div style="margin-top:8px">
                   <audio controls style="width:100%">{% if s.audio_file %}<source src="{{ s.audio_file.url }}">{% endif %}</audio>
                 </div>
-                {% if is_owner %}
-                  <div style="margin-top:8px">
-                    <a class="btn" href="{% url 'editar_mi_cancion_en_muro' s.id %}">Editar</a>
-                    <form method="post" action="{% url 'eliminar_mi_cancion' s.id %}" class="js-delete-form" data-title="{{ s.title|escapejs }}" style="display:inline">
-                      {% csrf_token %}
-<button class="btn btnDanger" type="submit">Eliminar</button>
-                    </form>
-                  </div>
-                {% endif %}
+               {% if is_owner %}
+  <div style="margin-top:8px">
+    <a class="btn" href="{% url 'editar_mi_cancion_en_muro' s.id %}">Editar</a>
+    <form method="post"
+          action="{% url 'eliminar_mi_cancion' s.id %}"
+          class="js-delete-form"
+          data-title="{{ s.title|escapejs }}"
+          style="display:inline">
+      {% csrf_token %}
+      <button class="btn btnDanger" type="submit">Eliminar</button>
+    </form>
+  </div>
+{% endif %}
+
               </div>
             {% endfor %}
           </div>
@@ -233,7 +243,7 @@
         <p id="confirm-text" class="muted" style="margin:0 0 8px">¿Eliminar este elemento?</p>
         <div class="actions">
           <button class="btn" id="confirm-cancel">Cancelar</button>
-<button class="btn" data-danger id="confirm-accept">Eliminar</button>
+          <button class="btn" data-danger id="confirm-accept">Eliminar</button>
         </div>
       </div>
     </div>
@@ -322,7 +332,7 @@
           card.className = 'song';
           card.innerHTML = `
             <div class="row">
-              ${ cover ? `<img class="preview" src="${cover}" alt="" onerror="this.style.visibility='hidden'">`
+              ${ cover ? `<img class="preview" src="${cover}" alt="" onerror="this.style.visibility='hidden'>`
                        : `<div class="preview" style="background:#2a2a2a"></div>` }
               <div>
                 <div style="font-weight:600">${s.title}</div>
@@ -338,7 +348,7 @@
               <a class="btn" href="${s.editar_url}">Editar</a>
               <form method="post" action="${s.eliminar_url}" class="js-delete-form" data-title="${String(s.title||'').replaceAll('"','&quot;')}" style="display:inline">
                 <input type="hidden" name="csrfmiddlewaretoken" value="${csrf}">
-<button class="btn btnDanger" type="submit">Eliminar</button>
+                <button class="btn btnDanger" type="submit">Eliminar</button>
               </form>
             </div>`;
           return card;
@@ -420,7 +430,7 @@
           e.preventDefault();
           e.stopPropagation();
           const t = f.dataset.title || 'esta canción';
-          pendingForm = f;        
+          pendingForm = f;
           openModal(`¿Eliminar “${t}”?`);
         }, true);
 

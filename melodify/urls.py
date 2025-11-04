@@ -4,8 +4,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path, re_path
+from django.contrib import admin
+from django.urls import path, include
 
-from inicio_sesion.vistas.views_stream import stream_uploaded_media
+from reproductor.views_stream import stream_uploaded_media
 
 urlpatterns = [
     re_path(
@@ -15,6 +17,9 @@ urlpatterns = [
     ),
     path("", include("inicio_sesion.urls")),
     path("admin/", admin.site.urls),
+    path("gestion/", include("gestion.urls")),
+        path("", include("reproductor.urls")),
+
 ]
 
 if settings.DEBUG:

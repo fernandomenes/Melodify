@@ -91,3 +91,4 @@ class Song(models.Model):
 
     def __str__(self) -> str:
         return f"{self.title} — {self.artist_display_name}"
+
