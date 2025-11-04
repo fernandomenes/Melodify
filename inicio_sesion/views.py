@@ -90,6 +90,18 @@ def pantallaLogin(request):
         password = request.POST.get("password")
         try:
             usuario_db = Users.objects.get(user=user, password=password)
+            request.session.cycle_key()
+            for k in [
+                "gestion_undo",
+                "gestion_undo_label",
+                "mi_muro_undo",
+                "mi_muro_undo_label",
+                "song_undo",
+                "song_undo_label",
+                "song_undo_artist",
+                "song_undo_artist_label",
+            ]:
+                request.session.pop(k, None)
             request.session["user"] = usuario_db.user
             request.session["role"] = usuario_db.type or ""
             return redirect("home")

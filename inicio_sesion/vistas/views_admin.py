@@ -100,7 +100,9 @@ def gestion_dashboard(request):
     playlists = Playlist.objects.all().order_by("-id") if Playlist else []
 
     undo_data = request.session.get("gestion_undo")
-    undo_label = request.session.get("gestion_undo_label")
+    if undo_data and undo_data.get("actor") != username:
+        undo_data = None
+    undo_label = request.session.get("gestion_undo_label") if undo_data else None
 
     # ===== Variables para data-* en el template =====
     role = "administrador"  # garantizado por _require_admin
@@ -165,9 +167,7 @@ def registrar_artista(request):
 
     try:
         with transaction.atomic():
-            user = Users.objects.create(
-                user=artist_id, password=password, type="artista"
-            )
+            user = Users.objects.create(user=artist_id, password=password, type="artista")
             if avatar:
                 user.avatar = avatar
                 user.save(update_fields=["avatar"])
@@ -177,7 +177,7 @@ def registrar_artista(request):
         _put_undo(
             request,
             f"Se creó el artista “{artist_id}”.",
-            {"kind": "delete_user_created", "username": artist_id},
+            {"kind": "delete_user_created", "username": artist_id, "actor": username},
         )
     except IntegrityError:
         messages.error(request, "El usuario ya existe.")
@@ -202,9 +202,7 @@ def registrar_admin(request):
         return redirect("gestion")
 
     try:
-        user = Users.objects.create(
-            user=admin_id, password=password, type="administrador"
-        )
+        user = Users.objects.create(user=admin_id, password=password, type="administrador")
         if avatar:
             user.avatar = avatar
             user.save(update_fields=["avatar"])
@@ -213,14 +211,12 @@ def registrar_admin(request):
         _put_undo(
             request,
             f"Se creó el administrador “{admin_id}”.",
-            {"kind": "delete_user_created", "username": admin_id},
+            {"kind": "delete_user_created", "username": admin_id, "actor": username},
         )
     except IntegrityError:
         messages.error(request, "El usuario ya existe.")
     except Exception:
-        messages.error(
-            request, "No se pudo agregar el administrador. Inténtalo más tarde."
-        )
+        messages.error(request, "No se pudo agregar el administrador. Inténtalo más tarde.")
     return redirect("gestion")
 
 
@@ -246,7 +242,7 @@ def desactivar_usuario(request, username: str):
     _put_undo(
         request,
         f"Se desactivó “{username}”.",
-        {"kind": "toggle_active", "username": username, "to": False},
+        {"kind": "toggle_active", "username": username, "to": False, "actor": session_user},
     )
     return redirect("gestion")
 
@@ -265,7 +261,11 @@ def activar_usuario(request, username: str):
     _put_undo(
         request,
         f"Se activó “{username}”.",
-        {"kind": "toggle_active", "username": username, "to": True},
+        {
+            "kind": "toggle_active",
+            "username": username,
+            "to": True,
+        },
     )
     return redirect("gestion")
 
@@ -284,9 +284,7 @@ def editar_usuario(request, username: str):
 
     u = get_object_or_404(Users, user=username)
     target_is_super = bool(getattr(u, "is_superadmin", False))
-    session_is_super = Users.objects.filter(
-        user=session_user, is_superadmin=True
-    ).exists()
+    session_is_super = Users.objects.filter(user=session_user, is_superadmin=True).exists()
 
     if request.method == "POST":
         new_user = (request.POST.get("user") or "").strip()
@@ -352,9 +350,7 @@ def editar_usuario(request, username: str):
                             ap.description = description
                             ap.save(update_fields=["description"])
                         except ArtistProfile.DoesNotExist:
-                            ArtistProfile.objects.create(
-                                user=u, description=description
-                            )
+                            ArtistProfile.objects.create(user=u, description=description)
                     else:
                         try:
                             u.artist_profile.delete()
@@ -391,9 +387,9 @@ def eliminar_usuario(request, username: str):
         with transaction.atomic():
             role_lower = (u.type or "").lower()
             songs_ids = list(
-                Song.objects.filter(
-                    owner_user=username, visibility="public"
-                ).values_list("id", flat=True)
+                Song.objects.filter(owner_user=username, visibility="public").values_list(
+                    "id", flat=True
+                )
             )
             description = ""
             if role_lower == "artista":
@@ -412,6 +408,7 @@ def eliminar_usuario(request, username: str):
                 "avatar": avatar_name,
                 "description": description,
                 "song_ids": songs_ids,
+                "actor": session_user,
             }
 
             if role_lower == "artista" and songs_ids:
@@ -466,18 +463,14 @@ def revertir_accion(request):
                     messages.info(request, "Nada que deshacer: la cuenta ya no existe.")
                 else:
                     if u.is_superadmin:
-                        messages.error(
-                            request, "No se puede deshacer sobre la cuenta principal."
-                        )
+                        messages.error(request, "No se puede deshacer sobre la cuenta principal.")
                     else:
                         try:
                             u.artist_profile.delete()
                         except ArtistProfile.DoesNotExist:
                             pass
                         u.delete()
-                        messages.success(
-                            request, f"Se deshizo la creación de “{uname}”."
-                        )
+                        messages.success(request, f"Se deshizo la creación de “{uname}”.")
                 _clear_undo(request)
 
             elif kind == "restore_deleted_user":
