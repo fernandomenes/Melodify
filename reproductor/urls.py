@@ -1,5 +1,6 @@
 # reproductor/urls.py
 from django.urls import path
+
 from .views_stream import stream_uploaded_media
 
 urlpatterns = [

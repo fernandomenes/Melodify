@@ -236,7 +236,7 @@ const RP = await import('/static/reproductor/reproductor.js?v=1');
     aplicarAvatarHeader();
     aplicarPermisosMenu();
 
-    // Conectar eventos del reproductor 
+    // Conectar eventos del reproductor
     RP.wireReproductorPlaylistEvents({ mainContent, ROLE, URL_MI_MUSICA_JSON });
 
     const first = INITIAL_VIEW || 'home';

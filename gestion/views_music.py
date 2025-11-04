@@ -16,7 +16,6 @@ from django.views.decorators.http import require_http_methods
 # ✅ Importa desde la app original, ya SIN rutas relativas
 from inicio_sesion import base as base
 from inicio_sesion.auth_helpers import _get_user_role, _is_admin, _is_artist, _require_session_user
-
 from inicio_sesion.models import Song
 
 
@@ -53,7 +52,7 @@ def _delete_storage_entry(file_or_url) -> None:
         name = getattr(file_or_url, "name", "") or str(file_or_url) or ""
         base_url = _storage().base_url.rstrip("/") + "/"
         if name.startswith(base_url):
-            name = name[len(base_url):].lstrip("/")
+            name = name[len(base_url) :].lstrip("/")
         if name:
             _storage().delete(name)
     except Exception:
@@ -96,7 +95,7 @@ def editar_cancion(request, song_id: int):
                 # Evita duplicados por mismo propietario + visibilidad pública
                 dup = (
                     Song.objects.filter(
-                        owner_user= song.owner_user,
+                        owner_user=song.owner_user,
                         visibility="public",
                         title__iexact=new_title,
                     )
@@ -119,7 +118,9 @@ def editar_cancion(request, song_id: int):
                     song.cover_image = None
                 elif new_cover:
                     _delete_storage_entry(song.cover_image)
-                    name = f"cover_{song.owner_user}_{uuid4().hex}{Path(new_cover.name).suffix or ''}"
+                    name = (
+                        f"cover_{song.owner_user}_{uuid4().hex}{Path(new_cover.name).suffix or ''}"
+                    )
                     saved = _storage().save(name, new_cover)
                     song.cover_image = saved
 

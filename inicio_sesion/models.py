@@ -26,12 +26,8 @@ class Users(models.Model):
 class ArtistProfile(models.Model):
     """Perfil complementario para artistas (descripción hasta 200 caracteres)."""
 
-    user = models.OneToOneField(
-        Users, on_delete=models.CASCADE, related_name="artist_profile"
-    )
-    description = models.CharField(
-        max_length=200, blank=True, validators=[MaxLengthValidator(200)]
-    )
+    user = models.OneToOneField(Users, on_delete=models.CASCADE, related_name="artist_profile")
+    description = models.CharField(max_length=200, blank=True, validators=[MaxLengthValidator(200)])
 
     def __str__(self) -> str:
         return f"Perfil {self.user.user}"
@@ -60,16 +56,12 @@ class Song(models.Model):
     audio_file = models.FileField(
         upload_to="uploaded_songs/",
         validators=[
-            FileExtensionValidator(
-                allowed_extensions=["mp3", "wav", "ogg", "m4a", "flac"]
-            )
+            FileExtensionValidator(allowed_extensions=["mp3", "wav", "ogg", "m4a", "flac"])
         ],
     )
     cover_image = models.ImageField(upload_to="uploaded_covers/", null=True, blank=True)
 
-    audio_sha256 = models.CharField(
-        max_length=64, blank=True, default="", db_index=True
-    )
+    audio_sha256 = models.CharField(max_length=64, blank=True, default="", db_index=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     visibility = models.CharField(
@@ -91,4 +83,3 @@ class Song(models.Model):
 
     def __str__(self) -> str:
         return f"{self.title} — {self.artist_display_name}"
-

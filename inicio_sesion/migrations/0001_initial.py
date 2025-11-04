@@ -39,9 +39,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "cover_image",
-                    models.ImageField(
-                        blank=True, null=True, upload_to="uploaded_covers/"
-                    ),
+                    models.ImageField(blank=True, null=True, upload_to="uploaded_covers/"),
                 ),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 (

@@ -44,10 +44,6 @@ def _protect_last_superadmin(sender, instance, **kwargs):
             return
 
         if before.is_superadmin and not instance.is_superadmin:
-            exists_other = (
-                Users.objects.exclude(pk=instance.pk)
-                .filter(is_superadmin=True)
-                .exists()
-            )
+            exists_other = Users.objects.exclude(pk=instance.pk).filter(is_superadmin=True).exists()
             if not exists_other:
                 raise ValidationError("Debe existir al menos un superadmin.")

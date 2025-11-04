@@ -1,13 +1,13 @@
 # Melodify
 
-Melodify es una plataforma de streaming musical con enfoque social (usuarios, artistas, playlists colaborativas, retos, etc.) desarrollada en **Python/Django**.  
+Melodify es una plataforma de streaming musical con enfoque social (usuarios, artistas, playlists colaborativas, retos, etc.) desarrollada en **Python/Django**.
 Este README resume cómo instalar, ejecutar, probar y contribuir al proyecto.
 
 ## EQUIPO: COFFEE & BUGS
-- Carlos Eduardo Gónzalez Arceo  
-- Rodrigo Galeana Vidaurri  
-- Juan Gabriel López Hernández  
-- Fernando Mendoza Eslava  
+- Carlos Eduardo Gónzalez Arceo
+- Rodrigo Galeana Vidaurri
+- Juan Gabriel López Hernández
+- Fernando Mendoza Eslava
 
 ![Logo del proyecto](Imágenes/Logo.png)
 

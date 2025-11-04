@@ -1,12 +1,11 @@
 # muro/views_artist.py
 """Vistas del muro del artista: pública, propia, CRUD de canciones y deshacer."""
 
-from pathlib import Path
-from uuid import uuid4
-from typing import Optional
-
-from hashlib import sha256
 import json
+from hashlib import sha256
+from pathlib import Path
+from typing import Optional
+from uuid import uuid4
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
@@ -18,16 +17,11 @@ from django.views.decorators.http import require_http_methods
 
 # Imports del proyecto (absolutos a la app original)
 from inicio_sesion import base as base
-from inicio_sesion.auth_helpers import (
-    _get_user_role,
-    _is_admin,
-    _is_artist,
-    _require_session_user,
-)
+from inicio_sesion.auth_helpers import _get_user_role, _is_admin, _is_artist, _require_session_user
 from inicio_sesion.models import ArtistProfile, Song, Users
 
-
 # ================= Helpers de storage/archivos =================
+
 
 def _storage():
     """Devuelve el storage usado para audio/portadas."""
@@ -41,7 +35,7 @@ def _rel_from_storage_url(url: str) -> Optional[str]:
     url = str(url)
     base_url = _storage().base_url.rstrip("/") + "/"
     if url.startswith(base_url):
-        return url[len(base_url):].lstrip("/")
+        return url[len(base_url) :].lstrip("/")
     return None
 
 
@@ -69,14 +63,18 @@ def _delete_song_files(song: Song) -> None:
     """Elimina del storage los archivos asociados a una canción (audio y portada)."""
     storage = _storage()
     try:
-        name = getattr(song.audio_file, "name", "") or _rel_from_storage_url(str(song.audio_file) or "")
+        name = getattr(song.audio_file, "name", "") or _rel_from_storage_url(
+            str(song.audio_file) or ""
+        )
         if name:
             storage.delete(name)
     except Exception:
         pass
     try:
         if getattr(song, "cover_image", None):
-            cname = getattr(song.cover_image, "name", "") or _rel_from_storage_url(str(song.cover_image) or "")
+            cname = getattr(song.cover_image, "name", "") or _rel_from_storage_url(
+                str(song.cover_image) or ""
+            )
             if cname:
                 storage.delete(cname)
     except Exception:
@@ -84,6 +82,7 @@ def _delete_song_files(song: Song) -> None:
 
 
 # =============== Helpers de UNDO en el muro ====================
+
 
 def _put_undo_muro(request, label: str, data: dict):
     """Guarda en sesión el último cambio del muro para permitir revertirlo."""
@@ -100,6 +99,7 @@ def _clear_undo_muro(request):
 
 
 # ====================== Vistas de muro =========================
+
 
 @require_http_methods(["GET"])
 def muro_publico(request, username: str):
@@ -194,6 +194,7 @@ def mi_muro(request):
 
 # ================= Acciones de canciones (propias) ==============
 
+
 @require_http_methods(["POST"])
 def subir_cancion_en_muro(request):
     """
@@ -240,7 +241,9 @@ def subir_cancion_en_muro(request):
 
     if (
         audio_digest
-        and Song.objects.filter(owner_user=username, visibility="public", audio_sha256=audio_digest).exists()
+        and Song.objects.filter(
+            owner_user=username, visibility="public", audio_sha256=audio_digest
+        ).exists()
     ):
         msg = "Ya subiste este mismo audio antes."
         return _json_err(msg) if is_fetch else _redirect_error(request, msg, "mi_muro")
@@ -345,7 +348,9 @@ def editar_mi_cancion_en_muro(request, song_id: int):
                         owner_user=username,
                         visibility="public",
                         title__iexact=new_title,
-                    ).exclude(pk=song.id).exists()
+                    )
+                    .exclude(pk=song.id)
+                    .exists()
                 ):
                     messages.error(request, "Ya tienes otra canción con ese título.")
                     return redirect("editar_mi_cancion_en_muro", song_id=song.id)
@@ -380,6 +385,7 @@ def editar_mi_cancion_en_muro(request, song_id: int):
 
 # =============== Eliminar + Deshacer (muro) =====================
 
+
 @require_http_methods(["POST"])
 def eliminar_cancion(request, song_id: int):
     """Marca una canción propia como 'removed' y registra undo en sesión."""
@@ -404,6 +410,7 @@ def eliminar_cancion(request, song_id: int):
 
 
 # ====================== Revertir (genérico) =====================
+
 
 @require_http_methods(["POST"])
 def revertir(request):
@@ -446,6 +453,7 @@ def revertir(request):
         _clear_undo_muro(request)
 
     return redirect("mi_muro")
+
 
 @require_http_methods(["GET", "POST"])
 def subir_cancion(request):
