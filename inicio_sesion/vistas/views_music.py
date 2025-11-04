@@ -134,7 +134,9 @@ def editar_cancion(request, song_id: int):
                     song.cover_image = None
                 elif new_cover:
                     _delete_storage_entry(song.cover_image)
-                    name = f"cover_{song.owner_user}_{uuid4().hex}{Path(new_cover.name).suffix or ''}"
+                    name = (
+                        f"cover_{song.owner_user}_{uuid4().hex}{Path(new_cover.name).suffix or ''}"
+                    )
                     saved = _storage().save(name, new_cover)
                     song.cover_image = saved
 
@@ -181,11 +183,13 @@ def eliminar_cancion(request, song_id: int):
                     "kind": "restore_song_visibility",
                     "song_id": song.id,
                     "prev_visibility": prev_visibility,
+                    "actor": username,  # <--- NUEVO
                 }
                 request.session["gestion_undo_label"] = (
                     f"Se eliminó “{song.title}” de {song.artist_display_name}."
                 )
                 request.session.modified = True
+
             else:
                 _put_song_undo_artist(
                     request,

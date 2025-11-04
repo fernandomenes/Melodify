@@ -51,9 +51,7 @@ def _delete_stored_file_by_url(url: str) -> None:
 def _delete_storage_entry(file_or_url) -> None:
     """Elimina del storage a partir de FieldFile.name o desde URL del storage."""
     try:
-        name = getattr(file_or_url, "name", "") or _rel_from_storage_url(
-            str(file_or_url) or ""
-        )
+        name = getattr(file_or_url, "name", "") or _rel_from_storage_url(str(file_or_url) or "")
         if name:
             _storage().delete(name)
     except Exception:
@@ -157,12 +155,8 @@ def muro_publico(request, username: str):
                 "id": s.id,
                 "title": s.title,
                 "author": s.artist_display_name,
-                "audioUrl": (
-                    s.audio_file.url if getattr(s, "audio_file", None) else ""
-                ),
-                "coverUrl": (
-                    s.cover_image.url if getattr(s, "cover_image", None) else None
-                ),
+                "audioUrl": (s.audio_file.url if getattr(s, "audio_file", None) else ""),
+                "coverUrl": (s.cover_image.url if getattr(s, "cover_image", None) else None),
                 "genre": getattr(s, "genre", "") or "",
             }
             for s in qs
@@ -170,7 +164,9 @@ def muro_publico(request, username: str):
         playlists.append({"id": 1, "name": "Mi música", "songs": songs_json})
 
     undo_muro_data = request.session.get("mi_muro_undo")
-    undo_muro_label = request.session.get("mi_muro_undo_label")
+    if undo_muro_data and undo_muro_data.get("owner") != session_user:
+        undo_muro_data = None
+    undo_muro_label = request.session.get("mi_muro_undo_label") if undo_muro_data else None
 
     ctx = {
         "artist": artist,
@@ -231,9 +227,7 @@ def subir_cancion_en_muro(request):
         msg = "Título, intérprete y archivo de audio son obligatorios."
         return _json_err(msg) if is_fetch else _redirect_error(request, msg, "mi_muro")
 
-    if Song.objects.filter(
-        owner_user=username, visibility="public", title__iexact=title
-    ).exists():
+    if Song.objects.filter(owner_user=username, visibility="public", title__iexact=title).exists():
         msg = "Ya tienes una canción con ese título."
         return _json_err(msg) if is_fetch else _redirect_error(request, msg, "mi_muro")
 
@@ -300,9 +294,7 @@ def subir_cancion_en_muro(request):
                         "title": song.title,
                         "artist_display_name": song.artist_display_name,
                         "owner_user": song.owner_user,
-                        "created_at": (
-                            song.created_at.isoformat() if song.created_at else ""
-                        ),
+                        "created_at": (song.created_at.isoformat() if song.created_at else ""),
                         "audio_url": song.audio_file.url if song.audio_file else "",
                         "cover_url": song.cover_image.url if song.cover_image else "",
                         "genre": getattr(song, "genre", "") or "",

@@ -43,11 +43,7 @@
   </header>
 
   <div class="card">
-    {% if messages %}
-      <ul class="messages">
-        {% for m in messages %}<li>{{ m }}</li>{% endfor %}
-      </ul>
-    {% endif %}
+
 
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
