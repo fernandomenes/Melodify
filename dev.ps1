@@ -158,9 +158,8 @@ function SuperClean {
 # ---------------- Tests / Coverage ----------------
 function Test-Unit {
   Ensure-Venv
-  # Coincide con tu Makefile (inicio_sesion/tests/test_*.py)
-  Invoke-Py @("manage.py","test","inicio_sesion","-v","2","--pattern=tests\test_*.py")
-}
+  # Coincide Makefile (inicio_sesion/tests/test_*.py)
+  Invoke-Py @("manage.py","test","-v","2")}
 
 function Coverage {
   Ensure-Venv
@@ -168,7 +167,7 @@ function Coverage {
   Push-Location $PSScriptRoot
   try {
     & $VenvPython -m coverage run manage.py test inicio_sesion -v 2 --pattern="tests\test_*.py"
-    & $VenvPython -m coverage report -m
+    & $VenvPython -m coverage run manage.py test -v 2
   } finally {
     Pop-Location
   }

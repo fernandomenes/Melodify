@@ -150,7 +150,6 @@ def gestion_dashboard(request):
         "playlists": playlists,
         "undo_data": undo_data,
         "undo_label": undo_label,
-        # Para data-* del template
         "username": username,
         "role": role,
         "avatar_url": avatar_url,
@@ -161,27 +160,37 @@ def gestion_dashboard(request):
 
 
 @require_http_methods(["POST"])
+@require_http_methods(["POST"])
 def registrar_artista(request):
-    """Crea un usuario con rol «artista» y su perfil asociado."""
+    """Crea un usuario con rol «Artista» y su perfil asociado."""
     username, error = _require_admin(request)
     if error:
         return error
 
-    artist_id = (request.POST.get("user") or "").strip()
-    password = (request.POST.get("password") or "").strip()
+    artist_id   = (request.POST.get("user") or "").strip()
+    password    = (request.POST.get("password") or "").strip()
     description = (request.POST.get("description") or "").strip()
-    avatar = request.FILES.get("avatar")
+    avatar      = request.FILES.get("avatar")
 
+    # Obligatorios
     if not artist_id or not description or not password:
         messages.error(request, "Completa: usuario, descripción y contraseña.")
         return redirect("gestion")
+
+    # Alterno A-1: contraseña mínima 10
+    if len(password) < 10:
+        messages.error(request, "La contraseña debe tener al menos 10 caracteres.")
+        return redirect("gestion")
+
+    # Descripción razonable
     if len(description) > 200:
         messages.error(request, "La descripción no puede superar 200 caracteres.")
         return redirect("gestion")
 
     try:
         with transaction.atomic():
-            user = Users.objects.create(user=artist_id, password=password, type="artista")
+            # Estandariza el rol con mayúscula inicial
+            user = Users.objects.create(user=artist_id, password=password, type="Artista")
             if avatar:
                 user.avatar = avatar
                 user.save(update_fields=["avatar"])
@@ -199,24 +208,24 @@ def registrar_artista(request):
         messages.error(request, "No se pudo agregar el artista. Inténtalo más tarde.")
     return redirect("gestion")
 
-
 @require_http_methods(["POST"])
 def registrar_admin(request):
-    """Crea un usuario con rol «administrador»."""
+    """Crea un usuario con rol «Administrador»."""
     username, error = _require_admin(request)
     if error:
         return error
 
     admin_id = (request.POST.get("user") or "").strip()
     password = (request.POST.get("password") or "").strip()
-    avatar = request.FILES.get("avatar")
+    avatar   = request.FILES.get("avatar")
 
     if not admin_id or not password:
         messages.error(request, "Completa: usuario y contraseña.")
         return redirect("gestion")
 
     try:
-        user = Users.objects.create(user=admin_id, password=password, type="administrador")
+        # Estandariza el rol con mayúscula inicial
+        user = Users.objects.create(user=admin_id, password=password, type="Administrador")
         if avatar:
             user.avatar = avatar
             user.save(update_fields=["avatar"])
@@ -232,7 +241,6 @@ def registrar_admin(request):
     except Exception:
         messages.error(request, "No se pudo agregar el administrador. Inténtalo más tarde.")
     return redirect("gestion")
-
 
 @require_http_methods(["POST"])
 def desactivar_usuario(request, username: str):

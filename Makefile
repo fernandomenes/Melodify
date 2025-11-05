@@ -125,8 +125,14 @@ clean-migrations:
 
 # ================== TESTS / COVERAGE ==================
 test:
-	$(PY) manage.py test inicio_sesion -v 2 --pattern="test_*.py"
+	$(PY) manage.py test -v 2
+
+# Opcional: correr apps específicas
+# Uso: make test-app APPS="muro gestion reproductor inicio_sesion"
+
+test-app:
+	$(PY) manage.py test $(APPS) -v 2
 
 coverage:
 	$(PIP) install -U coverage
-	. .venv/bin/activate; coverage run manage.py test inicio_sesion -v 2 --pattern="test_*.py"; coverage report -m
+	. .venv/bin/activate; coverage run manage.py test -v 2; coverage report -m

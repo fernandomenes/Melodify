@@ -376,7 +376,14 @@
             const ct = res.headers.get('Content-Type') || '';
             if (!ct.includes('application/json')) { showError('Respuesta inesperada del servidor.'); return; }
             const data = await res.json();
-            if (!data.ok) { showError(data.error || 'No se pudo subir la canción.'); return; }
+            if (!data.ok) {
+              showError(data.error || 'No se pudo subir la canción.');
+            if (data.suggested_title) {
+              const titleInput = document.querySelector('#form-upload input[name=title]');
+            if (titleInput) { titleInput.value = data.suggested_title; titleInput.focus(); }
+            }
+            return;
+          }
 
             let gridEl = document.getElementById('songs-grid');
             if (!gridEl) {
