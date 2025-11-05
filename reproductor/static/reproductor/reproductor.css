@@ -1,18 +1,26 @@
 /* ==========================================================================
    Melodify Player
    Variables de tema y colores base
+   --------------------------------------------------------------------------
+   - Centraliza colores, tamaños y acentos visuales.
+   - Facilita el theming sin tocar reglas individuales.
    ========================================================================== */
 :root {
   --bg:#121212; --card:#1b1b1b; --line:#2a2a2a; --muted:#9aa0a6;
   --accent:#7a3cff; --accent-2:#8b5dff; --text:#efeeee; --sidebar-w:220px;
-  --glow-bg-1:#221a36;
-  --glow-bg-2:#191627;
-  --glow-border:#6f58ff;
-  --glow-outer:rgba(122,60,255,.25);
+  --glow-bg-1:#221a36;         /* degradado “glow” (superior) */
+  --glow-bg-2:#191627;         /* degradado “glow” (inferior) */
+  --glow-border:#6f58ff;       /* borde luminoso */
+  --glow-outer:rgba(122,60,255,.25); /* halo externo */
 }
 
 /* ==========================================================================
    Barra del reproductor (fija inferior)
+   --------------------------------------------------------------------------
+   - Oculta por defecto; se muestra añadiendo .is-visible desde JS.
+   - Desplazada a la derecha del sidebar (—> --sidebar-w).
+   - El modificador .menuLateral-collapsed corrige el offset cuando el menú
+     lateral está plegado.
    ========================================================================== */
 ._mdf-player-bar {
   position: fixed;
@@ -34,7 +42,7 @@
 ._mdf-player-bar.is-visible { display: grid; }
 ._mdf-player-bar.menuLateral-collapsed { left: 0 !important; }
 
-/* Columna izquierda: portada + metadatos */
+/* --- Columna izquierda: portada + metadatos --- */
 ._mdf-now { display: flex; align-items: center; gap: 12px; min-width: 0; }
 ._mdf-cover {
   width: 48px; height: 48px; border-radius: 10px; background: #222; object-fit: cover;
@@ -44,7 +52,7 @@
 ._mdf-player-title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 ._mdf-player-artist { font-size: .9rem; color: #b3b3b3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* Columna central: controles */
+/* --- Columna central: controles --- */
 ._mdf-ctrls { display: flex; align-items: center; gap: 10px; }
 ._mdf-btn {
   width: 40px; height: 40px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
@@ -67,7 +75,7 @@
 ._mdf-btn--primary:hover { background: var(--accent-2) !important; }
 ._mdf-btn--primary:focus { outline: none; }
 
-/* Columna derecha: tiempo, seek y volumen */
+/* --- Columna derecha: tiempo, seek y volumen --- */
 ._mdf-right { display: flex; align-items: center; gap: 12px; justify-content: flex-end; min-width: 360px; }
 ._mdf-time { font-size: 12px; color: #bbb; min-width: 92px; text-align: right; }
 ._mdf-player-seek { flex: 1 1 360px; width: auto; min-width: 180px; }
@@ -75,6 +83,9 @@
 
 /* ==========================================================================
    Listado de canciones
+   --------------------------------------------------------------------------
+   - Ítems con grid responsive y estados de hover/playing.
+   - .song-cover--placeholder asegura consistencia sin imagen.
    ========================================================================== */
 .songs-wrap { width: min(980px, 92vw); margin: 8px 0 120px; }
 .song-item {
@@ -93,7 +104,7 @@
 .song-author { color: var(--muted); font-size: .9rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .song-actions { display: flex; align-items: center; gap: 10px; justify-self: end; }
 
-/* Acción “reproducir” en pastilla */
+/* Acción “reproducir” en forma de pastilla */
 .song-actions .play-pill {
   display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px;
   border-radius: 999px; background: #232323; border: 1px solid var(--line); color: #ddd; font-size: .9rem;
@@ -128,6 +139,8 @@ body[data-page="home"] a.back { display: none !important; }
 
 /* ==========================================================================
    Vista Reproductor: layout de dos paneles (izquierdo/visor — derecho/listas)
+   --------------------------------------------------------------------------
+   - En <960px> el panel derecho se coloca arriba (order:-1) para mejor lectura.
    ========================================================================== */
 .rep-grid { display: grid; grid-template-columns: 1fr 360px; gap: 16px; }
 @media (max-width:960px) {
@@ -151,6 +164,9 @@ body[data-page="home"] a.back { display: none !important; }
 
 /* ==========================================================================
    Chips de género
+   --------------------------------------------------------------------------
+   - .rep-chip es inline-flex para evitar saltos de línea irregulares.
+   - Estados :hover, :active y .active alineados con el estilo “glow”.
    ========================================================================== */
 #rep-genres {
   display: flex;
@@ -203,6 +219,8 @@ body[data-page="home"] a.back { display: none !important; }
 
 /* ==========================================================================
    Listas del panel derecho
+   --------------------------------------------------------------------------
+   - Ítems clicables con realce en hover y estado .active.
    ========================================================================== */
 .rep-list { list-style: none; margin: 0; padding: 0; }
 .rep-list li {
@@ -215,6 +233,8 @@ body[data-page="home"] a.back { display: none !important; }
 
 /* ==========================================================================
    Estado vacío del panel
+   --------------------------------------------------------------------------
+   - Bloque de ayuda cuando no hay contenido que mostrar en el visor izquierdo.
    ========================================================================== */
 .rep-empty {
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;

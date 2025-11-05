@@ -135,6 +135,9 @@
       {% if is_owner %}
         <div class="card">
           <h3 style="margin:0 0 12px">Subir canción</h3>
+          <div style="display:flex; gap:8px; margin:0 0 12px">
+            <a class="btn" href="{% url 'muro_subida_masiva' %}">Subida masiva</a>
+          </div>
           <form id="form-upload" method="post" enctype="multipart/form-data" action="{% url 'subir_cancion_en_muro' %}">
             {% csrf_token %}
             <label>Título</label>

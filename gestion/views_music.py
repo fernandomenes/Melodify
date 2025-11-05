@@ -1,7 +1,7 @@
 # gestion/views_music.py
 """
 Vistas para editar y eliminar canciones (admin/propietario) con soporte de deshacer.
-Ahora viven en la app 'gestion', pero siguen usando modelos/helpers de 'inicio_sesion'.
+Residen en la app 'gestion' y utilizan modelos/helpers definidos en 'inicio_sesion'.
 """
 
 from pathlib import Path
@@ -13,41 +13,61 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
-# ✅ Importa desde la app original, ya SIN rutas relativas
 from inicio_sesion import base as base
 from inicio_sesion.auth_helpers import _get_user_role, _is_admin, _is_artist, _require_session_user
 from inicio_sesion.models import Song
 
 
 def _storage():
+    """Devuelve el storage configurado para archivos de audio/portadas."""
     return base._AUDIO_STORAGE
 
 
 def _put_song_undo(request, label: str, data: dict):
+    """Guarda en sesión la acción de deshacer (clave genérica)."""
     request.session["song_undo"] = data
     request.session["song_undo_label"] = label
     request.session.modified = True
 
 
 def _clear_song_undo(request):
+    """Limpia de sesión la acción de deshacer (clave genérica)."""
     request.session.pop("song_undo", None)
     request.session.pop("song_undo_label", None)
     request.session.modified = True
 
 
 def _put_song_undo_artist(request, label: str, data: dict):
+    """Guarda en sesión la acción de deshacer para el flujo del artista."""
     request.session["song_undo_artist"] = data
     request.session["song_undo_artist_label"] = label
     request.session.modified = True
 
 
 def _clear_song_undo_artist(request):
+    """Limpia de sesión la acción de deshacer del flujo del artista."""
     request.session.pop("song_undo_artist", None)
     request.session.pop("song_undo_artist_label", None)
     request.session.modified = True
 
 
+def _get_gestion_undo(request):
+    """Obtiene de sesión la acción de deshacer del flujo de gestión/admin."""
+    return request.session.get("gestion_undo")
+
+
+def _clear_gestion_undo(request):
+    """Limpia de sesión la acción de deshacer del flujo de gestión/admin."""
+    request.session.pop("gestion_undo", None)
+    request.session.pop("gestion_undo_label", None)
+    request.session.modified = True
+
+
 def _delete_storage_entry(file_or_url) -> None:
+    """
+    Intenta eliminar del storage el archivo referenciado por nombre o URL.
+    Operación best-effort: los errores se ignoran silenciosamente.
+    """
     try:
         name = getattr(file_or_url, "name", "") or str(file_or_url) or ""
         base_url = _storage().base_url.rstrip("/") + "/"
@@ -56,15 +76,14 @@ def _delete_storage_entry(file_or_url) -> None:
         if name:
             _storage().delete(name)
     except Exception:
-        # Borrado best-effort
         pass
 
 
 @require_http_methods(["GET", "POST"])
 def editar_cancion(request, song_id: int):
     """
-    Edita metadatos básicos (título, intérprete, género, portada) de una canción.
-    Sólo admins.
+    Edita metadatos (título, intérprete, género, portada) de una canción.
+    Requiere rol administrador.
     """
     username = _require_session_user(request)
     if not username:
@@ -92,7 +111,7 @@ def editar_cancion(request, song_id: int):
 
         try:
             with transaction.atomic():
-                # Evita duplicados por mismo propietario + visibilidad pública
+                # Evita duplicados por mismo propietario y visibilidad pública
                 dup = (
                     Song.objects.filter(
                         owner_user=song.owner_user,
@@ -118,9 +137,7 @@ def editar_cancion(request, song_id: int):
                     song.cover_image = None
                 elif new_cover:
                     _delete_storage_entry(song.cover_image)
-                    name = (
-                        f"cover_{song.owner_user}_{uuid4().hex}{Path(new_cover.name).suffix or ''}"
-                    )
+                    name = f"cover_{song.owner_user}_{uuid4().hex}{Path(new_cover.name).suffix or ''}"
                     saved = _storage().save(name, new_cover)
                     song.cover_image = saved
 
@@ -132,14 +149,14 @@ def editar_cancion(request, song_id: int):
             messages.error(request, "No se pudieron guardar los cambios.")
             return redirect("editar_cancion", song_id=song.id)
 
-    # 👇 El template ya está bajo gestion/
     return render(request, "gestion/editar_cancion.html", {"song": song})
 
 
 @require_http_methods(["POST"])
 def eliminar_cancion(request, song_id: int):
     """
-    Elimina (soft-delete) una canción. Puede hacerlo el admin o el dueño (artista).
+    Realiza eliminación lógica (visibility='removed') de una canción.
+    Permitido para administrador o propietario (artista).
     """
     username = _require_session_user(request)
     if not username:
@@ -161,7 +178,7 @@ def eliminar_cancion(request, song_id: int):
             messages.success(request, "Canción eliminada.")
 
             if is_admin:
-                # Deshacer en barra de gestión
+                # Deshacer en flujo de gestión/admin
                 request.session["gestion_undo"] = {
                     "kind": "restore_song_visibility",
                     "song_id": song.id,
@@ -173,7 +190,7 @@ def eliminar_cancion(request, song_id: int):
                 )
                 request.session.modified = True
             else:
-                # Deshacer en muro del artista
+                # Deshacer en flujo del artista (muro)
                 _put_song_undo_artist(
                     request,
                     f"Eliminaste “{song.title}”.",
@@ -193,7 +210,8 @@ def eliminar_cancion(request, song_id: int):
 @require_http_methods(["POST"])
 def revertir_cancion(request):
     """
-    Deshacer de eliminación de canción (flujo de Gestión/Admin).
+    Deshace la eliminación de una canción (flujo de Gestión/Admin).
+    Requiere rol administrador.
     """
     username = _require_session_user(request)
     if not username:
@@ -203,7 +221,7 @@ def revertir_cancion(request):
     if not _is_admin(role):
         return HttpResponse("No autorizado", status=403)
 
-    data = request.session.get("song_undo")
+    data = _get_gestion_undo(request)
     if not data or data.get("kind") != "restore_song_visibility":
         messages.info(request, "No hay ninguna eliminación para deshacer.")
         return redirect("gestion")
@@ -217,7 +235,7 @@ def revertir_cancion(request):
             song.visibility = prev_visibility
             song.save(update_fields=["visibility"])
             messages.success(request, f"Se restauró la canción “{song.title}”.")
-            _clear_song_undo(request)
+            _clear_gestion_undo(request)
     except Exception:
         messages.error(request, "No fue posible deshacer la eliminación.")
 
@@ -227,7 +245,8 @@ def revertir_cancion(request):
 @require_http_methods(["POST"])
 def revertir_mi_cancion(request):
     """
-    Deshacer de eliminación de canción (flujo de artista en su muro).
+    Deshace la eliminación de una canción (flujo del artista en su muro).
+    Requiere rol artista y ser propietario de la canción.
     """
     username = _require_session_user(request)
     if not username:

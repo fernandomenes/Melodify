@@ -1,6 +1,6 @@
 # muro/urls.py
 from django.urls import path
-
+from .views_artist import subida_masiva
 from . import views_artist as va
 
 urlpatterns = [
@@ -16,4 +16,5 @@ urlpatterns = [
     path("mi-muro/undo/", va.revertir, name="revertir"),
     # JSON usado por el reproductor/Home
     path("mi-musica/json/", va.mi_musica_json, name="mi_musica_json"),
+    path("mi-muro/subida-masiva/", subida_masiva, name="muro_subida_masiva"),
 ]

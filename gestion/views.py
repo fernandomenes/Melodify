@@ -1,4 +1,11 @@
 # gestion/views.py
+"""
+Vistas para la administración del sistema (alta/edición de usuarios y catálogo),
+incluyendo soporte de deshacer mediante estado en sesión.
+
+Este módulo asume autenticación previa y utiliza los modelos y utilidades de
+la app `inicio_sesion`.
+"""
 
 from django.contrib import messages
 from django.db import IntegrityError, transaction
@@ -13,7 +20,7 @@ from django.views.decorators.http import require_http_methods
 from inicio_sesion.auth_helpers import _get_user_role, _is_admin, _require_session_user
 from inicio_sesion.models import ArtistProfile, Song, Users
 
-# Importaciones opcionales
+# Importaciones opcionales (si existen estas entidades)
 try:
     from inicio_sesion.models import Album
 except Exception:
@@ -24,18 +31,18 @@ except Exception:
     Playlist = None
 
 
-# =========================
+# =============================================================================
 # Helpers de "Deshacer"
-# =========================
-def _put_undo(request, label: str, data: dict):
-    """Guarda en sesión el último cambio para permitir su reversión."""
+# =============================================================================
+def _put_undo(request, label: str, data: dict) -> None:
+    """Persiste en sesión la acción más reciente para permitir su reversión."""
     request.session["gestion_undo"] = data
     request.session["gestion_undo_label"] = label
     request.session.modified = True
 
 
-def _clear_undo(request):
-    """Limpia el estado de deshacer en la sesión."""
+def _clear_undo(request) -> None:
+    """Limpia de sesión cualquier acción pendiente de deshacer."""
     request.session.pop("gestion_undo", None)
     request.session.pop("gestion_undo_label", None)
     request.session.modified = True
@@ -43,8 +50,9 @@ def _clear_undo(request):
 
 def _require_admin(request):
     """
-    Verifica que exista sesión y que el usuario tenga rol de administrador.
-    Devuelve (username, error_response|None).
+    Verifica que exista una sesión válida y que el usuario tenga rol administrador.
+    Devuelve una tupla (username, error_response). Si `error_response` no es None,
+    debe retornarse desde la vista que lo invocó.
     """
     username = _require_session_user(request)
     if not username:
@@ -59,14 +67,16 @@ def _require_admin(request):
     return None, HttpResponse("No autorizado", status=403)
 
 
-# =========================
+# =============================================================================
 # Vistas de Gestión (solo administradores)
-# =========================
+# =============================================================================
 @require_http_methods(["GET"])
 def gestion_dashboard(request):
     """
-    Panel de administración:
-      - Formularios de alta de artista/administrador.
+    Panel de administración.
+
+    Incluye:
+      - Formularios de alta de artista y administrador.
       - Pestaña "Usuarios": admins, artistas y usuarios.
       - Pestaña "Catálogo": canciones públicas (y álbumes/playlists si existen).
     """
@@ -101,17 +111,19 @@ def gestion_dashboard(request):
     albums = Album.objects.all().order_by("-id") if Album else []
     playlists = Playlist.objects.all().order_by("-id") if Playlist else []
 
+    # Estado de deshacer (sólo si lo generó el usuario actual)
     undo_data = request.session.get("gestion_undo")
     if undo_data and undo_data.get("actor") != username:
         undo_data = None
     undo_label = request.session.get("gestion_undo_label") if undo_data else None
 
-    # ===== Variables para data-* en el template =====
-    role = "administrador"  # garantizado por _require_admin
+    # Variables para data-* del template
+    role = "administrador"
     avatar_url = ""
     artist_description = ""
     created_at = ""
 
+    # Datos de identidad visual (avatar/fecha/descr.) si están disponibles
     try:
         u = Users.objects.select_related("artist_profile").get(user=username)
         if getattr(u, "avatar", None):
@@ -138,7 +150,7 @@ def gestion_dashboard(request):
         "playlists": playlists,
         "undo_data": undo_data,
         "undo_label": undo_label,
-        # Para el template (data-*)
+        # Para data-* del template
         "username": username,
         "role": role,
         "avatar_url": avatar_url,
@@ -150,7 +162,7 @@ def gestion_dashboard(request):
 
 @require_http_methods(["POST"])
 def registrar_artista(request):
-    """Crea un usuario con rol Artista y su perfil asociado."""
+    """Crea un usuario con rol «artista» y su perfil asociado."""
     username, error = _require_admin(request)
     if error:
         return error
@@ -190,7 +202,7 @@ def registrar_artista(request):
 
 @require_http_methods(["POST"])
 def registrar_admin(request):
-    """Crea un usuario con rol Administrador."""
+    """Crea un usuario con rol «administrador»."""
     username, error = _require_admin(request)
     if error:
         return error
@@ -251,7 +263,7 @@ def desactivar_usuario(request, username: str):
 
 @require_http_methods(["POST"])
 def activar_usuario(request, username: str):
-    """Activa una cuenta."""
+    """Activa una cuenta previamente desactivada."""
     _, error = _require_admin(request)
     if error:
         return error
@@ -263,11 +275,7 @@ def activar_usuario(request, username: str):
     _put_undo(
         request,
         f"Se activó “{username}”.",
-        {
-            "kind": "toggle_active",
-            "username": username,
-            "to": True,
-        },
+        {"kind": "toggle_active", "username": username, "to": True},
     )
     return redirect("gestion")
 
@@ -275,7 +283,9 @@ def activar_usuario(request, username: str):
 @require_http_methods(["GET", "POST"])
 def editar_usuario(request, username: str):
     """
-    Edita datos de un usuario. Permite:
+    Edita datos de un usuario.
+
+    Permite:
       - Cambio de username (migra ownership de canciones).
       - Cambio de password y rol (con restricciones para superadmin).
       - Gestión de avatar y descripción de artista.
@@ -296,7 +306,7 @@ def editar_usuario(request, username: str):
         remove_avatar = (request.POST.get("remove_avatar") or "") == "1"
         avatar_file = request.FILES.get("avatar")
 
-        # Reglas para superadmin
+        # Reglas restrictivas sobre superadmin
         if target_is_super and not session_is_super:
             new_password = ""
             new_role = (u.type or "").lower()
@@ -319,7 +329,7 @@ def editar_usuario(request, username: str):
 
         try:
             with transaction.atomic():
-                # Cambio de username (propaga ownership)
+                # Cambio de username (propaga ownership de canciones)
                 if new_user != u.user:
                     if Users.objects.filter(user=new_user).exclude(pk=u.pk).exists():
                         messages.error(request, "Ese nombre de usuario ya existe.")
@@ -375,7 +385,10 @@ def editar_usuario(request, username: str):
 
 @require_http_methods(["POST"])
 def eliminar_usuario(request, username: str):
-    """Elimina una cuenta (con soft-delete de canciones si es artista)."""
+    """
+    Elimina una cuenta. Si es artista, aplica soft-delete a sus canciones públicas
+    (visibility='removed') para permitir eventual reversión.
+    """
     session_user, error = _require_admin(request)
     if error:
         return error
@@ -431,7 +444,7 @@ def eliminar_usuario(request, username: str):
 @require_http_methods(["POST"])
 def revertir_accion(request):
     """
-    Revierte la última acción guardada en sesión.
+    Revierte la última acción registrada en sesión.
 
     Tipos soportados (data['kind']):
       - toggle_active: invierte activación de usuario.
@@ -495,7 +508,6 @@ def revertir_accion(request):
                     )
                     avatar = data.get("avatar")
                     if avatar:
-                        # Asignar name al FileField
                         u.avatar = avatar
                         u.save(update_fields=["avatar"])
 
@@ -529,15 +541,15 @@ def revertir_accion(request):
     return redirect("gestion")
 
 
-# =========================================================
+# =============================================================================
 # Pestaña "Catálogo": fragmento HTML y JSON
-# =========================================================
+# =============================================================================
 @require_http_methods(["GET"])
 def catalogo_admin_fragment(request):
     """
     Devuelve el HTML parcial del catálogo de canciones filtrado.
 
-    Query params:
+    Parámetros de consulta:
       - artist (str, opcional): username del artista.
       - q (str, opcional): texto a buscar en título o intérprete.
     """
@@ -576,9 +588,9 @@ def catalogo_admin_json(request):
     """
     Devuelve JSON para polling de nuevas canciones.
 
-    Query params:
+    Parámetros de consulta:
       - artist (str, opcional): username del artista.
-      - since (ISO8601, opcional): límite inferior de created_at (exclusivo).
+      - since (ISO8601, opcional): límite inferior exclusivo de created_at.
 
     Respuesta:
       {
