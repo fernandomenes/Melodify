@@ -1,6 +1,11 @@
 import json
+from django.contrib import messages
 
 from django.shortcuts import redirect, render
+from django.contrib.auth import logout as django_logout
+from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_http_methods
+
 
 from .models import ArtistProfile, Song, Users
 
@@ -23,7 +28,8 @@ def pantallaHome(request):
     es Artista, la playlist “Mi música” con canciones públicas del usuario.
     """
     if "user" not in request.session:
-        return redirect("login")
+        messages.error(request, "Debes iniciar sesión para acceder a esta página.")
+        return redirect('login')
 
     session_user = request.session.get("user", "")
     session_role = request.session.get("role", "")
@@ -79,6 +85,58 @@ def pantallaHome(request):
     }
     return render(request, "inicio_sesion/home.html", ctx)
 
+def pantallaRegistro(request):
+    """
+    Gestiona el formulario de registro de nuevos usuarios.
+    """
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        confirm_password = request.POST.get('confirm_password')
+        
+        # Validaciones
+        errors = []
+        
+        # Verificar que las contraseñas coincidan
+        if password != confirm_password:
+            errors.append("Las contraseñas no coinciden.")
+        
+        # Verificar que el usuario no exista
+        if Users.objects.filter(user=username).exists():
+            errors.append("El nombre de usuario ya existe.")
+        
+        # Verificar longitud mínima
+        if len(password) < 6:
+            errors.append("La contraseña debe tener al menos 6 caracteres.")
+        
+        # Verificar que el username no esté vacío
+        if not username.strip():
+            errors.append("El nombre de usuario no puede estar vacío.")
+        
+        # Si no hay errores, crear el usuario
+        if not errors:
+            try:
+                nuevo_usuario = Users(
+                    user=username.strip(),
+                    password=password,  # En un proyecto real, esto debería estar encriptado
+                    type='Usuario',  # Tipo por defecto
+                    is_superadmin=False,
+                    is_active=True
+                )
+                nuevo_usuario.save()
+                
+                messages.success(request, "¡Registro exitoso! Ahora puedes iniciar sesión.")
+                return redirect('login')
+                
+            except Exception as e:
+                errors.append(f"Error al crear el usuario: {str(e)}")
+        
+        # Si hay errores, mostrarlos
+        for error in errors:
+            messages.error(request, error)
+    
+    return render(request, 'inicio_sesion/registro.html')
+
 
 def pantallaLogin(request):
     """
@@ -112,3 +170,29 @@ def pantallaLogin(request):
                 {"error": "Usuario o contraseña incorrectos"},
             )
     return render(request, "inicio_sesion/login.html")
+
+@require_http_methods(["GET", "POST"])
+@csrf_protect
+def pantallaLogout(request):
+    """
+    Cierra la sesión del usuario y establece headers para no cachear.
+    """
+    # Limpiar toda la sesión
+    request.session.flush()
+    django_logout(request)
+    
+    messages.success(request, "Sesión cerrada correctamente.")
+    
+    # Crear respuesta con headers para no cachear
+    response = redirect('login')
+    
+    # Headers para evitar cacheo del navegador
+    response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
+    
+    # Eliminar cookie de sesión si existe
+    if hasattr(request, 'session'):
+        request.session.flush()
+    
+    return response

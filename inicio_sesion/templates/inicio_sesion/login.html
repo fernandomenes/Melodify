@@ -20,10 +20,22 @@
 
     <div class="loginContainer">
         <h2>Iniciar Sesión</h2>
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div class="message {% if message.tags %}{{ message.tags }}{% endif %}" 
+                    style="color: {% if message.tags == 'success' %}#4CAF50{% else %}#f44336{% endif %}; 
+                    padding: 10px; margin: 10px 0; border-radius: 5px; 
+                    background: {% if message.tags == 'success' %}#e8f5e8{% else %}#ffebee{% endif %};">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+
         {% if error %}
             <p style="color: red;">{{ error }}</p>
         {% endif %}
-
+        
 
          <form method="post" action="{% url 'login' %}">
             {% csrf_token %}

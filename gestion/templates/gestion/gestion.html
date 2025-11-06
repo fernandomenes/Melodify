@@ -1,3 +1,4 @@
+<!-- Dashboard principal de administración  -->
 {% load static %}
 <!doctype html>
 <html lang="es">
@@ -75,7 +76,7 @@
     <span id="username">Usuario</span>
     <div id="user-menu">
       <a href="#" id="menu-perfil">Perfil</a>
-      <a href="#" id="menu-logout">Cerrar sesión</a>
+      <a href="{% url 'logout' %}" id="menu-logout">Cerrar sesión</a>
     </div>
   </div>
 </div>

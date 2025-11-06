@@ -1,0 +1,74 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro - Melodify</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'inicio_sesion/GlobalStyles.css' %}">
+    <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}">
+</head>
+<body>
+
+    <div class="logo-container">
+        <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
+        <span class="logo-text">Melodify</span>
+    </div>
+
+    <div class="loginContainer">
+        <h2>Crear Cuenta</h2>
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div class="message {% if message.tags %}{{ message.tags }}{% endif %}" 
+                    style="color: {% if message.tags == 'success' %}#4CAF50{% else %}#f44336{% endif %}; 
+                            padding: 10px; margin: 10px 0; border-radius: 5px; 
+                            background: {% if message.tags == 'success' %}#e8f5e8{% else %}#ffebee{% endif %};">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="post" action="{% url 'registro' %}">
+            {% csrf_token %}
+            
+            <label for="username">Nombre de usuario:</label>
+            <input type="text" id="username" name="username" required placeholder="Ingresa tu nombre de usuario">
+            
+            <label for="password">Contraseña:</label>
+            <input type="password" id="password" name="password" required placeholder="Mínimo 6 caracteres">
+            
+            <label for="confirm_password">Confirmar contraseña:</label>
+            <input type="password" id="confirm_password" name="confirm_password" required placeholder="Repite tu contraseña">
+            
+            <button type="submit" class="btnRound">Registrarse</button>
+        </form>
+        
+        <p style="margin-top: 20px; text-align: center;">
+            ¿Ya tienes cuenta? <a href="{% url 'login' %}" style="color: #ff0066;">Inicia sesión aquí</a>
+        </p>
+    </div>
+
+    <script>
+        // Validación cliente de contraseñas
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm_password').value;
+            
+            if (password !== confirmPassword) {
+                e.preventDefault();
+                alert('Las contraseñas no coinciden. Por favor, verifica.');
+                return false;
+            }
+            
+            if (password.length < 6) {
+                e.preventDefault();
+                alert('La contraseña debe tener al menos 6 caracteres.');
+                return false;
+            }
+        });
+    </script>
+
+</body>
+</html>

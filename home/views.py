@@ -1,7 +1,5 @@
 from django.shortcuts import render
 
-
-# Create your views here.
 def pantallaHome(request):
     print("<--- pantallaHome--->")
-    return render(request, "home/homebase.html")
+    return render(request, "home/home.html")  # Cambiado a home.html
