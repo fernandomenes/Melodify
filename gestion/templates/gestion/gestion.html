@@ -4,41 +4,36 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Gestión (Administrador) | Melodify</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
-    <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet" href="{% static 'gestion/gestion.css' %}?v={% now 'U' %}">
 
   <style>
     :root{--bg:#121212;--card:#1e1e1e;--line:#2b2b2b;--muted:#9aa0a6;--btn:#2a2a2a;--btnb:#3a3a3a;--accent:#9ad}
     *{box-sizing:border-box}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:#eee;margin:0}
-
     .page{padding:16px 24px;max-width:1800px;margin:0 auto}
     header.page-hd{display:flex;align-items:center;gap:12px;margin:0 0 16px}
     .back{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:999px;border:1px solid var(--line);background:#181818;color:#fff;text-decoration:none;font-weight:700;font-size:18px}
     .back:hover{background:#222}
-
     .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:16px 0}
     label{display:block;margin:10px 0 6px;font-size:14px;color:#bbb}
     input[type="text"],input[type="password"],input[type="file"],textarea,select{
-      width:100%;max-width:520px;padding:10px;border-radius:8px;border:1px solid #333;background:#191919;color:#eee;
-      appearance:none;outline:none
-    }
+      width:100%;max-width:520px;padding:10px;border-radius:8px;border:1px solid #333;background:#191919;color:#eee;appearance:none;outline:none}
     textarea{resize:vertical;min-height:72px}
     .btn{padding:10px 14px;border-radius:8px;border:1px solid var(--btnb);background:var(--btn);color:#eee;cursor:pointer;text-decoration:none;display:inline-block}
     .btn:hover{background:#333}
-
     .grid2{display:grid;grid-template-columns:1fr;gap:16px}
     @media(min-width:1024px){.grid2{grid-template-columns:1fr 1fr}}
-
     .tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin:8px 0 0}
     .tab-btn{appearance:none;border:1px solid var(--line);border-bottom:none;background:#181818;color:#ddd;padding:10px 14px;border-top-left-radius:10px;border-top-right-radius:10px;cursor:pointer}
-    .tab-btn.active{background:#232323;color:#fff}
+    .tab-btn[aria-selected="true"], .tab-btn.active{background:#232323;color:#fff}
     .tab{display:none;background:#232323;border:1px solid var(--line);border-radius:0 12px 12px 12px;padding:16px}
     .tab.active{display:block}
-
     table{width:100%;border-collapse:collapse}
     th,td{padding:10px;border-bottom:1px solid #2b2b2b;text-align:left;vertical-align:middle;font-size:14px}
     .muted{color:var(--muted);font-size:12px}
@@ -48,27 +43,27 @@
     .row-actions{white-space:nowrap}
     .row-actions form{display:inline;margin:0 4px}
     .row-actions a{margin:0 4px;color:var(--accent)}
-
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
     .song{background:#1b1b1b;border:1px solid #2b2b2b;border-radius:10px;padding:12px}
     .row{display:flex;gap:12px;align-items:center}
     .preview{width:88px;height:88px;border-radius:8px;background:#2a2a2a;object-fit:cover;box-shadow:0 0 0 1px rgba(0,0,0,.2)}
     .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
-
     .undo-bar{display:flex;align-items:center;gap:10px;background:#202020;border:1px solid #2c2c2c;padding:10px;border-radius:10px;margin:12px 0}
     .undo-bar .undo-label{color:#bbb;font-size:14px}
-
     .msg{background:#202020;border:1px solid #333;color:#eee;border-radius:8px;padding:8px 10px;margin:10px 0;display:none}
     .msg.error{border-color:#743d3d;background:#2a1818}
-
     .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999;opacity:0;pointer-events:none;transition:opacity .15s}
     .modal.show{opacity:1;pointer-events:auto}
     .modal .dialog{background:#1f1f1f;border:1px solid #2b2b2b;border-radius:12px;padding:16px;max-width:420px;width:92%}
     .modal .title{margin:0 0 8px;font-weight:600}
     .modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+  /* Gating estático por rol (admin solo ve Gestión y Perfil) */
+body[data-role="administrador"] .menu-item[data-view="playlist"],
+body[data-role="administrador"] .menu-item[data-view="reproductor"],
+body[data-role="administrador"] .menu-item[data-view="mi-muro"] { display:none !important; }
   </style>
 </head>
-<body>
+<body data-role="{{ role|lower }}">
 
 <div id="header">
   <div class="user-info" id="user-trigger">
@@ -88,11 +83,14 @@
   </div>
 
   <a class="menu-item" data-view="home" href="{% url 'home' %}">Home</a>
-  <div class="menu-item active" data-view="gestion">Gestión</div>
-  <div class="menu-item" data-view="playlist">PlayList</div>
-  <div class="menu-item" data-view="reproductor">Reproductor</div>
-  <div class="menu-item" data-view="mi-muro">Muro del artista</div>
-  <div class="menu-item" data-view="perfil">Perfil</div>
+
+  {% if role|lower == 'administrador' %}
+    <div class="menu-item active" data-view="gestion">Gestión</div>
+    <div class="menu-item" data-view="perfil">Perfil</div>
+  {% else %}
+    <!-- fallback por si llega aquí alguien sin ser admin -->
+    <div class="menu-item" data-view="perfil">Perfil</div>
+  {% endif %}
 </div>
 
 <div id="main-content"
@@ -105,7 +103,11 @@
      data-url-mi-muro="{% url 'mi_muro' %}"
      data-url-gestion="{% url 'gestion' %}"
      data-url-revertir="{% url 'revertir_accion' %}"
-     data-url-mi-musica-json="{% url 'mi_musica_json' %}">
+     data-url-mi-musica-json="{% url 'mi_musica_json' %}"
+     data-url-catalogo-json="{% url 'catalogo_admin_json' %}"
+     data-url-catalogo-fragment="{% url 'catalogo_admin_fragment' %}"
+     data-live="1"
+     data-feed-scope="catalogo-admin">
 
   <button id="menu-toggle-btn">☰</button>
 
@@ -120,12 +122,19 @@
       <div id="inline-msg" class="msg" style="display:none"></div>
 
       {% if undo_data %}
-        <div class="undo-bar">
-          <form method="post" action="{% url 'revertir_accion' %}">{% csrf_token %}
-            <button class="btn" type="submit">Deshacer</button>
-          </form>
-          <div class="undo-label">{{ undo_label }}</div>
-        </div>
+      <div id="undo-bar" class="undo-bar" style="display:flex">
+        <form id="undo-form" method="post" action="{% url 'revertir_accion' %}">{% csrf_token %}
+          <button class="btn" type="submit">Deshacer</button>
+        </form>
+        <div id="undo-label">{{ undo_label }}</div>
+      </div>
+      {% else %}
+      <div id="undo-bar" class="undo-bar" style="display:none">
+        <form id="undo-form" method="post" action="{% url 'revertir_accion' %}">{% csrf_token %}
+          <button class="btn" type="submit">Deshacer</button>
+        </form>
+        <div id="undo-label"></div>
+      </div>
       {% endif %}
 
       <div class="grid2">
@@ -161,96 +170,12 @@
       </div>
 
       <div class="tabs" role="tablist" aria-label="Secciones de administración">
-        <button class="tab-btn active" data-tab="usuarios" role="tab" aria-selected="true">Usuarios</button>
-        <button class="tab-btn" data-tab="catalogo" role="tab" aria-selected="false">Catálogo</button>
+        <button class="tab-btn" data-tab="usuarios" role="tab" aria-controls="tab-usuarios" aria-selected="true">Usuarios</button>
+        <button class="tab-btn" data-tab="catalogo" role="tab" aria-controls="tab-catalogo" aria-selected="false">Catálogo</button>
       </div>
 
-      <section id="tab-usuarios" class="tab active" role="region" aria-label="Usuarios">
-        <div class="card" style="margin:0">
-          <h3 style="margin:0 0 8px">Artistas</h3>
-          <table>
-            <thead><tr><th></th><th>Usuario</th><th>Descripción</th><th>Estado</th><th>Registrado</th><th></th></tr></thead>
-            <tbody>
-              {% for u in artists %}
-                <tr>
-                  <td>{% if u.avatar %}<img class="avatar" src="{{ u.avatar.url }}" alt="{{ u.user }}">{% else %}<span class="avatar"></span>{% endif %}</td>
-                  <td>{{ u.user }}</td>
-                  <td>{{ u.artist_profile.description|default:"—" }}</td>
-                  <td>{% if u.is_active %}<span class="status ok">Activo</span>{% else %}<span class="status off">Inactivo</span>{% endif %}</td>
-                  <td class="muted">{{ u.created_at|date:"Y-m-d H:i" }}</td>
-                  <td class="row-actions">
-                    <a href="{% url 'editar_usuario' u.user %}">Editar</a>
-                    {% if u.is_active %}
-                      <form method="post" action="{% url 'desactivar_usuario' u.user %}">{% csrf_token %}<button class="btn" type="submit">Desactivar</button></form>
-                    {% else %}
-                      <form method="post" action="{% url 'activar_usuario' u.user %}">{% csrf_token %}<button class="btn" type="submit">Activar</button></form>
-                    {% endif %}
-                    <form method="post" action="{% url 'eliminar_usuario' u.user %}" class="js-delete-form" data-title="{{ u.user }}">{% csrf_token %}<button class="btn" type="submit">Eliminar</button></form>
-                  </td>
-                </tr>
-              {% empty %}
-                <tr><td colspan="6" class="muted">Sin registros</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-
-        <div class="card">
-          <h3 style="margin:0 0 8px">Administradores</h3>
-          <table>
-            <thead><tr><th></th><th>Usuario</th><th>Estado</th><th>Registrado</th><th></th></tr></thead>
-            <tbody>
-              {% for u in admins %}
-                <tr>
-                  <td>{% if u.avatar %}<img class="avatar" src="{{ u.avatar.url }}" alt="{{ u.user }}">{% else %}<span class="avatar"></span>{% endif %}</td>
-                  <td>{{ u.user }}</td>
-                  <td>{% if u.is_active %}<span class="status ok">Activo</span>{% else %}<span class="status off">Inactivo</span>{% endif %}</td>
-                  <td class="muted">{{ u.created_at|date:"Y-m-d H:i" }}</td>
-                  <td class="row-actions">
-                    <a href="{% url 'editar_usuario' u.user %}">Editar</a>
-                    {% if u.is_active %}
-                      <form method="post" action="{% url 'desactivar_usuario' u.user %}">{% csrf_token %}<button class="btn" type="submit">Desactivar</button></form>
-                    {% else %}
-                      <form method="post" action="{% url 'activar_usuario' u.user %}">{% csrf_token %}<button class="btn" type="submit">Activar</button></form>
-                    {% endif %}
-                    <form method="post" action="{% url 'eliminar_usuario' u.user %}" class="js-delete-form" data-title="{{ u.user }}">{% csrf_token %}<button class="btn" type="submit">Eliminar</button></form>
-                  </td>
-                </tr>
-              {% empty %}
-                <tr><td colspan="5" class="muted">Sin registros</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-
-        <div class="card">
-          <h3 style="margin:0 0 8px">Usuarios</h3>
-          <table>
-            <thead><tr><th></th><th>Usuario</th><th>Estado</th><th>Registrado</th><th></th></tr></thead>
-            <tbody>
-              {% for u in viewers %}
-                <tr>
-                  <td>{% if u.avatar %}<img class="avatar" src="{{ u.avatar.url }}" alt="{{ u.user }}">{% else %}<span class="avatar"></span>{% endif %}</td>
-                  <td>{{ u.user }}</td>
-                  <td>{% if u.is_active %}<span class="status ok">Activo</span>{% else %}<span class="status off">Inactivo</span>{% endif %}</td>
-                  <td class="muted">{{ u.created_at|date:"Y-m-d H:i" }}</td>
-                  <td class="row-actions">
-                    <a href="{% url 'editar_usuario' u.user %}">Editar</a>
-                    {% if u.is_active %}
-                      <form method="post" action="{% url 'desactivar_usuario' u.user %}">{% csrf_token %}<button class="btn" type="submit">Desactivar</button></form>
-                    {% else %}
-                      <form method="post" action="{% url 'activar_usuario' u.user %}">{% csrf_token %}<button class="btn" type="submit">Activar</button></form>
-                    {% endif %}
-                    <form method="post" action="{% url 'eliminar_usuario' u.user %}" class="js-delete-form" data-title="{{ u.user }}">{% csrf_token %}<button class="btn" type="submit">Eliminar</button></form>
-                  </td>
-                </tr>
-              {% empty %}
-                <tr><td colspan="5" class="muted">Sin registros</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      {# === AQUÍ VA EL INCLUDE DEL PARCIAL === #}
+      {% include "gestion/_usuarios_tab.html" %}
 
       <section id="tab-catalogo" class="tab" role="region" aria-label="Catálogo" hidden>
         <div class="filters">
@@ -261,9 +186,16 @@
           <input id="f-q" type="text" placeholder="Buscar por título o intérprete">
           <button class="btn" id="f-apply">Aplicar</button>
         </div>
+<div class="filters" id="bulk-bar">
+  <label style="display:flex;align-items:center;gap:8px">
+    <input type="checkbox" id="sel-all"> Seleccionar todo
+  </label>
+  <button class="btn" id="bulk-delete" disabled>Eliminar seleccionadas</button>
+  <span id="sel-count" class="muted"></span>
+</div>
 
         <div id="catalogo-songs" class="card" style="margin:0">
-{% include "gestion/admin_catalogo_songs.html" with songs=songs %}
+          {% include "gestion/admin_catalogo_songs.html" with songs=songs %}
         </div>
       </section>
     </div>
@@ -281,116 +213,40 @@
   </div>
 </div>
 
+<!-- Back universal -->
 <script>window.MELODIFY_HOME_URL = "{% url 'home' %}";</script>
-<script src="{% static 'inicio_sesion/back_to_home.js' %}?v={% now 'U' %}"></script>
-<script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'inicio_sesion/backToHome.js' %}?v={% now 'U' %}"></script>
 
+<!-- Gestion (externo, clásico; NO type="module") -->
+<script src="{% static 'gestion/gestion.js' %}?v={% now 'U' %}"></script>
+
+<!-- Fallback si gestion.js no cargó por alguna razón -->
 <script>
-  document.addEventListener('DOMContentLoaded', function(){
-    // Tabs
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    const tabs = document.querySelectorAll('.tab');
-    tabBtns.forEach(btn=>{
-      btn.addEventListener('click',()=>{
-        tabBtns.forEach(b=>{ b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
-        tabs.forEach(t=>{ t.classList.remove('active'); t.setAttribute('hidden',''); });
-        btn.classList.add('active');
-        btn.setAttribute('aria-selected','true');
-        const panel = document.getElementById('tab-'+btn.dataset.tab);
-        if (panel){ panel.classList.add('active'); panel.removeAttribute('hidden'); panel.focus?.(); }
-      });
-    });
-
-    // Exclusividad global de audio
-    document.addEventListener('play', function (ev) {
-      const t = ev.target;
-      if (!t || t.tagName !== 'AUDIO') return;
-      document.querySelectorAll('audio').forEach(a => { if (a !== t) a.pause(); });
-    }, true);
-
-    // Catálogo: filtros y polling
-    const root   = document.getElementById('catalogo-songs');
-    const sel    = document.getElementById('f-artist');
-    const q      = document.getElementById('f-q');
-    const apply  = document.getElementById('f-apply');
-    let latest = "{{ songs.0.created_at|date:'c'|default:''|escapejs }}";
-
-    async function loadFragment() {
-      const params = new URLSearchParams();
-      if (sel.value) params.set('artist', sel.value);
-      if (q.value)   params.set('q', q.value);
-      const res = await fetch("{% url 'catalogo_admin_fragment' %}?"+params.toString(), {headers:{'X-Requested-With':'fetch'}});
-      root.innerHTML = await res.text();
-    }
-
-    async function pollNew() {
-      const params = new URLSearchParams();
-      if (sel.value) params.set('artist', sel.value);
-      if (latest)    params.set('since', latest);
-      try {
-        const res = await fetch("{% url 'catalogo_admin_json' %}?"+params.toString());
-        const data = await res.json();
-        if (data.count > 0) {
-          latest = data.latest_created_at || latest;
-          await loadFragment();
-        }
-      } catch {}
-    }
-
-    apply.addEventListener('click', () => { latest=""; loadFragment(); });
-    setInterval(pollNew, 10000);
-
-    // Modal confirmación
-    const modal = document.getElementById('confirm-modal');
-    const txt = document.getElementById('confirm-text');
-    const btnCancel = document.getElementById('confirm-cancel');
-    const btnAccept = document.getElementById('confirm-accept');
-    let pendingForm = null;
-
-    function openModal(message){
-      txt.textContent = message || '¿Eliminar este elemento?';
-      modal.classList.add('show');
-      modal.setAttribute('aria-hidden','false');
-    }
-    function closeModal(){
-      modal.classList.remove('show');
-      modal.setAttribute('aria-hidden','true');
-      pendingForm = null;
-    }
-    btnCancel.addEventListener('click', (e)=>{ e.preventDefault(); closeModal(); });
-    modal.addEventListener('click', (e)=>{ if (e.target === modal) closeModal(); });
-
-    btnAccept.addEventListener('click', (e)=>{
-      e.preventDefault();
-      if (pendingForm){
-        let songId = null;
-        try {
-          const m = pendingForm.action.match(/\/(\d+)(?:\/)?$/);
-          if (m) songId = m[1];
-        } catch {}
-        try {
-          window.dispatchEvent(new CustomEvent('melodify:playlistChanged', {
-            detail: { type: 'delete', songId }
-          }));
-        } catch {}
-
-        pendingForm.dataset.confirmed = '1';
-        pendingForm.submit();
-        closeModal();
+  if (!window.__gestion_loaded__) {
+    console.warn('gestion.js no se cargó, aplicando fallback mínimo');
+    (function(){
+      const tablist = document.querySelector('.tabs[role="tablist"]');
+      if (!tablist) return;
+      function activate(t){
+        tablist.querySelectorAll('.tab-btn[role="tab"]').forEach(b=>{
+          const on = b.dataset.tab===t; b.classList.toggle('active', on);
+          b.setAttribute('aria-selected', String(on)); b.tabIndex = on?0:-1;
+        });
+        document.querySelectorAll('.tab[role="region"]').forEach(p=>{
+          const show = p.id === ('tab-'+t); p.classList.toggle('active', show); p.hidden=!show;
+        });
+        const u = new URL(location.href); u.hash=t; history.replaceState(null,'',u);
       }
-    });
-
-    document.addEventListener('submit', function(e){
-      const f = e.target;
-      if (!f.classList || !f.classList.contains('js-delete-form')) return;
-      if (f.dataset.confirmed === '1') return;
-      e.preventDefault();
-      e.stopPropagation();
-      const t = f.dataset.title || 'este elemento';
-      openModal(`¿Eliminar “${t}”?`);
-      pendingForm = f;
-    }, true);
-  });
+      tablist.addEventListener('click', e=>{
+        const b=e.target.closest('.tab-btn[role="tab"]'); if(!b) return;
+        e.preventDefault(); activate(b.dataset.tab);
+      });
+      activate((location.hash||'').slice(1)||'usuarios', false);
+    })();
+  }
 </script>
+
+<!-- Feed (polling/acciones) -->
+<script src="{% static 'feed/feed.js' %}?v={% now 'U' %}"></script>
 </body>
 </html>

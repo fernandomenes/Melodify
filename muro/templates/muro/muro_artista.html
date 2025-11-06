@@ -5,17 +5,16 @@
   <meta charset="utf-8">
   <title>Muro del artista — {{ artist.user }} | Melodify</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="csrf-token" content="{{ csrf_token }}"/>
 
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
-  <script>
-    window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
-  </script>
+  <script>window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";</script>
 
   <style>
-    :root{--bg:#121212;--card:#1e1e1e;--line:#2b2b2b;--muted:#9aa0a6;--btn:#2a2a2a;--btnb:#3a3a3a;--accent:#9ad}
+    :root{--bg:#121212;--card:#1e1e1e;--line:#2b2b2b;--muted:#9aa0a6;--btn:#2a2a2a;--btnb:#3a3a3a}
     *{box-sizing:border-box}
     body{background:var(--bg);color:#eee;margin:0}
     .page{padding:16px 24px;max-width:1800px;margin:0 auto}
@@ -25,7 +24,8 @@
     .avatar{width:64px;height:64px;border-radius:50%;background:#2a2a2a;object-fit:cover}
     .btn{padding:10px 14px;border-radius:8px;border:1px solid var(--btnb);background:var(--btn);color:#eee;cursor:pointer;text-decoration:none;display:inline-block}
     .btn:hover{background:#333}
-    .btn.primary{border-color:#4b72ff;background:#3a50b3}
+    .btnDanger{border-color:#743d3d;background:#592626}
+    .btnDanger:hover{background:#6a2d2d}
     .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:16px 0}
     label{display:block;margin:10px 0 6px;font-size:14px;color:#bbb}
     input[type="text"],input[type="file"],select{width:100%;max-width:520px;padding:10px;border-radius:8px;border:1px solid #333;background:#191919;color:#eee}
@@ -34,8 +34,9 @@
     .tab-btn.active{background:#232323;color:#fff}
     .tab{display:none;background:#232323;border:1px solid var(--line);border-radius:0 12px 12px 12px;padding:16px}
     .tab.active{display:block}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-    .song{background:#1b1b1b;border:1px solid #2b2b2b;border-radius:10px;padding:12px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:14px}
+    .song{position:relative;background:#1b1b1b;border:1px solid #2b2b2b;border-radius:10px;padding:12px}
+    .song .select-wrap{position:absolute;top:8px;left:8px;display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}
     .row{display:flex;gap:12px;align-items:center}
     .preview{width:112px;height:112px;border-radius:8px;background:#2a2a2a;object-fit:cover;box-shadow:0 0 0 1px rgba(0,0,0,.2)}
     .muted{color:var(--muted);font-size:12px}
@@ -43,6 +44,8 @@
     .undo-bar{display:flex;align-items:center;gap:10px;background:#202020;border:1px solid #2c2c2c;padding:10px;border-radius:10px;margin:12px 0}
     .msg{background:#202020;border:1px solid #333;color:#eee;border-radius:8px;padding:8px 10px;margin:10px 0;display:none}
     .msg.error{border-color:#743d3d;background:#2a1818}
+    .toolbar{display:flex;align-items:center;gap:12px;margin:6px 0 12px}
+    .toolbar .spacer{flex:1}
     .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999;opacity:0;pointer-events:none;transition:opacity .15s}
     .modal.show{opacity:1;pointer-events:auto}
     .modal .dialog{background:#1f1f1f;border:1px solid #2b2b2b;border-radius:12px;padding:16px;max-width:420px;width:92%}
@@ -93,9 +96,12 @@
      data-url-mi-musica-json="{% url 'mi_musica_json' %}"
      data-url-mi-muro="{% url 'mi_muro' %}"
      data-url-gestion="{% url 'gestion' %}"
-     data-url-revertir="{% url 'revertir' %}">
-  <button id="menu-toggle-btn">☰</button>
+     data-url-revertir-muro="{% url 'revertir_muro' %}"
+     data-feed-scope="muro"
+     data-artist="{{ artist.user }}"
+     data-live="1">
 
+  <button id="menu-toggle-btn">☰</button>
   <a id="back-btn" class="back" href="{% url 'home' %}" title="Volver a inicio" aria-label="Regresar">←</a>
 
   <div id="content">
@@ -104,7 +110,7 @@
         {% if artist.avatar %}
           <img class="avatar" src="{{ artist.avatar.url }}" alt="{{ artist.user }}">
         {% else %}
-          <div class="avatar"></div>
+          <div class="avatar" aria-hidden="true"></div>
         {% endif %}
         <div style="flex:1;">
           <h1 style="margin:0">{{ artist.user }}</h1>
@@ -114,7 +120,7 @@
 
       {% if undo_muro_data %}
         <div class="undo-bar" id="undo-bar">
-          <form method="post" action="{% url 'revertir' %}">
+          <form method="post" action="{% url 'revertir_muro' %}">
             {% csrf_token %}
             <button class="btn" type="submit">Deshacer</button>
           </form>
@@ -122,7 +128,7 @@
         </div>
       {% else %}
         <div class="undo-bar" id="undo-bar" style="display:none">
-          <form method="post" action="{% url 'revertir' %}">
+          <form method="post" action="{% url 'revertir_muro' %}">
             {% csrf_token %}
             <button class="btn" type="submit">Deshacer</button>
           </form>
@@ -130,7 +136,7 @@
         </div>
       {% endif %}
 
-      <div id="inline-msg" class="msg"></div>
+      <div id="inline-msg" class="msg" role="alert"></div>
 
       {% if is_owner %}
         <div class="card">
@@ -138,60 +144,71 @@
           <div style="display:flex; gap:8px; margin:0 0 12px">
             <a class="btn" href="{% url 'muro_subida_masiva' %}">Subida masiva</a>
           </div>
-          <form id="form-upload" method="post" enctype="multipart/form-data" action="{% url 'subir_cancion_en_muro' %}">
+          <form id="form-upload" method="post" enctype="multipart/form-data" action="{% url 'subir_cancion_en_muro' %}" data-ajax="1">
             {% csrf_token %}
             <label>Título</label>
             <input name="title" type="text" required>
-
             <label style="margin-top:10px">Autor / Intérprete</label>
             <input name="artist_display_name" type="text" required value="{{ artist.user }}">
-
             <label style="margin-top:10px">Género</label>
             <select name="genre" id="genre" required>
               <option value="" disabled selected>Selecciona un género</option>
-              <option value="pop">Pop</option>
-              <option value="rock">Rock</option>
-              <option value="electronica">Electrónica</option>
-              <option value="hiphop">Hip-Hop</option>
-              <option value="reggaeton">Reggaetón</option>
-              <option value="regional">Regional Mexicano</option>
-              <option value="balada">Balada</option>
-              <option value="indie">Indie</option>
-              <option value="jazz">Jazz</option>
-              <option value="clasica">Clásica</option>
+              <option value="pop">Pop</option><option value="rock">Rock</option>
+              <option value="electronica">Electrónica</option><option value="hiphop">Hip-Hop</option>
+              <option value="reggaeton">Reggaetón</option><option value="regional">Regional Mexicano</option>
+              <option value="balada">Balada</option><option value="indie">Indie</option>
+              <option value="jazz">Jazz</option><option value="clasica">Clásica</option>
               <option value="_other">Otro…</option>
             </select>
-            <input id="genre-other" type="text" placeholder="Escribe el género" style="display:none;margin-top:8px">
-
+            <input id="genre-other" type="text" placeholder="Escribe el género" style="display:none;margin-top:8px" data-for="genre">
             <label style="margin-top:10px">Archivo de audio (.mp3, .wav, .ogg, .m4a, .flac)</label>
             <input name="audio_file" type="file" accept=".mp3,.wav,.ogg,.m4a,.flac" required>
-
             <label style="margin-top:10px">Portada (opcional)</label>
             <input name="cover_image" type="file" accept=".png,.jpg,.jpeg,.webp">
-
             <button class="btn" type="submit">Subir</button>
           </form>
         </div>
       {% endif %}
 
-      <div class="tabs">
-        <button class="tab-btn active" data-tab="songs">Canciones</button>
-        <button class="tab-btn" data-tab="playlists">Playlists</button>
-        <button class="tab-btn" data-tab="events">Eventos</button>
-        <button class="tab-btn" data-tab="posts">Publicaciones</button>
+      <div class="tabs" role="tablist" aria-label="Secciones del muro">
+        <button class="tab-btn active" data-tab="songs" role="tab" aria-selected="true">Canciones</button>
+        <button class="tab-btn" data-tab="playlists" role="tab" aria-selected="false">Playlists</button>
+        <button class="tab-btn" data-tab="events" role="tab" aria-selected="false">Eventos</button>
+        <button class="tab-btn" data-tab="posts" role="tab" aria-selected="false">Publicaciones</button>
       </div>
 
-      <section id="tab-songs" class="tab active">
+      <section id="tab-songs" class="tab active" role="region" aria-label="Canciones">
         <h3 style="margin:0 0 12px">Canciones</h3>
+
+        <div class="toolbar" id="muro-bulk-toolbar">
+          <label style="display:flex;align-items:center;gap:6px">
+            <input id="sel-all" type="checkbox"> Seleccionar todo
+          </label>
+          <button id="bulk-delete" class="btn btnDanger" disabled>Eliminar seleccionadas</button>
+          <span class="muted" id="sel-count" aria-live="polite"></span>
+          <div class="spacer"></div>
+        </div>
+
         {% if songs %}
-          <div id="songs-grid" class="grid">
+          <div id="songs-grid" class="grid" data-feed-list="songs" data-latest="{{ songs.0.created_at|date:'c'|default:'' }}">
             {% for s in songs %}
-              <div class="song">
+              <article class="song js-song-card"
+                       data-song-id="{{ s.id }}"
+                       data-created-at="{{ s.created_at|date:'c' }}"
+                       data-title="{{ s.title|escape }}"
+                       data-artist="{{ s.artist_display_name|escape }}"
+                       {% if s.genre %}data-genre="{{ s.genre|escape }}"{% endif %}
+                       {% if s.audio_file %}data-audio-url="{{ s.audio_file.url }}"{% endif %}
+                       {% if s.cover_image %}data-cover-url="{{ s.cover_image.url }}"{% endif %}>
+                <label class="select-wrap">
+                  <input class="song-select" type="checkbox" value="{{ s.id }}"> Seleccionar
+                </label>
+
                 <div class="row">
                   {% if s.cover_image %}
-                    <img class="preview" src="{{ s.cover_image.url }}" alt="" onerror="this.style.visibility='hidden'">
+                    <img class="preview" src="{{ s.cover_image.url }}" alt="Portada de {{ s.title }}" loading="lazy">
                   {% else %}
-                    <div class="preview"></div>
+                    <div class="preview" aria-hidden="true"></div>
                   {% endif %}
                   <div>
                     <div style="font-weight:600">{{ s.title }}</div>
@@ -200,41 +217,44 @@
                     <div class="muted">Subida: {{ s.created_at|date:"Y-m-d H:i" }}</div>
                   </div>
                 </div>
-                <div style="margin-top:8px">
-                  <audio controls style="width:100%">{% if s.audio_file %}<source src="{{ s.audio_file.url }}">{% endif %}</audio>
-                </div>
-               {% if is_owner %}
-  <div style="margin-top:8px">
-    <a class="btn" href="{% url 'editar_mi_cancion_en_muro' s.id %}">Editar</a>
-    <form method="post"
-          action="{% url 'eliminar_mi_cancion' s.id %}"
-          class="js-delete-form"
-          data-title="{{ s.title|escapejs }}"
-          style="display:inline">
-      {% csrf_token %}
-      <button class="btn btnDanger" type="submit">Eliminar</button>
-    </form>
-  </div>
-{% endif %}
 
-              </div>
+                <div style="margin-top:8px">
+                  {% if s.audio_file %}
+                    <audio controls preload="none" style="width:100%">
+                      <source src="{{ s.audio_file.url }}">
+                    </audio>
+                  {% endif %}
+                </div>
+
+                {% if is_owner %}
+                  <div style="margin-top:8px">
+                    <a class="btn" href="{% url 'editar_mi_cancion_en_muro' s.id %}">Editar</a>
+                    <form method="post"
+                          action="{% url 'eliminar_mi_cancion' s.id %}"
+                          class="js-delete-form"
+                          data-title="{{ s.title|escapejs }}"
+                          data-song-id="{{ s.id }}"
+                          style="display:inline">
+                      {% csrf_token %}
+                      <button class="btn btnDanger" type="submit">Eliminar</button>
+                    </form>
+                  </div>
+                {% endif %}
+              </article>
             {% endfor %}
-          </div>
-          <div style="margin-top:12px;text-align:center">
-            <button id="btn-show-all" class="btn" style="display:none">Mostrar todas</button>
           </div>
         {% else %}
           <p id="no-songs-msg" class="muted">Aún no hay canciones públicas.</p>
         {% endif %}
       </section>
 
-      <section id="tab-playlists" class="tab">
+      <section id="tab-playlists" class="tab" role="region" aria-label="Playlists">
         <div class="card" style="margin:0"><p class="muted">Se mostrarán aquí cuando estén disponibles.</p></div>
       </section>
-      <section id="tab-events" class="tab">
+      <section id="tab-events" class="tab" role="region" aria-label="Eventos">
         <div class="card" style="margin:0"><p class="muted">Eventos del artista.</p></div>
       </section>
-      <section id="tab-posts" class="tab">
+      <section id="tab-posts" class="tab" role="region" aria-label="Publicaciones">
         <div class="card" style="margin:0"><p class="muted">Publicaciones.</p></div>
       </section>
     </div>
@@ -246,206 +266,35 @@
         <p id="confirm-text" class="muted" style="margin:0 0 8px">¿Eliminar este elemento?</p>
         <div class="actions">
           <button class="btn" id="confirm-cancel">Cancelar</button>
-          <button class="btn" data-danger id="confirm-accept">Eliminar</button>
+          <button class="btn btnDanger" id="confirm-accept">Eliminar</button>
         </div>
       </div>
     </div>
 
-    <script>
-      (function () {
-        // Tabs
-        const tabBtns = document.querySelectorAll('.tab-btn');
-        const tabs = document.querySelectorAll('.tab');
-        tabBtns.forEach(btn => {
-          btn.addEventListener('click', () => {
-            tabBtns.forEach(b => b.classList.remove('active'));
-            tabs.forEach(t => t.classList.remove('active'));
-            btn.classList.add('active');
-            const pane = document.getElementById('tab-' + btn.dataset.tab);
-            if (pane) pane.classList.add('active');
-          });
-        });
-
-        // Audio exclusivo
-        document.addEventListener('play', function (ev) {
-          const t = ev.target;
-          if (t?.tagName !== 'AUDIO') return;
-          document.querySelectorAll('audio').forEach(a => { if (a !== t) a.pause(); });
-        }, true);
-
-        // Mostrar todas
-        const grid = document.getElementById('songs-grid');
-        const btnAll = document.getElementById('btn-show-all');
-        const limit = 8;
-        if (grid) {
-          const cards = Array.from(grid.children);
-          if (cards.length > limit) {
-            cards.forEach((c, i) => { if (i >= limit) c.classList.add('hidden'); });
-            if (btnAll){
-              btnAll.style.display = 'inline-block';
-              btnAll.addEventListener('click', () => {
-                cards.forEach(c => c.classList.remove('hidden'));
-                btnAll.remove();
-              });
-            }
-          }
-        }
-
-        // UI helpers
-        const inlineMsg = document.getElementById('inline-msg');
-        function showError(text){ if (!inlineMsg) return; inlineMsg.textContent = text; inlineMsg.className = 'msg error'; inlineMsg.style.display = 'block'; }
-
-        // UNDO bar
-        const undoBar = document.getElementById('undo-bar');
-        const undoLbl = document.getElementById('undo-label');
-        const undoUrl = document.getElementById('main-content')?.dataset?.urlRevertir;
-        function renderUndo(label){
-          if (!undoBar || !undoLbl) return;
-          undoLbl.textContent = label || '';
-          undoBar.style.display = label ? 'flex' : 'none';
-          const form = undoBar.querySelector('form');
-          if (form && undoUrl) form.action = undoUrl;
-        }
-
-        // ======= Género: selector "Otro" =======
-        const genreSel = document.getElementById('genre');
-        const genreOther = document.getElementById('genre-other');
-        if (genreSel && genreOther){
-          genreSel.addEventListener('change', () => {
-            const useOther = genreSel.value === '_other';
-            genreOther.style.display = useOther ? 'block' : 'none';
-            if (!useOther) genreOther.value = '';
-          });
-        }
-
-        // ======= Subida por fetch =======
-        function fmt(dt){
-          if (!dt) return '';
-          const d = new Date(dt);
-          const p = n => String(n).padStart(2,'0');
-          return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-        }
-
-        function buildCard(s, csrf){
-          const cover = s.cover_url || s.cover_image || '';
-          const audio = s.audio_url || s.audio_file || '';
-          const genre = s.genre || s.genre_name || s.genero || '';
-
-          const card = document.createElement('div');
-          card.className = 'song';
-          card.innerHTML = `
-            <div class="row">
-              ${ cover ? `<img class="preview" src="${cover}" alt="" onerror="this.style.visibility='hidden'>`
-                       : `<div class="preview" style="background:#2a2a2a"></div>` }
-              <div>
-                <div style="font-weight:600">${s.title}</div>
-                <div class="muted">${s.artist_display_name}</div>
-                ${ genre ? `<div class="muted">Género: ${genre}</div>` : `` }
-                <div class="muted">Subida: ${fmt(s.created_at)}</div>
-              </div>
-            </div>
-            <div style="margin-top:8px">
-              <audio controls style="width:100%"><source src="${audio}"></audio>
-            </div>
-            <div style="margin-top:8px">
-              <a class="btn" href="${s.editar_url}">Editar</a>
-              <form method="post" action="${s.eliminar_url}" class="js-delete-form" data-title="${String(s.title||'').replaceAll('"','&quot;')}" style="display:inline">
-                <input type="hidden" name="csrfmiddlewaretoken" value="${csrf}">
-                <button class="btn btnDanger" type="submit">Eliminar</button>
-              </form>
-            </div>`;
-          return card;
-        }
-
-        async function handleUpload(form){
-          const csrf = form.querySelector('input[name=csrfmiddlewaretoken]')?.value || '';
-          const fd = new FormData(form);
-
-          if (genreSel && genreSel.value === '_other'){
-            const val = (genreOther?.value || '').trim();
-            if (!val){ showError('Escribe un género.'); return; }
-            fd.set('genre', val);
-          }
-
-          const btn = form.querySelector('button[type=submit]');
-          inlineMsg && (inlineMsg.style.display='none');
-          if (btn) { btn.disabled = true; btn.textContent = 'Subiendo…'; }
-
-          try {
-            const res = await fetch(form.action, { method:'POST', body:fd, headers:{'X-Requested-With':'fetch'} });
-            const ct = res.headers.get('Content-Type') || '';
-            if (!ct.includes('application/json')) { showError('Respuesta inesperada del servidor.'); return; }
-            const data = await res.json();
-            if (!data.ok) {
-              showError(data.error || 'No se pudo subir la canción.');
-            if (data.suggested_title) {
-              const titleInput = document.querySelector('#form-upload input[name=title]');
-            if (titleInput) { titleInput.value = data.suggested_title; titleInput.focus(); }
-            }
-            return;
-          }
-
-            let gridEl = document.getElementById('songs-grid');
-            if (!gridEl) {
-              const wrapper = document.getElementById('tab-songs');
-              const empty = document.getElementById('no-songs-msg'); if (empty) empty.remove();
-              gridEl = document.createElement('div'); gridEl.id='songs-grid'; gridEl.className='grid'; wrapper.appendChild(gridEl);
-            }
-            const card = buildCard(data.song, csrf);
-            gridEl.prepend(card);
-
-            if (data.undo?.label) renderUndo(data.undo.label);
-            form.reset();
-            if (genreOther) genreOther.style.display = 'none';
-          } catch (e) {
-            showError('Error de red al subir la canción.');
-          } finally {
-            if (btn) { btn.disabled = false; btn.textContent = 'Subir'; }
-          }
-        }
-
-        document.addEventListener('submit', function (e) {
-          const target = e.target;
-          if (target && target.id === 'form-upload') {
-            e.preventDefault(); e.stopPropagation(); handleUpload(target);
-          }
-        }, true);
-
-        // ======= Modal de confirmación (Eliminar) =======
-        const modal = document.getElementById('confirm-modal');
-        const txt = document.getElementById('confirm-text');
-        const btnCancel = document.getElementById('confirm-cancel');
-        const btnAccept = document.getElementById('confirm-accept');
-        let pendingForm = null;
-
-        function openModal(message){ txt.textContent = message || '¿Eliminar este elemento?'; modal.classList.add('show'); modal.setAttribute('aria-hidden','false'); }
-        function closeModal(){ modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); pendingForm = null; }
-
-        btnCancel.addEventListener('click', (e)=>{ e.preventDefault(); closeModal(); });
-        modal.addEventListener('click', (e)=>{ if (e.target === modal) closeModal(); });
-
-        btnAccept.addEventListener('click', (e)=>{
-          e.preventDefault();
-          if (pendingForm){
-            pendingForm.dataset.confirmed = '1';
-            pendingForm.submit();
-            closeModal();
-          }
-        });
-
-        document.addEventListener('submit', function(e){
-          const f = e.target;
-          if (!f.classList || !f.classList.contains('js-delete-form')) return;
-          if (f.dataset.confirmed === '1') return;
-          e.preventDefault();
-          e.stopPropagation();
-          const t = f.dataset.title || 'esta canción';
-          pendingForm = f;
-          openModal(`¿Eliminar “${t}”?`);
-        }, true);
-
-      })();
-    </script>
+    <!-- Template de tarjeta para posibles inserciones -->
+    <template id="song-card-template">
+      <article class="song js-song-card" data-song-id="" data-created-at="">
+        <label class="select-wrap">
+          <input class="song-select" type="checkbox" value=""> Seleccionar
+        </label>
+        <div class="row">
+          <img class="preview" data-slot="cover" alt="" style="display:none" loading="lazy">
+          <div class="preview" data-slot="cover-fallback"></div>
+          <div>
+            <div style="font-weight:600" data-slot="title">—</div>
+            <div class="muted" data-slot="artist">—</div>
+            <div class="muted">Género: <span data-slot="genre">—</span></div>
+            <div class="muted">Subida: <span data-slot="created_at">—</span></div>
+          </div>
+        </div>
+        <div style="margin-top:8px">
+          <audio controls preload="none" style="width:100%">
+            <source data-slot="audio-src" src="">
+          </audio>
+        </div>
+        <div class="owner-actions" style="margin-top:8px" data-slot="owner-actions"></div>
+      </article>
+    </template>
   </div>
 </div>
 
@@ -453,14 +302,168 @@
 <script>window.MELODIFY_HOME_URL = "{% url 'home' %}";</script>
 <script src="{% static 'inicio_sesion/backToHome.js' %}?v={% now 'U' %}"></script>
 <script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'feed/feed.js' %}?v={% now 'U' %}"></script>
 
+<!-- JS ligero del Muro para selección, borrado múltiple y deshacer sin recargar -->
 <script>
 (function(){
-  function clearInline(el){ if(!el) return; el.style.transform=''; el.style.left=''; el.style.right=''; el.style.top=''; el.style.position=''; }
-  function fixAll(){ clearInline(document.getElementById('main-content')); clearInline(document.getElementById('content')); document.documentElement.style.background='#121212'; document.body.style.background='#121212'; }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fixAll); else fixAll();
+  const $ = (s, r=document)=>r.querySelector(s);
+  const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
+  const grid = $("#songs-grid");
+  const selAll = $("#sel-all");
+  const btnBulk = $("#bulk-delete");
+  const selCount = $("#sel-count");
+  const undoBar = $("#undo-bar");
+  const undoForm = undoBar ? undoBar.querySelector("form") : null;
+
+  const selected = new Set();
+  // Guardamos temporalmente los nodos eliminados para reponerlos al deshacer
+  const removedCache = new Map(); // id -> HTMLElement
+
+  function getCookie(name){
+    const m = document.cookie.match(new RegExp("(^|;)\\s*"+name+"=([^;]*)"));
+    return m ? decodeURIComponent(m[2]) : "";
+  }
+  function getCSRF(){
+    return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || getCookie("csrftoken");
+  }
+  function updateUI(){
+    const n = selected.size;
+    btnBulk.disabled = n === 0;
+    selCount.textContent = n ? `${n} seleccionada${n!==1?'s':''}` : "";
+    const checks = $$(".song-select", grid);
+    if (selAll) {
+      selAll.checked = (checks.length>0 && checks.every(ch => ch.checked));
+      selAll.indeterminate = (n>0 && n<checks.length);
+    }
+  }
+  function showUndo(label){
+    if (!undoBar) return;
+    $("#undo-label").textContent = label || "Acción realizada.";
+    undoBar.style.display = "flex";
+  }
+  function hideUndo(){
+    if (!undoBar) return;
+    $("#undo-label").textContent = "";
+    undoBar.style.display = "none";
+  }
+
+  // Delegado: cambios de checkboxes
+  document.addEventListener("change", (e)=>{
+    const t = e.target;
+    if (t && t.matches("#sel-all")){
+      $$(".song-select", grid).forEach(ch=>{
+        ch.checked = t.checked;
+        const id = parseInt(ch.value,10);
+        if (!isNaN(id)){
+          if (t.checked) selected.add(id); else selected.delete(id);
+        }
+      });
+      updateUI();
+    }
+    if (t && t.classList && t.classList.contains("song-select")){
+      const id = parseInt(t.value,10);
+      if (!isNaN(id)){
+        if (t.checked) selected.add(id); else selected.delete(id);
+        updateUI();
+      }
+    }
+  });
+
+  // Borrado múltiple
+  btnBulk?.addEventListener("click", async (e)=>{
+    e.preventDefault();
+    if (selected.size === 0) return;
+    const n = selected.size;
+    if (!confirm(`¿Eliminar ${n} cancion${n!==1?'es':''} seleccionada${n!==1?'s':''}?`)) return;
+
+    try{
+      const fd = new FormData();
+      Array.from(selected).forEach(id => fd.append("ids[]", String(id)));
+      const res = await fetch("/gestion/canciones/eliminar-multiples/", {
+        method: "POST",
+        body: fd,
+        headers: {"X-Requested-With":"fetch","X-CSRFToken": getCSRF()},
+        credentials: "same-origin",
+      });
+      const ct = (res.headers.get("content-type")||"").toLowerCase();
+      if (!ct.includes("application/json")) { location.reload(); return; }
+      const j = await res.json();
+      if (!j.ok){ alert(j.error || "No fue posible eliminar las canciones."); return; }
+
+      // Cachear y quitar del DOM
+      (j.removed_ids||[]).forEach(id=>{
+        const card = grid.querySelector(`.js-song-card[data-song-id="${id}"]`);
+        if (card){ removedCache.set(id, card); card.remove(); }
+      });
+
+      selected.clear();
+      updateUI();
+      if (j.undo_label) showUndo(j.undo_label);
+    }catch{ location.reload(); }
+  });
+
+  // Deshacer (sin recargar): posteamos a revertir_muro y reponemos desde removedCache
+  undoForm?.addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    try{
+      const fd = new FormData(undoForm);
+      const href = undoForm.action;
+      const res = await fetch(href, {
+        method: "POST",
+        body: fd,
+        headers: {"X-Requested-With":"fetch","X-CSRFToken": getCSRF()},
+        credentials: "same-origin",
+      });
+      const ct = (res.headers.get("content-type")||"").toLowerCase();
+      if (!ct.includes("application/json")) { location.reload(); return; }
+      const j = await res.json();
+      const ids = j.restored_ids || [];
+      if (ids.length){
+        const frag = document.createDocumentFragment();
+        ids.forEach(id=>{
+          const node = removedCache.get(id);
+          if (node){ removedCache.delete(id); frag.appendChild(node); }
+        });
+        grid.prepend(frag);
+      }
+      hideUndo();
+    }catch{
+      location.reload();
+    }
+  });
+
+  // Hotfix visual fuera del SPA
+  (function fixAll(){
+    const clearInline = (el)=>{ if(!el) return; el.style.transform=''; el.style.left=''; el.style.right=''; el.style.top=''; el.style.position=''; };
+    clearInline(document.getElementById('main-content'));
+    clearInline(document.getElementById('content'));
+    document.documentElement.style.background='#121212';
+    document.body.style.background='#121212';
+  })();
+
 })();
 </script>
+<style id="muro-match-admin">
+  #tab-songs article.song .row .preview{
+    width:96px !important;
+    height:96px !important;
+    object-fit:cover !important;
+    border-radius:8px !important;
+  }
+
+  #tab-songs article.song .select-wrap{
+    position:static !important;
+    top:auto !important; left:auto !important;
+    margin:-2px 0 8px !important;
+    display:flex !important; align-items:center !important; gap:6px !important;
+    font-size:12px !important;
+    background:transparent !important; box-shadow:none !important;
+  }
+
+  #tab-songs .grid{ grid-template-columns:repeat(auto-fill,minmax(300px,1fr)) !important; gap:14px !important; }
+  #tab-songs .row{ gap:12px !important; }
+</style>
 
 </body>
 </html>

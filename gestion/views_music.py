@@ -1,7 +1,22 @@
 # gestion/views_music.py
 """
-Vistas para editar y eliminar canciones (admin/propietario) con soporte de deshacer.
-Residen en la app 'gestion' y utilizan modelos/helpers definidos en 'inicio_sesion'.
+Vistas para la administración de canciones (edición, eliminación y deshacer).
+
+Ámbito
+------
+- Residen en la app «gestión» y utilizan modelos/helpers de «inicio_sesion».
+- Soportan navegación clásica (redirect + mensajes) y flujo asíncrono vía fetch
+  devolviendo JSON o 204 según corresponda.
+
+Permisos
+--------
+- Edición: requiere rol de administrador.
+- Eliminación:
+    * Administrador: sobre cualquier canción.
+    * Artista/propietario: únicamente sobre canciones propias.
+- Deshacer:
+    * Flujo de gestión/admin: sesión «gestion_undo».
+    * Flujo del artista (muro): sesión «song_undo_artist».
 """
 
 from pathlib import Path
@@ -9,46 +24,72 @@ from uuid import uuid4
 
 from django.contrib import messages
 from django.db import transaction
-from django.http import HttpResponse
+from django.http import JsonResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.views.decorators.http import require_http_methods
 
 from inicio_sesion import base as base
-from inicio_sesion.auth_helpers import _get_user_role, _is_admin, _is_artist, _require_session_user
+from inicio_sesion.auth_helpers import (
+    _require_session_user,
+    _get_user_role,
+    _is_admin,
+    _is_artist,
+)
 from inicio_sesion.models import Song
 
+
+# ---------------------------------------------------------------------------
+# Helpers internos (storage, html, undo y request)
+# ---------------------------------------------------------------------------
 
 def _storage():
     """Devuelve el storage configurado para archivos de audio/portadas."""
     return base._AUDIO_STORAGE
 
 
-def _put_song_undo(request, label: str, data: dict):
-    """Guarda en sesión la acción de deshacer (clave genérica)."""
-    request.session["song_undo"] = data
-    request.session["song_undo_label"] = label
-    request.session.modified = True
-
-
-def _clear_song_undo(request):
-    """Limpia de sesión la acción de deshacer (clave genérica)."""
-    request.session.pop("song_undo", None)
-    request.session.pop("song_undo_label", None)
-    request.session.modified = True
+def _catalogo_html_admin(request):
+    """
+    Renderiza el fragmento HTML del catálogo de canciones (vista admin),
+    ordenado por creación descendente y limitado a los campos necesarios.
+    """
+    songs = (
+        Song.objects.filter(visibility="public")
+        .only(
+            "id",
+            "title",
+            "artist_display_name",
+            "owner_user",
+            "created_at",
+            "cover_image",
+            "audio_file",
+            "visibility",
+            "genre",
+        )
+        .order_by("-created_at")
+    )
+    return render_to_string(
+        "gestion/admin_catalogo_songs.html", {"songs": songs}, request=request
+    )
 
 
 def _put_song_undo_artist(request, label: str, data: dict):
-    """Guarda en sesión la acción de deshacer para el flujo del artista."""
+    """Registra en sesión la acción de deshacer para el flujo de artista."""
     request.session["song_undo_artist"] = data
     request.session["song_undo_artist_label"] = label
     request.session.modified = True
 
 
 def _clear_song_undo_artist(request):
-    """Limpia de sesión la acción de deshacer del flujo del artista."""
+    """Limpia de sesión la acción de deshacer del flujo de artista."""
     request.session.pop("song_undo_artist", None)
     request.session.pop("song_undo_artist_label", None)
     request.session.modified = True
+
+
+def _is_fetch(request) -> bool:
+    """Indica si la petición proviene de fetch() usando cabecera X-Requested-With."""
+    return (request.headers.get("X-Requested-With") or "").lower() == "fetch"
 
 
 def _get_gestion_undo(request):
@@ -65,25 +106,40 @@ def _clear_gestion_undo(request):
 
 def _delete_storage_entry(file_or_url) -> None:
     """
-    Intenta eliminar del storage el archivo referenciado por nombre o URL.
-    Operación best-effort: los errores se ignoran silenciosamente.
+    Elimina del storage el archivo referenciado por nombre o URL.
+
+    Nota: operación best effort; fallos en el borrado se ignoran sin interrumpir
+    el flujo de la vista.
     """
     try:
         name = getattr(file_or_url, "name", "") or str(file_or_url) or ""
         base_url = _storage().base_url.rstrip("/") + "/"
         if name.startswith(base_url):
-            name = name[len(base_url) :].lstrip("/")
+            name = name[len(base_url):].lstrip("/")
         if name:
             _storage().delete(name)
     except Exception:
         pass
 
 
+# ---------------------------------------------------------------------------
+# Vistas (edición y eliminación)
+# ---------------------------------------------------------------------------
+
 @require_http_methods(["GET", "POST"])
 def editar_cancion(request, song_id: int):
     """
-    Edita metadatos (título, intérprete, género, portada) de una canción.
-    Requiere rol administrador.
+    Edita metadatos de una canción (título, intérprete, género y portada).
+
+    Método: GET/POST
+    Permisos: administrador
+    Efectos:
+      - Guarda cambios en modelo Song.
+      - Gestiona portadas (sustitución/borrado) en storage.
+      - Impide duplicados por título público del mismo propietario.
+    Respuesta:
+      - Navegación clásica con mensajes y redirect a «gestion» o a la propia
+        pantalla de edición si hay error de validación.
     """
     username = _require_session_user(request)
     if not username:
@@ -141,7 +197,14 @@ def editar_cancion(request, song_id: int):
                     saved = _storage().save(name, new_cover)
                     song.cover_image = saved
 
-                song.save(update_fields=["title", "artist_display_name", "cover_image", "genre"])
+                song.save(
+                    update_fields=[
+                        "title",
+                        "artist_display_name",
+                        "cover_image",
+                        "genre",
+                    ]
+                )
 
             messages.success(request, "Cambios guardados.")
             return redirect("gestion")
@@ -155,8 +218,18 @@ def editar_cancion(request, song_id: int):
 @require_http_methods(["POST"])
 def eliminar_cancion(request, song_id: int):
     """
-    Realiza eliminación lógica (visibility='removed') de una canción.
-    Permitido para administrador o propietario (artista).
+    Elimina (soft-delete) una canción estableciendo visibility='removed'.
+
+    Método: POST
+    Permisos:
+      - Administrador: sobre cualquier canción.
+      - Artista: únicamente si es propietario.
+    Deshacer:
+      - Admin: sesión «gestion_undo».
+      - Artista: sesión «song_undo_artist».
+    Respuesta:
+      - fetch(): JSON { ok, undo_label }.
+      - Navegación clásica: redirect a «gestion» o «mi_muro».
     """
     username = _require_session_user(request)
     if not username:
@@ -178,7 +251,7 @@ def eliminar_cancion(request, song_id: int):
             messages.success(request, "Canción eliminada.")
 
             if is_admin:
-                # Deshacer en flujo de gestión/admin
+                # Deshacer (gestión/admin)
                 request.session["gestion_undo"] = {
                     "kind": "restore_song_visibility",
                     "song_id": song.id,
@@ -190,7 +263,7 @@ def eliminar_cancion(request, song_id: int):
                 )
                 request.session.modified = True
             else:
-                # Deshacer en flujo del artista (muro)
+                # Deshacer (muro/artista)
                 _put_song_undo_artist(
                     request,
                     f"Eliminaste “{song.title}”.",
@@ -204,14 +277,143 @@ def eliminar_cancion(request, song_id: int):
     except Exception:
         messages.error(request, "Error al eliminar la canción.")
 
+    # Respuesta: fetch() vs navegación clásica
+    if _is_fetch(request):
+        undo_label = (
+            request.session.get("gestion_undo_label")
+            if is_admin
+            else request.session.get("song_undo_artist_label")
+        ) or ""
+        return JsonResponse({"ok": True, "undo_label": undo_label})
+
     return redirect("gestion" if is_admin else "mi_muro")
 
 
 @require_http_methods(["POST"])
+def eliminar_canciones_bulk(request):
+    """
+    Eliminación (soft-delete) de un conjunto de canciones.
+
+    Método: POST
+    Permisos:
+      - Administrador: sobre cualquier canción.
+      - Artista: únicamente canciones propias.
+    Deshacer:
+      - Admin: sesión «gestion_undo» con lista de items.
+      - Artista: sesión «song_undo_artist» con lista de items.
+    Respuesta:
+      - fetch(): JSON { ok, undo_label, removed_ids, catalogo_html? }.
+      - Navegación clásica: redirect a «gestion» o «mi_muro».
+    """
+    username = _require_session_user(request)
+    if not username:
+        return redirect("login")
+
+    role = _get_user_role(username)
+    is_admin = _is_admin(role)
+    is_artist = _is_artist(role)
+
+    raw_ids = request.POST.getlist("ids[]") or request.POST.getlist("ids") or []
+    try:
+        ids = sorted({int(x) for x in raw_ids})
+    except Exception:
+        ids = []
+
+    if not ids:
+        if _is_fetch(request):
+            return JsonResponse(
+                {"ok": False, "error": "No hay canciones seleccionadas."}, status=400
+            )
+        return redirect("gestion" if is_admin else "mi_muro")
+
+    qs = Song.objects.filter(id__in=ids)
+    if not is_admin:
+        if not is_artist:
+            return HttpResponse("No autorizado", status=403)
+        qs = qs.filter(owner_user=username)
+
+    prev = list(qs.values("id", "visibility", "title", "artist_display_name"))
+    if not prev:
+        if _is_fetch(request):
+            return JsonResponse(
+                {"ok": False, "error": "No se encontraron canciones válidas."},
+                status=404,
+            )
+        return redirect("gestion" if is_admin else "mi_muro")
+
+    try:
+        with transaction.atomic():
+            qs.update(visibility="removed")
+
+            if is_admin:
+                request.session["gestion_undo"] = {
+                    "kind": "bulk_restore_song_visibility",
+                    "items": [
+                        {"song_id": it["id"], "prev_visibility": it["visibility"]}
+                        for it in prev
+                    ],
+                    "actor": username,
+                }
+                count = len(prev)
+                request.session["gestion_undo_label"] = (
+                    f"Se eliminaron {count} cancion{'es' if count != 1 else ''}."
+                )
+                request.session.modified = True
+            else:
+                request.session["song_undo_artist"] = {
+                    "kind": "bulk_restore_song_visibility_artist",
+                    "items": [
+                        {"song_id": it["id"], "prev_visibility": it["visibility"]}
+                        for it in prev
+                    ],
+                    "owner_user": username,
+                }
+                request.session["song_undo_artist_label"] = (
+                    f"Eliminaste {len(prev)} cancion{'es' if len(prev)!=1 else ''}."
+                )
+                request.session.modified = True
+
+    except Exception:
+        if _is_fetch(request):
+            return JsonResponse(
+                {"ok": False, "error": "No fue posible eliminar las canciones."},
+                status=500,
+            )
+        return redirect("gestion" if is_admin else "mi_muro")
+
+    payload = {
+        "ok": True,
+        "undo_label": (
+            request.session.get("gestion_undo_label")
+            if is_admin
+            else request.session.get("song_undo_artist_label")
+        ) or "",
+        "removed_ids": [it["id"] for it in prev],
+    }
+    if is_admin:
+        payload["catalogo_html"] = _catalogo_html_admin(request)
+
+    if _is_fetch(request):
+        return JsonResponse(payload)
+
+    return redirect("gestion" if is_admin else "mi_muro")
+
+
+# ---------------------------------------------------------------------------
+# Vistas de deshacer
+# ---------------------------------------------------------------------------
+
+@require_http_methods(["POST"])
 def revertir_cancion(request):
     """
-    Deshace la eliminación de una canción (flujo de Gestión/Admin).
-    Requiere rol administrador.
+    Deshace la eliminación de UNA canción (flujo de gestión/admin).
+
+    Método: POST
+    Permisos: administrador
+    Origen de datos: sesión «gestion_undo» con kind="restore_song_visibility".
+    Respuesta:
+      - fetch(): 204 (sin contenido).
+      - Navegación clásica: redirect a «gestion».
     """
     username = _require_session_user(request)
     if not username:
@@ -239,14 +441,24 @@ def revertir_cancion(request):
     except Exception:
         messages.error(request, "No fue posible deshacer la eliminación.")
 
+    if _is_fetch(request):
+        return HttpResponse(status=204)
     return redirect("gestion")
 
 
 @require_http_methods(["POST"])
 def revertir_mi_cancion(request):
     """
-    Deshace la eliminación de una canción (flujo del artista en su muro).
-    Requiere rol artista y ser propietario de la canción.
+    Deshace la eliminación en el muro del artista (una o varias canciones).
+
+    Método: POST
+    Permisos: artista
+    Origen de datos:
+      - kind="restore_song_visibility_artist": una canción.
+      - kind="bulk_restore_song_visibility_artist": múltiples canciones.
+    Respuesta:
+      - fetch(): JSON { ok, restored_ids }.
+      - Navegación clásica: redirect a «mi_muro».
     """
     username = _require_session_user(request)
     if not username:
@@ -257,24 +469,57 @@ def revertir_mi_cancion(request):
         return HttpResponse("No autorizado", status=403)
 
     data = request.session.get("song_undo_artist")
-    if not data or data.get("kind") != "restore_song_visibility_artist":
+    if not data:
+        if _is_fetch(request):
+            return JsonResponse({"ok": False}, status=400)
         messages.info(request, "No hay ninguna eliminación para deshacer.")
         return redirect("mi_muro")
 
-    song_id = data.get("song_id")
-    prev_visibility = data.get("prev_visibility", "public")
-    owner_user = data.get("owner_user")
+    kind = data.get("kind")
 
     try:
         with transaction.atomic():
-            song = get_object_or_404(Song, id=song_id)
-            if song.owner_user != username or owner_user != username:
-                return HttpResponse("No autorizado", status=403)
-            song.visibility = prev_visibility
-            song.save(update_fields=["visibility"])
-            messages.success(request, f"Se restauró tu canción “{song.title}”.")
-            _clear_song_undo_artist(request)
+            if kind == "restore_song_visibility_artist":
+                song_id = int(data.get("song_id"))
+                prev_visibility = data.get("prev_visibility", "public")
+                song = get_object_or_404(Song, id=song_id)
+                if song.owner_user != username:
+                    return HttpResponse("No autorizado", status=403)
+                song.visibility = prev_visibility
+                song.save(update_fields=["visibility"])
+                _clear_song_undo_artist(request)
+                restored_ids = [song_id]
+
+            elif kind == "bulk_restore_song_visibility_artist":
+                items = data.get("items") or []
+                prev_map = {
+                    int(it["song_id"]): (it.get("prev_visibility") or "public")
+                    for it in items
+                    if "song_id" in it
+                }
+                ids = list(prev_map.keys())
+                songs = list(
+                    Song.objects.filter(id__in=ids, owner_user=username).only(
+                        "id", "visibility", "owner_user"
+                    )
+                )
+                for s in songs:
+                    s.visibility = prev_map.get(s.id, "public")
+                    s.save(update_fields=["visibility"])
+                _clear_song_undo_artist(request)
+                restored_ids = [s.id for s in songs]
+
+            else:
+                _clear_song_undo_artist(request)
+                restored_ids = []
+
     except Exception:
+        if _is_fetch(request):
+            return JsonResponse({"ok": False}, status=500)
         messages.error(request, "No fue posible deshacer la eliminación.")
+        return redirect("mi_muro")
+
+    if _is_fetch(request):
+        return JsonResponse({"ok": True, "restored_ids": restored_ids})
 
     return redirect("mi_muro")
