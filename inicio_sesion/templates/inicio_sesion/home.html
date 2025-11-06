@@ -14,11 +14,13 @@
 
   <!-- Reproductor movido a la app 'reproductor' -->
   <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
+
   <script>
     // Ruta del módulo JS del reproductor (usada por homeScript.js para el import dinámico)
     window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
   </script>
 </head>
+
 <body>
 
   <!-- Header -->
@@ -28,7 +30,7 @@
       <span id="username">Usuario</span>
       <div id="user-menu">
         <a href="#" id="menu-perfil">Perfil</a>
-        <a href="#" id="menu-logout">Cerrar sesión</a>
+        <a href="#" id="menu-logout" data-logout-url="{% url 'logout' %}">Cerrar sesión</a>
       </div>
     </div>
   </div>
@@ -62,7 +64,7 @@
        data-description="{{ session_description }}"
        data-created-at="{{ session_created_at }}"
        data-url-home="{% url 'home' %}"
-data-url-musica="/musica/"
+       data-url-musica="/musica/"
        data-url-mi-muro="{% url 'mi_muro' %}"
        data-url-gestion="{% url 'gestion' %}"
        data-url-revertir="{% url 'revertir' %}"
@@ -84,6 +86,42 @@ data-url-musica="/musica/"
 
   <!-- SPA principal -->
   <script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
+
+  <!-- Script adicional para logout -->
+  <script>
+  // Script único para logout - sin duplicados
+  document.addEventListener('DOMContentLoaded', function() {
+    const logoutLink = document.getElementById('menu-logout');
+    const logoutUrl = "{% url 'logout' %}";  <!-- URL procesada por Django -->
+    
+    if (logoutLink) {
+      logoutLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        if (confirm('¿Seguro que deseas cerrar sesión?')) {
+          // Crear formulario para POST
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = logoutUrl;
+          
+          // Agregar CSRF token
+          const csrfInput = document.createElement('input');
+          csrfInput.type = 'hidden';
+          csrfInput.name = 'csrfmiddlewaretoken';
+          csrfInput.value = '{{ csrf_token }}';
+          form.appendChild(csrfInput);
+          
+          document.body.appendChild(form);
+          form.submit();
+        }
+        
+        // Cerrar menú usuario
+        const userMenu = document.getElementById('user-menu');
+        if (userMenu) userMenu.classList.remove('show');
+      });
+    }
+  });
+</script>
 
 </body>
 </html>

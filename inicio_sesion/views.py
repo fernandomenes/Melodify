@@ -1,6 +1,11 @@
 import json
+from django.contrib import messages
 
 from django.shortcuts import redirect, render
+from django.contrib.auth import logout as django_logout
+from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_http_methods
+
 
 from .models import ArtistProfile, Song, Users
 
@@ -112,3 +117,19 @@ def pantallaLogin(request):
                 {"error": "Usuario o contraseña incorrectos"},
             )
     return render(request, "inicio_sesion/login.html")
+
+@require_http_methods(["GET", "POST"])
+@csrf_protect
+def pantallaLogout(request):
+    """
+    Cierra la sesión del usuario de forma segura.
+    """
+    # Limpiar toda la sesión
+    request.session.flush()
+    
+    # También cerrar sesión de Django
+    django_logout(request)
+    
+    # Usar el sistema de mensajes de Django correctamente
+    messages.success(request, "Sesión cerrada correctamente.")
+    return redirect('login')

@@ -46,9 +46,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('menu-logout').addEventListener('click', (e) => {
         e.preventDefault();
-        if (confirm('¿Seguro que deseas cerrar sesión?')) {
-            // Aquí redirigira a vista de logout
-           // window.location.href = '/logout/';
+        if (confirm('¿Esta usted seguro que desea cerrar sesión?')) {
+           window.location.href = "{% url 'logout' %}";
         }
         userMenu.classList.remove('show');
     });

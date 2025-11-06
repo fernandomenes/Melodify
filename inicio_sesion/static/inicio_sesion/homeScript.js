@@ -164,9 +164,8 @@ const RP = await import('/static/reproductor/reproductor.js?v=1');
     document.getElementById('menu-perfil')?.addEventListener('click', (e) => {
       e.preventDefault(); userMenu.classList.remove('show'); activarItemMenu('perfil'); navegarSPA('perfil');
     });
-    document.getElementById('menu-logout')?.addEventListener('click', (e) => {
-      e.preventDefault(); if (confirm('¿Seguro que deseas cerrar sesión?')) {}; userMenu.classList.remove('show');
-    });
+
+    //---------------------------------
   }
 
   document.querySelectorAll('.menu-item').forEach(item => {
