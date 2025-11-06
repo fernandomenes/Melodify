@@ -123,5 +123,28 @@
   });
 </script>
 
+<script>
+  // Prevenir navegación hacia atrás después de logout
+  document.addEventListener('DOMContentLoaded', function() {
+    // Limpiar el estado de la aplicación al cargar
+    if (performance.navigation.type === 2) {
+        // Si la página se cargó desde cache (navegación hacia atrás)
+        window.location.href = "{% url 'home' %}";
+    }
+    
+    // Deshabilitar cache para esta página
+    window.onpageshow = function(event) {
+        if (event.persisted) {
+            window.location.reload();
+        }
+    };
+  });
+
+  // Prevenir que el formulario se reenvíe al refrescar
+  if (window.history.replaceState) {
+    window.history.replaceState(null, null, window.location.href);
+  }
+</script>
+
 </body>
 </html>

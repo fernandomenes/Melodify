@@ -32,6 +32,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    'inicio_sesion.middleware.NoCacheMiddleware', 
 ]
 
 ROOT_URLCONF = "melodify.urls"
