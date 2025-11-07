@@ -1,0 +1,87 @@
+{# templates/gestion/_usuarios_tab.html #}
+<section id="tab-usuarios" class="tab active" role="region" aria-label="Usuarios">
+  <div class="card" style="margin:0">
+    <h3 style="margin:0 0 8px">Artistas</h3>
+    <table>
+      <thead><tr><th></th><th>Usuario</th><th>Descripción</th><th>Estado</th><th>Registrado</th><th></th></tr></thead>
+      <tbody>
+        {% for u in artists %}
+        <tr>
+          <td>{% if u.avatar %}<img class="avatar" src="{{ u.avatar.url }}" alt="{{ u.user }}">{% else %}<span class="avatar"></span>{% endif %}</td>
+          <td>{{ u.user }}</td>
+          <td>{{ u.artist_profile.description|default:"—" }}</td>
+          <td>{% if u.is_active %}<span class="status ok">Activo</span>{% else %}<span class="status off">Inactivo</span>{% endif %}</td>
+          <td class="muted">{{ u.created_at|date:"Y-m-d H:i" }}</td>
+          <td class="row-actions">
+            <a href="{% url 'editar_usuario' u.user %}">Editar</a>
+            {% if u.is_active %}
+              <form method="post" action="{% url 'desactivar_usuario' u.user %}">{% csrf_token %}<button class="btn" type="submit">Desactivar</button></form>
+            {% else %}
+              <form method="post" action="{% url 'activar_usuario' u.user %}">{% csrf_token %}<button class="btn" type="submit">Activar</button></form>
+            {% endif %}
+            <form method="post" action="{% url 'eliminar_usuario' u.user %}" class="js-delete-form" data-title="{{ u.user }}">{% csrf_token %}<button class="btn" type="submit">Eliminar</button></form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="muted">Sin registros</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 8px">Administradores</h3>
+    <table>
+      <thead><tr><th></th><th>Usuario</th><th>Estado</th><th>Registrado</th><th></th></tr></thead>
+      <tbody>
+        {% for u in admins %}
+        <tr>
+          <td>{% if u.avatar %}<img class="avatar" src="{{ u.avatar.url }}" alt="{{ u.user }}">{% else %}<span class="avatar"></span>{% endif %}</td>
+          <td>{{ u.user }}</td>
+          <td>{% if u.is_active %}<span class="status ok">Activo</span>{% else %}<span class="status off">Inactivo</span>{% endif %}</td>
+          <td class="muted">{{ u.created_at|date:"Y-m-d H:i" }}</td>
+          <td class="row-actions">
+            <a href="{% url 'editar_usuario' u.user %}">Editar</a>
+            {% if u.is_active %}
+              <form method="post" action="{% url 'desactivar_usuario' u.user %}">{% csrf_token %}<button class="btn" type="submit">Desactivar</button></form>
+            {% else %}
+              <form method="post" action="{% url 'activar_usuario' u.user %}">{% csrf_token %}<button class="btn" type="submit">Activar</button></form>
+            {% endif %}
+            <form method="post" action="{% url 'eliminar_usuario' u.user %}" class="js-delete-form" data-title="{{ u.user }}">{% csrf_token %}<button class="btn" type="submit">Eliminar</button></form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="muted">Sin registros</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 8px">Usuarios</h3>
+    <table>
+      <thead><tr><th></th><th>Usuario</th><th>Estado</th><th>Registrado</th><th></th></tr></thead>
+      <tbody>
+        {% for u in viewers %}
+        <tr>
+          <td>{% if u.avatar %}<img class="avatar" src="{{ u.avatar.url }}" alt="{{ u.user }}">{% else %}<span class="avatar"></span>{% endif %}</td>
+          <td>{{ u.user }}</td>
+          <td>{% if u.is_active %}<span class="status ok">Activo</span>{% else %}<span class="status off">Inactivo</span>{% endif %}</td>
+          <td class="muted">{{ u.created_at|date:"Y-m-d H:i" }}</td>
+          <td class="row-actions">
+            <a href="{% url 'editar_usuario' u.user %}">Editar</a>
+            {% if u.is_active %}
+              <form method="post" action="{% url 'desactivar_usuario' u.user %}">{% csrf_token %}<button class="btn" type="submit">Desactivar</button></form>
+            {% else %}
+              <form method="post" action="{% url 'activar_usuario' u.user %}">{% csrf_token %}<button class="btn" type="submit">Activar</button></form>
+            {% endif %}
+            <form method="post" action="{% url 'eliminar_usuario' u.user %}" class="js-delete-form" data-title="{{ u.user }}">{% csrf_token %}<button class="btn" type="submit">Eliminar</button></form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="muted">Sin registros</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>

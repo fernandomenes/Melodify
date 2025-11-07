@@ -1,9 +1,17 @@
 # gestion/views.py
+"""
+Vistas de administración (alta/edición de usuarios y catálogo) con soporte de
+deshacer mediante estado en sesión.
+
+Supone autenticación previa y utiliza modelos/utilidades de la app
+«inicio_sesion».
+"""
 
 from django.contrib import messages
 from django.db import IntegrityError, transaction
 from django.db.models import Q
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse, HttpResponse
+from django.template.loader import render_to_string
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -24,27 +32,69 @@ except Exception:
     Playlist = None
 
 
-# =========================
-# Helpers de "Deshacer"
-# =========================
-def _put_undo(request, label: str, data: dict):
-    """Guarda en sesión el último cambio para permitir su reversión."""
+# =============================================================================
+# Helpers de «Deshacer» y utilidades de render
+# =============================================================================
+def _put_undo(request, label: str, data: dict) -> None:
+    """Persiste en sesión la última acción para permitir su reversión."""
     request.session["gestion_undo"] = data
     request.session["gestion_undo_label"] = label
     request.session.modified = True
 
 
-def _clear_undo(request):
-    """Limpia el estado de deshacer en la sesión."""
+def _clear_undo(request) -> None:
+    """Limpia de sesión cualquier acción pendiente de deshacer."""
     request.session.pop("gestion_undo", None)
     request.session.pop("gestion_undo_label", None)
     request.session.modified = True
 
 
+def _usuarios_tab_html(request) -> str:
+    """Renderiza el HTML completo de la pestaña «Usuarios» para reemplazo dinámico."""
+    admins = Users.objects.filter(type__iexact="administrador").order_by("user")
+    artists = (
+        Users.objects.filter(type__iexact="artista")
+        .select_related("artist_profile")
+        .order_by("user")
+    )
+    viewers = Users.objects.filter(type__iexact="usuario").order_by("user")
+    ctx = {"admins": admins, "artists": artists, "viewers": viewers}
+    return render_to_string("gestion/_usuarios_tab.html", ctx, request=request)
+
+
+def _catalogo_html(request) -> str:
+    """Renderiza el fragmento HTML del catálogo de canciones (vista admin)."""
+    songs = (
+        Song.objects.filter(visibility="public")
+        .only(
+            "id",
+            "title",
+            "artist_display_name",
+            "owner_user",
+            "created_at",
+            "cover_image",
+            "audio_file",
+            "visibility",
+            "genre",
+        )
+        .order_by("-created_at")
+    )
+    return render_to_string("gestion/admin_catalogo_songs.html", {"songs": songs}, request=request)
+
+
+def _is_fetch(request) -> bool:
+    """Indica si la petición proviene del front (fetch) mediante la cabecera esperada."""
+    return request.headers.get("X-Requested-With") == "fetch"
+
+
 def _require_admin(request):
     """
-    Verifica que exista sesión y que el usuario tenga rol de administrador.
-    Devuelve (username, error_response|None).
+    Comprueba sesión válida y rol de administrador.
+
+    Retorna:
+        (username, error_response)
+        - username (str | None)
+        - error_response (HttpResponse | None): respuesta inmediata en caso de error.
     """
     username = _require_session_user(request)
     if not username:
@@ -59,16 +109,18 @@ def _require_admin(request):
     return None, HttpResponse("No autorizado", status=403)
 
 
-# =========================
-# Vistas de Gestión (solo administradores)
-# =========================
+# =============================================================================
+# Vistas de Gestión (sólo administradores)
+# =============================================================================
 @require_http_methods(["GET"])
 def gestion_dashboard(request):
     """
-    Panel de administración:
-      - Formularios de alta de artista/administrador.
-      - Pestaña "Usuarios": admins, artistas y usuarios.
-      - Pestaña "Catálogo": canciones públicas (y álbumes/playlists si existen).
+    Panel de administración.
+
+    Contiene:
+      - Formularios de alta de artista y administrador.
+      - Pestaña «Usuarios»: administradores, artistas y usuarios finales.
+      - Pestaña «Catálogo»: canciones públicas (y álbumes/playlist si existen).
     """
     username, error = _require_admin(request)
     if error:
@@ -101,13 +153,14 @@ def gestion_dashboard(request):
     albums = Album.objects.all().order_by("-id") if Album else []
     playlists = Playlist.objects.all().order_by("-id") if Playlist else []
 
+    # Estado de deshacer (sólo si fue generado por el usuario actual)
     undo_data = request.session.get("gestion_undo")
     if undo_data and undo_data.get("actor") != username:
         undo_data = None
     undo_label = request.session.get("gestion_undo_label") if undo_data else None
 
-    # ===== Variables para data-* en el template =====
-    role = "administrador"  # garantizado por _require_admin
+    # Metadatos de contexto
+    role = "administrador"
     avatar_url = ""
     artist_description = ""
     created_at = ""
@@ -138,7 +191,6 @@ def gestion_dashboard(request):
         "playlists": playlists,
         "undo_data": undo_data,
         "undo_label": undo_label,
-        # Para el template (data-*)
         "username": username,
         "role": role,
         "avatar_url": avatar_url,
@@ -150,7 +202,7 @@ def gestion_dashboard(request):
 
 @require_http_methods(["POST"])
 def registrar_artista(request):
-    """Crea un usuario con rol Artista y su perfil asociado."""
+    """Alta de usuario con rol «Artista» (descripción opcional)."""
     username, error = _require_admin(request)
     if error:
         return error
@@ -160,16 +212,27 @@ def registrar_artista(request):
     description = (request.POST.get("description") or "").strip()
     avatar = request.FILES.get("avatar")
 
-    if not artist_id or not description or not password:
-        messages.error(request, "Completa: usuario, descripción y contraseña.")
+    if not artist_id or not password:
+        messages.error(request, "Completa: usuario y contraseña.")
+        if _is_fetch(request):
+            return JsonResponse({"ok": False})
         return redirect("gestion")
-    if len(description) > 200:
+
+    if len(password) < 6:
+        messages.error(request, "La contraseña debe tener al menos 6 caracteres.")
+        if _is_fetch(request):
+            return JsonResponse({"ok": False})
+        return redirect("gestion")
+
+    if description and len(description) > 200:
         messages.error(request, "La descripción no puede superar 200 caracteres.")
+        if _is_fetch(request):
+            return JsonResponse({"ok": False})
         return redirect("gestion")
 
     try:
         with transaction.atomic():
-            user = Users.objects.create(user=artist_id, password=password, type="artista")
+            user = Users.objects.create(user=artist_id, password=password, type="Artista")
             if avatar:
                 user.avatar = avatar
                 user.save(update_fields=["avatar"])
@@ -184,14 +247,24 @@ def registrar_artista(request):
     except IntegrityError:
         messages.error(request, "El usuario ya existe.")
     except Exception:
-        messages.error(request, "No se pudo agregar el artista. Inténtalo más tarde.")
+        messages.error(request, "No se pudo agregar el artista. Inténtelo más tarde.")
+
+    if _is_fetch(request):
+        return JsonResponse(
+            {
+                "ok": True,
+                "reverted": True,
+                "undo_label": request.session.get("gestion_undo_label", ""),
+                "usuarios_html": _usuarios_tab_html(request),
+            }
+        )
     return redirect("gestion")
 
 
 @require_http_methods(["POST"])
 def registrar_admin(request):
-    """Crea un usuario con rol Administrador."""
-    username, error = _require_admin(request)
+    """Alta de usuario con rol «Administrador». Responde JSON si proviene de fetch()."""
+    session_user, error = _require_admin(request)
     if error:
         return error
 
@@ -199,26 +272,57 @@ def registrar_admin(request):
     password = (request.POST.get("password") or "").strip()
     avatar = request.FILES.get("avatar")
 
+    def _json(ok: bool, **extra):
+        if _is_fetch(request):
+            if ok:
+                extra.setdefault("undo_label", request.session.get("gestion_undo_label", ""))
+                extra.setdefault("usuarios_html", _usuarios_tab_html(request))
+            return JsonResponse({"ok": ok, **extra})
+        return None
+
     if not admin_id or not password:
         messages.error(request, "Completa: usuario y contraseña.")
+        j = _json(False, error="Completa: usuario y contraseña.")
+        if j:
+            return j
+        return redirect("gestion")
+
+    if len(password) < 6:
+        messages.error(request, "La contraseña debe tener al menos 6 caracteres.")
+        j = _json(False, error="La contraseña debe tener al menos 6 caracteres.")
+        if j:
+            return j
         return redirect("gestion")
 
     try:
-        user = Users.objects.create(user=admin_id, password=password, type="administrador")
-        if avatar:
-            user.avatar = avatar
-            user.save(update_fields=["avatar"])
+        with transaction.atomic():
+            user = Users.objects.create(user=admin_id, password=password, type="Administrador")
+            if avatar:
+                user.avatar = avatar
+                user.save(update_fields=["avatar"])
 
-        messages.success(request, f"Administrador '{admin_id}' agregado.")
-        _put_undo(
-            request,
-            f"Se creó el administrador “{admin_id}”.",
-            {"kind": "delete_user_created", "username": admin_id, "actor": username},
-        )
+            messages.success(request, f"Administrador '{admin_id}' agregado.")
+            _put_undo(
+                request,
+                f"Se creó el administrador “{admin_id}”.",
+                {"kind": "delete_user_created", "username": admin_id, "actor": session_user},
+            )
     except IntegrityError:
         messages.error(request, "El usuario ya existe.")
+        j = _json(False, error="El usuario ya existe.")
+        if j:
+            return j
+        return redirect("gestion")
     except Exception:
-        messages.error(request, "No se pudo agregar el administrador. Inténtalo más tarde.")
+        messages.error(request, "No se pudo agregar el administrador.")
+        j = _json(False, error="No se pudo agregar el administrador.")
+        if j:
+            return j
+        return redirect("gestion")
+
+    j = _json(True)
+    if j:
+        return j
     return redirect("gestion")
 
 
@@ -235,7 +339,7 @@ def desactivar_usuario(request, username: str):
         messages.error(request, "La cuenta principal no puede desactivarse.")
         return redirect("gestion")
     if session_user == username:
-        messages.error(request, "No puedes desactivar tu propia cuenta.")
+        messages.error(request, "No es posible desactivar la propia cuenta.")
         return redirect("gestion")
 
     u.is_active = False
@@ -246,12 +350,22 @@ def desactivar_usuario(request, username: str):
         f"Se desactivó “{username}”.",
         {"kind": "toggle_active", "username": username, "to": False, "actor": session_user},
     )
+    if _is_fetch(request):
+        return JsonResponse(
+            {
+                "ok": True,
+                "reverted": True,
+                "undo_label": request.session.get("gestion_undo_label", ""),
+                "usuarios_html": _usuarios_tab_html(request),
+            }
+        )
+
     return redirect("gestion")
 
 
 @require_http_methods(["POST"])
 def activar_usuario(request, username: str):
-    """Activa una cuenta."""
+    """Activa una cuenta previamente desactivada."""
     _, error = _require_admin(request)
     if error:
         return error
@@ -263,19 +377,26 @@ def activar_usuario(request, username: str):
     _put_undo(
         request,
         f"Se activó “{username}”.",
-        {
-            "kind": "toggle_active",
-            "username": username,
-            "to": True,
-        },
+        {"kind": "toggle_active", "username": username, "to": True},
     )
+    if _is_fetch(request):
+        return JsonResponse(
+            {
+                "ok": True,
+                "reverted": True,
+                "undo_label": request.session.get("gestion_undo_label", ""),
+                "usuarios_html": _usuarios_tab_html(request),
+            }
+        )
     return redirect("gestion")
 
 
 @require_http_methods(["GET", "POST"])
 def editar_usuario(request, username: str):
     """
-    Edita datos de un usuario. Permite:
+    Edición de datos de un usuario.
+
+    Permite:
       - Cambio de username (migra ownership de canciones).
       - Cambio de password y rol (con restricciones para superadmin).
       - Gestión de avatar y descripción de artista.
@@ -296,7 +417,7 @@ def editar_usuario(request, username: str):
         remove_avatar = (request.POST.get("remove_avatar") or "") == "1"
         avatar_file = request.FILES.get("avatar")
 
-        # Reglas para superadmin
+        # Reglas sobre superadmin (evitan cambios de rol por no superadmin)
         if target_is_super and not session_is_super:
             new_password = ""
             new_role = (u.type or "").lower()
@@ -312,14 +433,13 @@ def editar_usuario(request, username: str):
             messages.error(request, "El nombre de usuario no puede estar vacío.")
             return redirect("editar_usuario", username=u.user)
 
-        if new_role == "artista" and not target_is_super:
-            if not description:
-                messages.error(request, "La descripción es obligatoria para artistas.")
-                return redirect("editar_usuario", username=u.user)
+        if new_role == "artista" and not target_is_super and not description:
+            messages.error(request, "La descripción es obligatoria para artistas.")
+            return redirect("editar_usuario", username=u.user)
 
         try:
             with transaction.atomic():
-                # Cambio de username (propaga ownership)
+                # Cambio de username (propaga ownership de canciones)
                 if new_user != u.user:
                     if Users.objects.filter(user=new_user).exclude(pk=u.pk).exists():
                         messages.error(request, "Ese nombre de usuario ya existe.")
@@ -375,7 +495,10 @@ def editar_usuario(request, username: str):
 
 @require_http_methods(["POST"])
 def eliminar_usuario(request, username: str):
-    """Elimina una cuenta (con soft-delete de canciones si es artista)."""
+    """
+    Elimina una cuenta. Si el usuario es artista, aplica soft-delete a sus
+    canciones públicas (visibility='removed') para permitir reversión posterior.
+    """
     session_user, error = _require_admin(request)
     if error:
         return error
@@ -385,7 +508,7 @@ def eliminar_usuario(request, username: str):
         messages.error(request, "La cuenta principal no puede eliminarse.")
         return redirect("gestion")
     if session_user == username:
-        messages.error(request, "No puedes eliminar tu propia cuenta.")
+        messages.error(request, "No es posible eliminar la propia cuenta.")
         return redirect("gestion")
 
     try:
@@ -425,20 +548,22 @@ def eliminar_usuario(request, username: str):
         _put_undo(request, f"Se eliminó “{username}”.", undo_payload)
     except Exception:
         messages.error(request, "No se pudo eliminar la cuenta.")
+    if _is_fetch(request):
+        return JsonResponse(
+            {
+                "ok": True,
+                "reverted": True,
+                "undo_label": request.session.get("gestion_undo_label", ""),
+                "usuarios_html": _usuarios_tab_html(request),
+            }
+        )
+
     return redirect("gestion")
 
 
 @require_http_methods(["POST"])
 def revertir_accion(request):
-    """
-    Revierte la última acción guardada en sesión.
-
-    Tipos soportados (data['kind']):
-      - toggle_active: invierte activación de usuario.
-      - delete_user_created: elimina la cuenta recién creada.
-      - restore_deleted_user: recrea cuenta eliminada y restaura visibilidad de canciones.
-      - restore_song_visibility: restaura la visibilidad previa de una canción.
-    """
+    """Deshace la última acción registrada en sesión (gestión/admin)."""
     username, error = _require_admin(request)
     if error:
         return error
@@ -446,9 +571,13 @@ def revertir_accion(request):
     data = request.session.get("gestion_undo")
     if not data:
         messages.info(request, "No hay ninguna acción para deshacer.")
+        if _is_fetch(request):
+            return JsonResponse({"ok": False})
         return redirect("gestion")
 
     kind = data.get("kind")
+    resp = {"ok": True}
+
     try:
         with transaction.atomic():
             if kind == "toggle_active":
@@ -459,13 +588,14 @@ def revertir_accion(request):
                 u.save(update_fields=["is_active"])
                 messages.success(request, f"Se revirtió el estado de “{uname}”.")
                 _clear_undo(request)
+                resp["usuarios_html"] = _usuarios_tab_html(request)
 
             elif kind == "delete_user_created":
                 uname = data.get("username")
                 try:
                     u = Users.objects.get(user=uname)
                 except Users.DoesNotExist:
-                    messages.info(request, "Nada que deshacer: la cuenta ya no existe.")
+                    messages.info(request, "Nada que deshacer: la cuenta no existe.")
                 else:
                     if u.is_superadmin:
                         messages.error(request, "No se puede deshacer sobre la cuenta principal.")
@@ -477,14 +607,12 @@ def revertir_accion(request):
                         u.delete()
                         messages.success(request, f"Se deshizo la creación de “{uname}”.")
                 _clear_undo(request)
+                resp["usuarios_html"] = _usuarios_tab_html(request)
 
             elif kind == "restore_deleted_user":
                 uname = data.get("username")
                 if Users.objects.filter(user=uname).exists():
-                    messages.error(
-                        request,
-                        f"No se puede deshacer: ya existe una cuenta con ID “{uname}”.",
-                    )
+                    messages.error(request, f"No se puede deshacer: ya existe “{uname}”.")
                     _clear_undo(request)
                 else:
                     u = Users.objects.create(
@@ -495,21 +623,16 @@ def revertir_accion(request):
                     )
                     avatar = data.get("avatar")
                     if avatar:
-                        # Asignar name al FileField
                         u.avatar = avatar
                         u.save(update_fields=["avatar"])
-
                     if (u.type or "").lower() == "artista":
-                        ArtistProfile.objects.create(
-                            user=u, description=data.get("description") or ""
-                        )
-
+                        ArtistProfile.objects.create(user=u, description=data.get("description") or "")
                     song_ids = data.get("song_ids") or []
                     if song_ids:
                         Song.objects.filter(id__in=song_ids).update(visibility="public")
-
                     messages.success(request, f"Se restauró la cuenta “{uname}”.")
                     _clear_undo(request)
+                resp["usuarios_html"] = _usuarios_tab_html(request)
 
             elif kind == "restore_song_visibility":
                 sid = data.get("song_id")
@@ -519,25 +642,53 @@ def revertir_accion(request):
                 song.save(update_fields=["visibility"])
                 messages.success(request, f"Se restauró “{song.title}”.")
                 _clear_undo(request)
+                resp["catalogo_html"] = _catalogo_html(request)
+
+            elif kind == "bulk_restore_song_visibility":
+                items = data.get("items") or []
+                if not items:
+                    messages.info(request, "Nada que deshacer.")
+                    _clear_undo(request)
+                else:
+                    prev_map = {
+                        int(it["song_id"]): (it.get("prev_visibility") or "public")
+                        for it in items
+                        if "song_id" in it
+                    }
+                    ids = list(prev_map.keys())
+                    songs = list(Song.objects.filter(id__in=ids).only("id", "visibility"))
+                    for s in songs:
+                        s.visibility = prev_map.get(s.id, "public")
+                        s.save(update_fields=["visibility"])
+                    messages.success(request, f"Se restauraron {len(songs)} canciones.")
+                    _clear_undo(request)
+
+                resp["catalogo_html"] = _catalogo_html(request)
 
             else:
                 messages.info(request, "Esta acción no admite deshacer.")
                 _clear_undo(request)
 
     except Exception:
+        if _is_fetch(request):
+            return JsonResponse({"ok": False})
         messages.error(request, "No fue posible deshacer la última acción.")
+        return redirect("gestion")
+
+    if _is_fetch(request):
+        return JsonResponse(resp)
     return redirect("gestion")
 
 
-# =========================================================
-# Pestaña "Catálogo": fragmento HTML y JSON
-# =========================================================
+# =============================================================================
+# Pestaña «Catálogo»: fragmento HTML y JSON
+# =============================================================================
 @require_http_methods(["GET"])
 def catalogo_admin_fragment(request):
     """
     Devuelve el HTML parcial del catálogo de canciones filtrado.
 
-    Query params:
+    Parámetros de consulta:
       - artist (str, opcional): username del artista.
       - q (str, opcional): texto a buscar en título o intérprete.
     """
@@ -576,16 +727,9 @@ def catalogo_admin_json(request):
     """
     Devuelve JSON para polling de nuevas canciones.
 
-    Query params:
+    Parámetros de consulta:
       - artist (str, opcional): username del artista.
-      - since (ISO8601, opcional): límite inferior de created_at (exclusivo).
-
-    Respuesta:
-      {
-        "latest_created_at": "<ISO8601|''>",
-        "count": <int>,
-        "songs": [ { ... } ]
-      }
+      - since (ISO8601, opcional): límite inferior exclusivo de created_at.
     """
     _, error = _require_admin(request)
     if error:
@@ -638,3 +782,60 @@ def catalogo_admin_json(request):
         ],
     }
     return JsonResponse(payload)
+
+
+# =============================================================================
+# Borrado múltiple de canciones (endpoint del botón «Eliminar seleccionadas»)
+# =============================================================================
+@require_http_methods(["POST"])
+def eliminar_canciones_multiples(request):
+    """Elimina (soft-delete) varias canciones y deja estado de deshacer en sesión."""
+    session_user, error = _require_admin(request)
+    if error:
+        return error
+
+    # ids[] / ids / ids_csv
+    ids = request.POST.getlist("ids[]") or request.POST.getlist("ids")
+    if not ids:
+        raw = (request.POST.get("ids_csv") or "").strip()
+        if raw:
+            ids = [x for x in raw.split(",") if x]
+
+    try:
+        ids = [int(x) for x in ids]
+    except (TypeError, ValueError):
+        return JsonResponse({"ok": False, "error": "IDs inválidos."}, status=400)
+
+    if not ids:
+        return JsonResponse({"ok": False, "error": "Sin selección."}, status=400)
+
+    songs = list(Song.objects.filter(id__in=ids).only("id", "visibility", "title"))
+    if not songs:
+        return JsonResponse({"ok": False, "error": "No se encontraron canciones."}, status=404)
+
+    items = [{"song_id": s.id, "prev_visibility": (s.visibility or "public")} for s in songs]
+    removed_ids = [s.id for s in songs]
+
+    try:
+        with transaction.atomic():
+            Song.objects.filter(id__in=removed_ids).update(visibility="removed")
+            _put_undo(
+                request,
+                f"Se eliminaron {len(removed_ids)} canciones.",
+                {"kind": "bulk_restore_song_visibility", "items": items, "actor": session_user},
+            )
+    except Exception:
+        return JsonResponse({"ok": False, "error": "No se pudo eliminar."}, status=500)
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "removed_ids": removed_ids,
+            "undo_label": request.session.get("gestion_undo_label", ""),
+            "catalogo_html": _catalogo_html(request),
+        }
+    )
+
+
+# Alias por compatibilidad con referencias previas
+eliminar_canciones_bulk = eliminar_canciones_multiples

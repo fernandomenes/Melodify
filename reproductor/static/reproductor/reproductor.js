@@ -1,17 +1,52 @@
 // static/reproductor/reproductor.js
+/* ==========================================================================
+   Módulo: Reproductor central (UI + control de audio)
+   --------------------------------------------------------------------------
+   Responsabilidades:
+   - Gestionar una cola de reproducción derivada del DOM (.song-item / data-audio-url).
+   - Controlar reproducción HTMLAudioElement (play/pause/prev/next/seek/volumen).
+   - Renderizar y sincronizar la barra fija del reproductor con el layout.
+   - Proveer utilidades de render para la vista “Reproductor” (paneles y filtros).
+   - Permanecer activo entre vistas SPA sin interrumpir audio por navegación.
+
+   Convenciones de datos (nodos/atributos):
+   - Cada elemento clicable de canción debe exponer:
+       data-audio-url  (URL absoluta/relativa del audio)
+       data-title      (título)   [opcional: si no existe se toma de .song-title]
+       data-author     (autor)    [opcional: si no existe se toma de .song-author]
+       .song-cover[src] (portada) [opcional]
+   - El contenedor principal expone data-view para el enrutamiento SPA.
+   - La barra del reproductor se inserta como ._mdf-player-bar al <body>.
+
+   API exportada:
+   - DEFAULT_GENRES
+   - renderLeftSongs(songs, titleForEmpty)
+   - buildRightSidebarHTML({ playlists, genres })
+   - attachSidebarHandlers()
+   - inicializarReproductor()
+   - stopReproductor()
+   - rebindReproductor()
+   - renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON })
+   - wireReproductorPlaylistEvents({ mainContent, ROLE, URL_MI_MUSICA_JSON })
+   - stopReproductorIfLoaded()
+
+   Notas:
+   - Este módulo no depende de frameworks.
+   - Evita logs verbosos; se prioriza comportamiento silencioso de producción.
+   ========================================================================== */
 
 let _state = {
-  queue: [],
-  index: -1,
-  audio: null,
-  bar: null,
-  els: {},
-  boundItems: new Set(),
-  guardHooked: false,
-  moView: null,
-  moLayout: null,
-  moList: null,
-  exclusiveHooked: false,
+  queue: [],               // Cola actual derivada del DOM
+  index: -1,               // Índice de la pista activa en la cola
+  audio: null,             // Instancia HTMLAudioElement utilizada por el player
+  bar: null,               // Nodo raíz de la barra del reproductor
+  els: {},                 // Referencias a sub-nodos de la barra
+  boundItems: new Set(),   // Ítems (DOM) con listeners de click vinculados
+  guardHooked: false,      // Bandera: guardia de vista enganchada
+  moView: null,            // MutationObserver para data-view
+  moLayout: null,          // MutationObserver para clases de layout (colapso menú)
+  moList: null,            // MutationObserver para cambios en la lista de canciones
+  exclusiveHooked: false,  // Bandera: hook global para exclusividad de audio
 };
 
 const icons = { prev: "⏮", next: "⏭", play: "▶", pause: "⏸" };
@@ -19,6 +54,7 @@ const icons = { prev: "⏮", next: "⏭", play: "▶", pause: "⏸" };
 const q  = (sel, root = document) => root.querySelector(sel);
 const qa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
+/** Normaliza una cadena a slug simple (minúsculas, sin acentos, sin espacios). */
 function slugify(s){
   return String(s || '')
     .toLowerCase()
@@ -26,6 +62,8 @@ function slugify(s){
     .replace(/[^a-z0-9]+/g,'')
     .trim();
 }
+
+/** Garantiza URL absoluta o relativa desde raíz (/). */
 function ensureAbs(u) {
   if (!u) return "";
   const s = String(u).trim();
@@ -33,34 +71,51 @@ function ensureAbs(u) {
   if (/^https?:\/\//i.test(s) || s.startsWith("/")) return s;
   return "/" + s.replace(/^\/+/, "");
 }
+
+/** Devuelve href absoluto seguro (o cadena vacía si no es válido). */
 function absHref(u) {
   if (!u) return "";
   try { return new URL(u, window.location.origin).href; }
   catch { return ""; }
 }
+
+/** Formatea segundos a mm:ss. */
 function fmtTime(t) {
   if (!Number.isFinite(t)) return "0:00";
   t = Math.max(0, Math.floor(t));
   const m = Math.floor(t / 60), s = String(t % 60).padStart(2, "0");
   return `${m}:${s}`;
 }
+
+/** Escapa HTML en línea. */
 function _esc(s){
   return String(s ?? '')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// === vistas donde el player debe quedar activo y con binding ===
+/* ========================================================================== */
+/* Vistas habilitadas para mantener el reproductor activo                     */
+/* ========================================================================== */
+
 const PLAYABLE_VIEWS = new Set([
-  "reproductor","playlist","musica","genero","generos","home",
+  "reproductor", "playlist", "musica", "genero", "generos", "home",
 ]);
 
+/** Obtiene la vista SPA actual desde #main-content. */
 function getCurrentView() {
   const main = document.getElementById("main-content");
   return (main?.dataset.view || main?.dataset.initialView || "").trim();
 }
+
+/** Indica si la vista actual admite control de player visible/activo. */
 function isPlayableView() { return PLAYABLE_VIEWS.has(getCurrentView()); }
 
+/* ========================================================================== */
+/* Barra del reproductor                                                       */
+/* ========================================================================== */
+
+/** Sincroniza offset de la barra con el estado del menú lateral. */
 function syncBarWithSidebar() {
   const main = document.getElementById("main-content");
   if (!_state.bar || !main) return;
@@ -68,6 +123,7 @@ function syncBarWithSidebar() {
   _state.bar.classList.toggle("menuLateral-collapsed", collapsed);
 }
 
+/** Crea (si no existe) y configura la barra del reproductor. */
 function ensureBar() {
   let bar = q("._mdf-player-bar");
   if (!bar) {
@@ -109,14 +165,15 @@ function ensureBar() {
 
   syncBarWithSidebar();
 
+  // Observa cambios de layout (colapso/expandir menú)
   const main = document.getElementById("main-content");
   if (main && !_state.moLayout) {
     _state.moLayout = new MutationObserver(syncBarWithSidebar);
     _state.moLayout.observe(main, { attributes: true, attributeFilter: ["class"] });
   }
 
+  // Exclusividad: si otro <audio> embebido reproduce, este player pausa
   if (!_state.exclusiveHooked) {
-    // Pausa cualquier <audio> suelto del DOM cuando el player central reproduce
     document.addEventListener("play", (ev) => {
       const t = ev.target;
       if (t && t.tagName === "AUDIO") {
@@ -126,6 +183,7 @@ function ensureBar() {
     _state.exclusiveHooked = true;
   }
 
+  // Inicializa HTMLAudioElement y suscripción a eventos
   if (!_state.audio) {
     _state.audio = new Audio();
     _state.audio.preload = "metadata";
@@ -141,8 +199,8 @@ function ensureBar() {
     _state.audio.addEventListener("play", updatePlayIcon);
     _state.audio.addEventListener("pause", updatePlayIcon);
 
+    // Pausa audios embebidos del documento si el player central reproduce
     _state.audio.addEventListener("play", () => {
-      // Pausar audios embebidos
       document.querySelectorAll("audio").forEach((a) => { try { a.pause(); } catch {} });
     });
 
@@ -156,10 +214,12 @@ function ensureBar() {
     _state.audio.volume = 1;
   }
 
+  // Controles
   _state.els.play.onclick = toggle;
   _state.els.prev.onclick = prev;
   _state.els.next.onclick = next;
 
+  // Seek y volumen
   _state.els.seek.oninput = (e) => {
     const a = _state.audio;
     if (!a || !Number.isFinite(a.duration) || a.duration <= 0) return;
@@ -172,10 +232,14 @@ function ensureBar() {
   };
 }
 
+/** Muestra la barra. */
 function showBar() { if (_state.bar) _state.bar.classList.add("is-visible"); }
+/** Oculta la barra. */
 function hideBar() { if (_state.bar) _state.bar.classList.remove("is-visible"); }
+/** Pausa el audio. */
 function stopAudio() { if (_state.audio) _state.audio.pause(); }
 
+/** Rellena metadatos visuales del player (título, artista, portada). */
 function setMeta(song) {
   _state.els.title.textContent = song.title || "—";
   _state.els.artist.textContent = song.author || song.artist_display_name || "—";
@@ -189,20 +253,31 @@ function setMeta(song) {
     _state.els.cover.style.visibility = "hidden";
   }
 }
+
+/** Actualiza el ícono de play/pause según el estado del audio. */
 function updatePlayIcon() {
   if (!_state.els.play) return;
   const playing = _state.audio && !_state.audio.paused;
   _state.els.play.textContent = playing ? icons.pause : icons.play;
 }
+
+/** Elimina resalte de fila activa. */
 function clearRowHighlight() {
   qa(".song-item.is-playing").forEach((el) => el.classList.remove("is-playing"));
 }
+
+/** Resalta fila correspondiente al índice actual. */
 function highlightCurrent() {
   clearRowHighlight();
   const node = q(`.song-item[data-_idx="${_state.index}"]`);
   if (node) node.classList.add("is-playing");
 }
 
+/**
+ * Carga una pista por índice en la cola y reproduce opcionalmente.
+ * @param {number} idx - Índice de la pista en _state.queue.
+ * @param {boolean} autoplay - Si true, reproduce tras cargar.
+ */
 function load(idx, autoplay = true) {
   idx = Number(idx);
   if (!Number.isInteger(idx) || idx < 0 || idx >= _state.queue.length) return;
@@ -221,33 +296,42 @@ function load(idx, autoplay = true) {
   updatePlayIcon();
   showBar();
 }
+
+/** Alterna reproducción. */
 function toggle() {
   if (!_state.audio || !_state.audio.src) return;
   if (_state.audio.paused) _state.audio.play().catch(() => {});
   else _state.audio.pause();
 }
+
+/** Reproduce pista anterior (con wrap). */
 function prev() {
   if (_state.queue.length === 0) return;
   const i = _state.index > 0 ? _state.index - 1 : _state.queue.length - 1;
   load(i, true);
 }
+
+/** Reproduce pista siguiente (con wrap). */
 function next() {
   if (_state.queue.length === 0) return;
   const i = (_state.index + 1) % _state.queue.length;
   load(i, true);
 }
 
+/**
+ * Reconstruye la cola de reproducción a partir del DOM.
+ * - Soporta nodos con clase .song-item y/o atributo data-audio-url.
+ * - Mantiene índice si la pista actual sigue presente.
+ */
 function collectQueueFromDOM() {
-  // Soporta .song-item y cualquier nodo con data-audio-url
   const items = qa(".song-item, [data-audio-url]");
   const curHref = absHref(_state.audio?.src || "");
 
   const nextQueue = [];
   let k = 0;
   items.forEach((el) => {
-    // Prioriza dataset si existe
-    const title  = el.dataset.title  || el.querySelector(".song-title")?.textContent || "—";
-    const author = el.dataset.author || el.querySelector(".song-author")?.textContent || "—";
+    const title   = el.dataset.title  || el.querySelector(".song-title")?.textContent || "—";
+    const author  = el.dataset.author || el.querySelector(".song-author")?.textContent || "—";
     const coverUrl = ensureAbs(el.dataset.coverUrl || el.querySelector(".song-cover")?.getAttribute("src") || "");
     const audioUrl = ensureAbs(el.dataset.audioUrl || "");
     if (audioUrl) {
@@ -266,6 +350,10 @@ function collectQueueFromDOM() {
   _state.index = want;
 }
 
+/**
+ * Vincula/Desvincula clicks sobre .song-item para controlar reproducción.
+ * @param {boolean} enable - true para vincular, false para quitar.
+ */
 function bindClicks(enable) {
   _state.boundItems.forEach((el) => (el.onclick = null));
   _state.boundItems.clear();
@@ -291,6 +379,7 @@ function bindClicks(enable) {
   });
 }
 
+/** Observa cambios en el contenedor de listas para rearmar la cola. */
 function observeListChanges() {
   const host = document.getElementById("content") || document.body;
   if (_state.moList) {
@@ -314,6 +403,11 @@ function observeListChanges() {
   _state.moList.observe(host, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-audio-url"] });
 }
 
+/**
+ * Guardia de vista SPA:
+ * - En vistas reproducibles, reengancha cola y controles sin pausar audio.
+ * - En otras vistas, mantiene la barra si existe src; oculta si no hay.
+ */
 function hookViewGuard() {
   if (_state.guardHooked) return;
   _state.guardHooked = true;
@@ -323,7 +417,6 @@ function hookViewGuard() {
 
   const apply = () => {
     const playable = isPlayableView();
-    // Evita parar el audio automáticamente por cambiar de vista.
     if (playable) {
       collectQueueFromDOM();
       bindClicks(true);
@@ -331,7 +424,6 @@ function hookViewGuard() {
       observeListChanges();
     } else {
       bindClicks(false);
-      // Mantiene la barra si está sonando algo; se oculta solo si no hay src
       if (!_state.audio?.src) {
         hideBar();
         clearRowHighlight();
@@ -346,7 +438,11 @@ function hookViewGuard() {
   _state.moView.observe(main, { attributes: true, attributeFilter: ["data-view"] });
 }
 
-// ========= API visual para que homeScript delegue todo al módulo =========
+/* ========================================================================== */
+/* API de render y utilidades para la vista Reproductor                       */
+/* ========================================================================== */
+
+/** Catálogo por defecto de géneros. */
 export const DEFAULT_GENRES = [
   { value:'pop',         label:'Pop' },
   { value:'rock',        label:'Rock' },
@@ -362,6 +458,7 @@ export const DEFAULT_GENRES = [
   { value:'otro',        label:'Otro' },
 ];
 
+/** Genera el HTML de una fila de canción para el panel izquierdo. */
 function _playlistSongRow(song) {
   const isString = (typeof song === 'string');
   const title  = isString ? song : (song?.title || '—');
@@ -387,6 +484,11 @@ function _playlistSongRow(song) {
   `;
 }
 
+/**
+ * Renderiza el panel izquierdo con una lista de canciones.
+ * @param {Array<Object|string>} songs - Arreglo de canciones o títulos.
+ * @param {string} titleForEmpty - Etiqueta a mostrar cuando no hay elementos.
+ */
 export function renderLeftSongs(songs, titleForEmpty = 'Mi música') {
   const left = q('.rep-left');
   if (!left) return;
@@ -401,6 +503,13 @@ export function renderLeftSongs(songs, titleForEmpty = 'Mi música') {
   try { inicializarReproductor(); } catch {}
 }
 
+/**
+ * Construye el HTML del panel derecho (playlists + chips de géneros).
+ * @param {Object} params
+ * @param {Array}  params.playlists - Colección de playlists [{id, name, songs}].
+ * @param {Array}  params.genres    - Catálogo de géneros {value,label}.
+ * @returns {string} HTML concatenado de ambos paneles.
+ */
 export function buildRightSidebarHTML({ playlists, genres = DEFAULT_GENRES }) {
   const P  = Array.isArray(playlists) ? playlists : [];
   const pl = P[0] || { id: 1, name: 'Mi música', songs: [] };
@@ -427,6 +536,7 @@ export function buildRightSidebarHTML({ playlists, genres = DEFAULT_GENRES }) {
   return playlistsHTML + '\n' + genresHTML;
 }
 
+/** Registra manejadores del panel derecho (exclusividad playlists ↔ géneros). */
 export function attachSidebarHandlers() {
   const clearGenres = () => {
     const wrap = document.getElementById('rep-genres');
@@ -483,7 +593,11 @@ export function attachSidebarHandlers() {
   }
 }
 
-// ===================== API núcleo (audio / cola / hooks) =====================
+/* ========================================================================== */
+/* API núcleo (audio / cola / hooks)                                          */
+/* ========================================================================== */
+
+/** Inicializa barra, guardia de vista y bindings según la vista actual. */
 export function inicializarReproductor() {
   ensureBar();
   hookViewGuard();
@@ -500,6 +614,7 @@ export function inicializarReproductor() {
   }
 }
 
+/** Detiene y oculta el reproductor (sin destruir estado de sesión). */
 export function stopReproductor() {
   bindClicks(false);
   stopAudio();
@@ -511,7 +626,7 @@ export function stopReproductor() {
   }
 }
 
-// Reenganche manual tras re-render de listas
+/** Reengancha click handlers tras re-render de listas. */
 export function rebindReproductor() {
   ensureBar();
   collectQueueFromDOM();
@@ -519,9 +634,14 @@ export function rebindReproductor() {
   if (_state.audio?.src) showBar();
 }
 
-/* ===================== Integración SPA  ===================== */
+/* ========================================================================== */
+/* Integración SPA                                                             */
+/* ========================================================================== */
 
-// Refresca "Mi música" SOLO para artistas, usando el endpoint ya existente
+/**
+ * Refresca “Mi música” para artistas, usando el endpoint JSON existente.
+ * No altera otros roles.
+ */
 async function _refreshMyMusic(ROLE, URL_MI_MUSICA_JSON) {
   if (String(ROLE).toLowerCase() !== 'artista') return;
   try {
@@ -532,19 +652,25 @@ async function _refreshMyMusic(ROLE, URL_MI_MUSICA_JSON) {
 
     const songs = Array.isArray(data.songs) ? data.songs : [];
     window._playlists = [{ id: 1, name: 'Mi música', songs }];
-  } catch {
-  }
+  } catch { /* silencioso */ }
 }
 
-// Renderiza la vista "reproductor" (rep-grid + panel derecho + lista izquierda)
+/**
+ * Renderiza la vista “Reproductor” (layout rep-grid con panel derecho).
+ * @param {Object} params
+ * @param {HTMLElement} params.mainContent   - Contenedor principal (#main-content).
+ * @param {HTMLElement} params.contentDiv    - Contenedor interno (#content).
+ * @param {string} params.ROLE               - Rol actual (artista/…).
+ * @param {string} params.URL_MI_MUSICA_JSON - Endpoint JSON para “Mi música”.
+ */
 export async function renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON }) {
-  // Asegura ?view=reproductor en la URL
+  // Asegura ?view=reproductor en la URL sin abandonar /home/
   const u = new URL(location.href);
   u.searchParams.set('view', 'reproductor');
   history.replaceState(null, '', u.toString());
   mainContent.dataset.view = 'reproductor';
 
-  // Carga/actualiza "Mi música" si aplica
+  // Carga/actualiza “Mi música” si aplica
   await _refreshMyMusic(ROLE, URL_MI_MUSICA_JSON);
 
   const P  = Array.isArray(window._playlists) ? window._playlists : [];
@@ -565,7 +691,10 @@ export async function renderMenuReproductor({ mainContent, contentDiv, ROLE, URL
   attachSidebarHandlers();
 }
 
-// Reacciona a cambios externos en playlist (delete/undo) SIN dependencias externas
+/**
+ * Observa eventos externos de cambio de playlist (delete/undo) y refresca.
+ * Se limita a la vista actual para evitar re-render innecesario.
+ */
 export function wireReproductorPlaylistEvents({ mainContent, ROLE, URL_MI_MUSICA_JSON }) {
   window.addEventListener('melodify:playlistChanged', async () => {
     if ((mainContent?.dataset.view || '') === 'reproductor') {
@@ -583,6 +712,7 @@ export function wireReproductorPlaylistEvents({ mainContent, ROLE, URL_MI_MUSICA
   });
 }
 
+/** Detiene el reproductor si ya estaba cargado. */
 export async function stopReproductorIfLoaded() {
   try { stopReproductor(); } catch {}
 }

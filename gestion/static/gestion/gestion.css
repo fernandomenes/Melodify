@@ -1,0 +1,54 @@
+/* ==========================================================================
+   Melodify – Gestión/Catálogo: estilos de acciones destructivas (danger)
+   Consistencia visual con Muro/Admin
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Variables de color (danger)
+   -------------------------------------------------------------------------- */
+:root {
+  --danger-border:     #743d3d;
+  --danger-bg:         #592626;
+  --danger-bg-hover:   #6a2d2d;
+}
+
+/* --------------------------------------------------------------------------
+   Botón base en Gestión (alcance limitado a Catálogo)
+   -------------------------------------------------------------------------- */
+#tab-catalogo .btn,
+#catalogo-grid .js-delete-form button {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #3a3a3a;
+  background: #2a2a2a;
+  color: #eee;
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   Variante “danger” (bulk y acciones por ítem)
+   -------------------------------------------------------------------------- */
+#tab-catalogo #bulk-delete,
+#catalogo-grid .js-delete-form button {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+#tab-catalogo #bulk-delete:hover,
+#catalogo-grid .js-delete-form button:hover {
+  background: var(--danger-bg-hover);
+}
+
+/* --------------------------------------------------------------------------
+   Accesibilidad y estados
+   -------------------------------------------------------------------------- */
+#tab-catalogo #bulk-delete:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+#tab-catalogo #bulk-delete:focus-visible,
+#catalogo-grid .js-delete-form button:focus-visible {
+  outline: 2px solid #ff4d4d;
+  outline-offset: 1px;
+}

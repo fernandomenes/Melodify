@@ -1,0 +1,134 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <title>Subida masiva • Melodify</title>
+  <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}">
+  <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    .card{background:#1e1e1e;border:1px solid #2b2b2b;border-radius:12px;padding:16px;margin:16px 0}
+    .muted{color:#9aa0a6}
+    .progress{height:8px;background:#333;border-radius:999px;overflow:hidden}
+    .bar{height:100%;width:0%;background:#7a3cff}
+    .row{display:flex;gap:12px;align-items:center}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+    .item{border:1px solid #2b2b2b;border-radius:10px;padding:10px;background:#181818}
+    .ok{border-color:#315a31}
+    .err{border-color:#6b1b21}
+  </style>
+</head>
+<body>
+<div class="page">
+  <a class="back" href="{% url 'mi_muro' %}">←</a>
+  <h1 style="margin:0 0 12px">Subida masiva</h1>
+  <p class="muted">Máximo {{ MAX_FILES }} archivos. Formatos: mp3, wav, ogg, m4a, flac. Límite {{ MAX_MB }} MB por archivo.</p>
+
+  <div class="card">
+    <form id="bulk-form" method="post" enctype="multipart/form-data" action="{% url 'muro_subida_masiva' %}">
+      {% csrf_token %}
+      <label>Archivos de audio (múltiples)</label>
+      <input id="audio-input" name="audio_files" type="file" accept=".mp3,.wav,.ogg,.m4a,.flac" multiple required>
+
+      <div class="row" style="margin-top:10px">
+        <div style="flex:1">
+          <label>Género (obligatorio)</label>
+          <select name="genre" id="genre" required>
+            <option value="" disabled selected>Selecciona un género</option>
+            <option value="pop">Pop</option><option value="rock">Rock</option>
+            <option value="electronica">Electrónica</option><option value="hiphop">Hip-Hop</option>
+            <option value="reggaeton">Reggaetón</option><option value="regional">Regional Mexicano</option>
+            <option value="balada">Balada</option><option value="indie">Indie</option>
+            <option value="jazz">Jazz</option><option value="clasica">Clásica</option>
+            <option value="_other">Otro…</option>
+          </select>
+          <input id="genre-other" name="genre_other" type="text" placeholder="Escribe el género" style="display:none;margin-top:8px">
+        </div>
+        <div>
+          <label>Portada única (opcional)</label>
+          <input name="cover_image" type="file" accept=".png,.jpg,.jpeg,.webp">
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <button class="btn" type="submit">Subir en lote</button>
+        <div class="progress" style="flex:1"><div id="bar" class="bar"></div></div>
+      </div>
+    </form>
+  </div>
+
+  <div id="results" class="grid"></div>
+</div>
+
+<script>
+(function(){
+  const f = document.getElementById('bulk-form');
+  const bar = document.getElementById('bar');
+  const res = document.getElementById('results');
+  const genreSel = document.getElementById('genre');
+  const genreOther = document.getElementById('genre-other');
+
+  genreSel.addEventListener('change', ()=>{
+    const useOther = genreSel.value === '_other';
+    genreOther.style.display = useOther ? 'block' : 'none';
+    if (!useOther) genreOther.value = '';
+  });
+
+  function setBar(pct){ bar.style.width = Math.max(0, Math.min(100, pct)) + '%'; }
+  function card(html, cls){ const d=document.createElement('div'); d.className='item '+(cls||''); d.innerHTML=html; return d; }
+
+  f.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+
+    // Construye FormData con múltiples archivos bajo la misma clave
+    const fd = new FormData();
+    const files = document.getElementById('audio-input').files;
+    if (!files || files.length === 0){ alert('Selecciona archivos.'); return; }
+
+    for (const file of files){ fd.append('audio_files', file); }
+    fd.append('genre', genreSel.value || '');
+    if (genreSel.value === '_other') fd.append('genre_other', genreOther.value || '');
+    const cover = f.querySelector('input[name=cover_image]').files[0];
+    if (cover) fd.append('cover_image', cover);
+    fd.append('csrfmiddlewaretoken', f.querySelector('input[name=csrfmiddlewaretoken]').value);
+
+    setBar(10);
+    try{
+      const r = await fetch(f.action, { method:'POST', body:fd, headers:{'X-Requested-With':'fetch'} });
+      setBar(60);
+      const data = await r.json();
+      setBar(100);
+
+      res.innerHTML = '';
+      (data.results || []).forEach(item=>{
+        if (item.ok){
+          const s = item.song || {};
+          res.appendChild(card(`
+            <div style="display:flex;gap:10px;align-items:center">
+              ${ s.cover_url ? `<img src="${s.cover_url}" style="width:48px;height:48px;border-radius:6px;object-fit:cover">` : `<div style="width:48px;height:48px;border-radius:6px;background:#2a2a2a"></div>`}
+              <div style="flex:1">
+                <div><strong>${s.title||'—'}</strong></div>
+                <div class="muted">${s.artist_display_name||'—'} · ${s.genre||''}</div>
+              </div>
+              <audio controls src="${s.audio_url||''}" style="width:180px"></audio>
+            </div>
+          `, 'ok'));
+        } else {
+          res.appendChild(card(`<div><strong>${item.name}</strong><br><span class="muted">${item.error||'Error'}</span></div>`, 'err'));
+        }
+      });
+
+      // refresca listas/reproductor
+      window.dispatchEvent(new Event('melodify:playlistChanged'));
+    } catch(err){
+      setBar(0);
+      alert('Error de red al subir el lote.');
+    } finally {
+      setTimeout(()=>setBar(0), 800);
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,45 +1,55 @@
-<!-- Fragmento para catálogo de canciones -->
+{# gestion/admin_catalogo_songs.html — combinado main + multi-selección #}
 {% comment %} Fragmento para la pestaña “Catálogo” del admin {% endcomment %}
 {% if songs %}
-  <div class="grid">
+  <div id="catalogo-grid" class="grid" data-latest="{{ songs.0.created_at|date:'c'|default:'' }}">
     {% for s in songs %}
-      <div class="song">
+      <article class="song js-song-card"
+               data-song-id="{{ s.id }}"
+               data-created-at="{{ s.created_at|date:'c' }}">
+
+        <!-- Checkbox de selección múltiple -->
+        <label class="sel" style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <input type="checkbox" class="song-select" value="{{ s.id }}">
+          <span class="muted">Seleccionar</span>
+        </label>
+
         <div class="row">
           {% if s.cover_image %}
-            <img class="preview" src="{{ s.cover_image.url }}" alt="Portada de {{ s.title }}">
+            <img class="preview" src="{{ s.cover_image.url }}" alt="Portada de {{ s.title }}" loading="lazy">
           {% else %}
-            <div class="preview"></div>
+            <div class="preview" aria-hidden="true"></div>
           {% endif %}
           <div>
             <div style="font-weight:600">{{ s.title }}</div>
-            <div class="muted">{{ s.artist_display_name }} <span style="opacity:.6;">({{ s.owner_user }})</span></div>
+            <div class="muted">
+              {{ s.artist_display_name }} <span style="opacity:.6;">({{ s.owner_user }})</span>
+            </div>
             {% if s.genre %}<div class="muted">Género: {{ s.genre }}</div>{% endif %}
-
             <div class="muted">Subida: {{ s.created_at|date:"Y-m-d H:i" }}</div>
           </div>
         </div>
 
-        <div style="margin-top:8px">
-          {% if s.audio_file %}
-            <audio controls style="width:100%">
+        {% if s.audio_file %}
+          <div style="margin-top:8px">
+            <audio controls preload="none" style="width:100%">
               <source src="{{ s.audio_file.url }}">
             </audio>
-          {% endif %}
-        </div>
+          </div>
+        {% endif %}
 
         <div style="margin-top:8px">
-         <a class="btn" href="{% url 'editar_cancion' s.id %}">Editar</a>
-<form method="post"
-      action="{% url 'eliminar_cancion' s.id %}"
-      style="display:inline"
-      class="js-delete-form"
-      data-title="{{ s.title }}">
-  {% csrf_token %}
-  <button class="btn" type="submit">Eliminar</button>
-</form>
-
+          <a class="btn" href="{% url 'editar_cancion' s.id %}">Editar</a>
+          <form method="post"
+                action="{% url 'eliminar_cancion' s.id %}"
+                style="display:inline"
+                class="js-delete-form"
+                data-title="{{ s.title }}"
+                data-song-id="{{ s.id }}">
+            {% csrf_token %}
+            <button class="btn" type="submit">Eliminar</button>
+          </form>
         </div>
-      </div>
+      </article>
     {% endfor %}
   </div>
 {% else %}
