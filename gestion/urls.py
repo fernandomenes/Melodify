@@ -21,6 +21,7 @@ urlpatterns = [
     path("usuarios/editar/<str:username>/", v.editar_usuario, name="editar_usuario"),
     path("usuarios/eliminar/<str:username>/", v.eliminar_usuario, name="eliminar_usuario"),
     path("undo/", v.revertir_accion, name="revertir_accion"),
+      path("undo/", v.revertir_accion, name="revertir"),
 
     # ------------------------------------------------------------------
     # Catálogo

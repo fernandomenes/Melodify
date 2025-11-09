@@ -98,9 +98,8 @@ function _esc(s){
 /* Vistas habilitadas para mantener el reproductor activo                     */
 /* ========================================================================== */
 
-const PLAYABLE_VIEWS = new Set([
-  "reproductor", "playlist", "musica", "genero", "generos", "home",
-]);
+// Solo visible y activo en la vista Reproductor
+const PLAYABLE_VIEWS = new Set(["reproductor"]);
 
 /** Obtiene la vista SPA actual desde #main-content. */
 function getCurrentView() {
@@ -295,6 +294,10 @@ function load(idx, autoplay = true) {
   if (autoplay) _state.audio.play().catch(() => {});
   updatePlayIcon();
   showBar();
+    if (autoplay) _state.audio.play().catch(() => {});
+  updatePlayIcon();
+  if (isPlayableView()) showBar(); else hideBar();
+
 }
 
 /** Alterna reproducción. */
@@ -395,9 +398,10 @@ function observeListChanges() {
       ) { touched = true; break; }
     }
     if (touched) {
-      collectQueueFromDOM();
+            collectQueueFromDOM();
       bindClicks(isPlayableView());
-      if (_state.audio?.src) showBar();
+      if (isPlayableView() && _state.audio?.src) showBar(); else hideBar();
+
     }
   });
   _state.moList.observe(host, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-audio-url"] });
@@ -424,13 +428,12 @@ function hookViewGuard() {
       observeListChanges();
     } else {
       bindClicks(false);
-      if (!_state.audio?.src) {
-        hideBar();
-        clearRowHighlight();
-      }
+      hideBar();
+      clearRowHighlight();
       observeListChanges();
     }
   };
+
 
   apply();
   if (_state.moView) _state.moView.disconnect();
@@ -609,7 +612,7 @@ export function inicializarReproductor() {
     observeListChanges();
   } else {
     bindClicks(false);
-    if (!_state.audio?.src) hideBar();
+    hideBar();
     observeListChanges();
   }
 }
@@ -631,7 +634,7 @@ export function rebindReproductor() {
   ensureBar();
   collectQueueFromDOM();
   bindClicks(isPlayableView());
-  if (_state.audio?.src) showBar();
+  if (isPlayableView() && _state.audio?.src) showBar(); else hideBar();
 }
 
 /* ========================================================================== */

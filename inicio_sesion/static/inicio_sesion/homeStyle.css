@@ -110,7 +110,7 @@ body {
 }
 #menuLateral.collapsed { transform: translateX(-100%); }
 
-/* Ítem del menú: base (comportamiento de botón) */
+/* Ítem del menú */
 .menu-item {
   display: block;
   width: calc(100% - 24px);
@@ -123,17 +123,9 @@ body {
   border-radius: 10px;
   border: 1px solid transparent;
   cursor: pointer;
-  transition:
-    background .2s ease,
-    border-color .2s ease,
-    color .2s ease,
-    transform .08s ease;
+  transition: background .2s ease, border-color .2s ease, color .2s ease, transform .08s ease;
 }
-
-/* Ítem: estado hover (inactivo) */
 .menu-item:hover { background-color: #2a2a2a; }
-
-/* Ítem: estado activo */
 .menu-item.active {
   background-color: #ff0066;
   border-color: #ff2a7f;
@@ -141,11 +133,7 @@ body {
   border-radius: 10px;
   border-left: none;
 }
-
-/* Ítem: estado activo + hover */
 .menu-item.active:hover { background-color: #ff2a7f; }
-
-/* Ítem: estado active (feedback de pulsación) */
 .menu-item:active { transform: translateY(1px); }
 
 /* ==========================================================================
@@ -202,7 +190,7 @@ a.back:hover,
 a.back:focus { background: #262626; }
 
 /* ==========================================================================
-   Listado de canciones (uso simple en Home)
+   Lista de canciones simple (Home)
    ========================================================================== */
 .song-item {
   padding: 10px 16px;
@@ -224,9 +212,72 @@ a.back:focus { background: #262626; }
    Visibilidad del botón Back según la vista
    ========================================================================== */
 #back-btn { display: inline-flex; }
-
 #main-content[data-view="home"] #back-btn,
 #main-content[data-initial-view="home"]:not([data-view]) #back-btn,
 #main-content[data-initial-view="home"][data-view="home"] #back-btn {
   display: none !important;
+}
+
+/* ==========================================================================
+   FAB “Muro del artista” 
+   ========================================================================== */
+.fab-muro{
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  font-weight: 700;
+  border-radius: 999px;
+  background: #21c8ff;        
+  color: #042029;             
+  text-decoration: none;
+  box-shadow: 0 10px 24px rgba(33,200,255,.35), inset 0 1px 0 rgba(255,255,255,.2);
+  border: 1px solid rgba(255,255,255,.25);
+  z-index: 250;               
+}
+.fab-muro:hover { background: #53d8ff; }
+.fab-muro:active { transform: translateY(1px); }
+.fab-muro .sub{
+  font-size: 12px;
+  font-weight: 500;
+  opacity: .9;
+  margin-left: 6px;
+}
+
+/* ==========================================================================
+   FAB “Gestión” 
+   ========================================================================== */
+.fab-gestion{
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  font-weight: 700;
+  border-radius: 999px;
+  background: #21c8ff;       
+  color: #042029;
+  text-decoration: none;
+  box-shadow: 0 10px 24px rgba(33,200,255,.35), inset 0 1px 0 rgba(255,255,255,.2);
+  border: 1px solid rgba(255,255,255,.25);
+  z-index: 250;
+}
+.fab-gestion:hover { background: #53d8ff; }
+.fab-gestion:active { transform: translateY(1px); }
+.fab-gestion .sub{
+  font-size: 12px;
+  font-weight: 500;
+  opacity: .9;
+  margin-left: 6px;
+}
+
+/* Responsive: margen en pantallas pequeñas */
+@media (max-width: 720px){
+  .fab-muro{ right: 16px; bottom: 16px; padding: 10px 14px; }
+  .fab-gestion{ right: 16px; bottom: 16px; padding: 10px 14px; }
 }

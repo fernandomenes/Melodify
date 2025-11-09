@@ -1,47 +1,117 @@
 // static/gestion/gestion.js
 // ============================================================================
-// Gestión – Administración de pestañas, selección múltiple, eliminación (con
-// modal de confirmación), deshacer y reemplazo parcial de vistas.
+// Gestión – Tabs, selección múltiple, borrado con modal, undo y reemplazos.
+// Header (avatar/nombre), menú usuario (perfil/logout) y toggle lateral.
 // ============================================================================
 
 (function () {
   "use strict";
 
-  // Exponer bandera de carga (diagnóstico)
   window.__gestion_loaded__ = true;
 
   // ---------------------------------------------------------------------------
-  // Utilidades
+  // Utils
   // ---------------------------------------------------------------------------
   const $  = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const $all = $$;
 
-  /**
-   * Obtiene el valor de una cookie por nombre.
-   * @param {string} name
-   * @returns {string}
-   */
   function getCookie(name) {
     const m = document.cookie.match(new RegExp("(^|;)\\s*" + name + "=([^;]*)"));
     return m ? decodeURIComponent(m[2]) : "";
   }
-
-  /**
-   * Obtiene el token CSRF desde meta o cookie.
-   * @returns {string}
-   */
   function getCSRF() {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || getCookie("csrftoken");
   }
+  function escapeHtml(s){ return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
   // ---------------------------------------------------------------------------
-  // Mensajería en línea (errores/success)
+  // Header (avatar/nombre) + menú (perfil/logout)
   // ---------------------------------------------------------------------------
-  /**
-   * Muestra un mensaje de error en el contenedor inline.
-   * @param {string} msg
-   */
+  function applyHeaderIdentity() {
+    const mc   = $("#main-content");
+    const name = $("#username");
+    const icon = $("#user-trigger .user-icon");
+
+    const USERNAME = (mc?.dataset.username || "Usuario").trim();
+    const AVATAR   = (mc?.dataset.avatar || "").trim();
+
+    if (name) name.textContent = USERNAME || "Usuario";
+
+    if (icon) {
+      if (AVATAR) {
+        icon.innerHTML = `<img src="${escapeHtml(AVATAR)}" alt="${escapeHtml(USERNAME)}"
+                           style="width:36px;height:36px;border-radius:50%;object-fit:cover;">`;
+      } else {
+        icon.textContent = (USERNAME || "U").charAt(0).toUpperCase();
+      }
+    }
+  }
+
+  function initHeaderMenu() {
+    const trigger = $("#user-trigger");
+    const menu    = $("#user-menu");
+    const perfil  = $("#menu-perfil");
+    const logout  = $("#menu-logout");
+    const homeURL = (window.MELODIFY_HOME_URL || "/home/");
+
+    if (trigger && menu){
+      trigger.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        menu.classList.toggle("show");
+      });
+      document.addEventListener("click", () => menu.classList.remove("show"));
+      menu.addEventListener("click", (e) => e.stopPropagation());
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") menu.classList.remove("show");
+      });
+    }
+
+    if (perfil) {
+      perfil.addEventListener("click", (e) => {
+        e.preventDefault();
+        menu?.classList.remove("show");
+        location.href = homeURL + "?view=perfil&no_spa=1";
+      });
+    }
+
+    if (logout) {
+      const logoutUrl = logout.getAttribute("href") || logout.dataset.logoutUrl || "/logout/";
+      logout.addEventListener("click", async (e) => {
+        e.preventDefault();
+        menu?.classList.remove("show");
+        try {
+          const res = await fetch(logoutUrl, {
+            method: "POST",
+            headers: { "X-CSRFToken": getCSRF() },
+            credentials: "same-origin",
+          });
+          if (res.redirected) { location.href = res.url; return; }
+          if (res.ok) { location.href = homeURL; return; }
+        } catch {}
+        location.href = logoutUrl; 
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Toggle del menú lateral
+  // ---------------------------------------------------------------------------
+  function initSideToggle(){
+    const btn    = $("#menu-toggle-btn");
+    const menu   = $("#menuLateral");
+    const header = $("#header");
+    btn?.addEventListener("click", () => {
+      menu?.classList.toggle("collapsed");
+      $("#main-content")?.classList.toggle("menuLateral-collapsed");
+      header?.classList.toggle("menuLateral-collapsed");
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mensajería inline + undo bar
+  // ---------------------------------------------------------------------------
   function showInlineError(msg) {
     const box = $("#inline-msg");
     if (!box) return;
@@ -49,28 +119,17 @@
     box.className = "msg error";
     box.style.display = "block";
   }
-
-  /** Oculta el contenedor de mensaje en línea. */
   function clearInlineMsg() {
     const box = $("#inline-msg");
     if (box) box.style.display = "none";
   }
 
-  // ---------------------------------------------------------------------------
-  // Barra de deshacer (undo)
-  // ---------------------------------------------------------------------------
-  /**
-   * Muestra la barra de deshacer con etiqueta.
-   * @param {string} label
-   */
   function showUndo(label) {
     const bar = $("#undo-bar");
     const lbl = $("#undo-label");
     if (lbl) lbl.textContent = label || "Acción realizada.";
     if (bar) bar.style.display = "flex";
   }
-
-  /** Oculta la barra de deshacer y limpia etiqueta. */
   function hideUndo() {
     const bar = $("#undo-bar");
     const lbl = $("#undo-label");
@@ -81,10 +140,6 @@
   // ---------------------------------------------------------------------------
   // Reemplazos parciales (Usuarios / Catálogo)
   // ---------------------------------------------------------------------------
-  /**
-   * Reemplaza la pestaña #tab-usuarios por su versión fresca en HTML.
-   * @param {string} html
-   */
   function replaceUsuariosTab(html) {
     if (!html) return;
     const wrap = document.createElement("div");
@@ -92,44 +147,29 @@
     const fresh = wrap.querySelector("#tab-usuarios");
     const old   = $("#tab-usuarios");
     if (fresh && old) old.replaceWith(fresh);
-
-    // Marcar pestaña como activa si aplica
     const tabBtn = $('.tab-btn[data-tab="usuarios"]');
     if (tabBtn) tabBtn.setAttribute("aria-selected", "true");
   }
 
-  /**
-   * Sustituye el grid del catálogo con el fragmento recibido y reinicia selección.
-   * @param {string} html
-   */
   function replaceCatalogo(html) {
     const cont = $("#catalogo-songs");
     if (!cont || typeof html !== "string") return;
-
     const wrap = document.createElement("div");
     wrap.innerHTML = html.trim();
-
     const fresh = wrap.querySelector("#catalogo-grid") || wrap.firstElementChild;
     const old   = cont.querySelector("#catalogo-grid");
-
     if (fresh) {
       if (old) old.replaceWith(fresh);
       else cont.innerHTML = html;
     } else {
       cont.innerHTML = html;
     }
-
     resetSelection();
   }
 
   // ---------------------------------------------------------------------------
-  // Tabs accesibles (ARIA)
+  // Tabs
   // ---------------------------------------------------------------------------
-  /**
-   * Activa una pestaña y su panel asociado.
-   * @param {string} tabName
-   * @param {boolean} [push=true] Actualiza hash en URL.
-   */
   function activateTabs(tabName, push = true) {
     const tablist = $('.tabs[role="tablist"]');
     if (!tablist) return;
@@ -154,7 +194,6 @@
     }
   }
 
-  /** Inicializa control de tabs (mouse/teclado). */
   function initTabs() {
     const tablist = $('.tabs[role="tablist"]');
     if (!tablist) return;
@@ -184,62 +223,73 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Modal de confirmación
+  // Modal confirm (con delegación)
   // ---------------------------------------------------------------------------
-  const modal      = $("#confirm-modal");
-  const txt        = $("#confirm-text");
-  const btnCancel  = $("#confirm-cancel");
-  const btnAccept  = $("#confirm-accept");
+  const modal = $("#confirm-modal");
+  const txt   = $("#confirm-text");
 
-  /** @type {HTMLFormElement|null} */
-  let pendingForm  = null;
-  /** @type {number[]|null} */
-  let pendingBulkIds = null;
+  let pendingForm    = null;   // HTMLFormElement
+  let pendingBulkIds = null;   // number[]
 
-  /**
-   * Abre el modal con un mensaje.
-   * @param {string} message
-   * @returns {boolean} true si se mostró.
-   */
   function openModal(message) {
     if (!modal) return false;
     if (txt) txt.textContent = message || "¿Eliminar este elemento?";
     modal.classList.add("show");
     modal.setAttribute("aria-hidden", "false");
+    // Foco al botón aceptar si existe
+    setTimeout(() => $("#confirm-accept")?.focus(), 0);
     return true;
   }
-
-  /** Cierra el modal y limpia estados pendientes. */
   function closeModal() {
     if (!modal) return;
     modal.classList.remove("show");
     modal.setAttribute("aria-hidden", "true");
-    pendingForm = null;
-    pendingBulkIds = null;
   }
 
-  btnCancel?.addEventListener("click", (e) => { e.preventDefault(); closeModal(); });
+  // Clic fuera del diálogo cierra modal
   modal?.addEventListener("click",  (e) => { if (e.target === modal) closeModal(); });
 
+  // Delegación global para aceptar/cancelar 
+  document.addEventListener("click", async (e) => {
+    const accept = e.target.closest?.("#confirm-accept");
+    if (accept) {
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        if (pendingForm) {
+          await doDelete(pendingForm);
+          pendingForm = null;
+        } else if (pendingBulkIds && pendingBulkIds.length) {
+          await doBulkDelete(pendingBulkIds);
+          pendingBulkIds = null;
+        }
+      } finally {
+        closeModal();
+      }
+      return;
+    }
+
+    const cancel = e.target.closest?.("#confirm-cancel");
+    if (cancel) {
+      e.preventDefault();
+      e.stopPropagation();
+      pendingForm = null;
+      pendingBulkIds = null;
+      closeModal();
+    }
+  });
+
   // ---------------------------------------------------------------------------
-  // Eliminación múltiple (Catálogo)
+  // Bulk delete
   // ---------------------------------------------------------------------------
-  /**
-   * Ejecuta eliminación en lote y actualiza vistas.
-   * @param {number[]} ids
-   */
   async function doBulkDelete(ids) {
     try {
       const fd = new FormData();
       ids.forEach(id => fd.append("ids[]", String(id)));
-
       const res = await fetch("/gestion/canciones/eliminar-multiples/", {
         method: "POST",
         body: fd,
-        headers: {
-          "X-Requested-With": "fetch",
-          "X-CSRFToken": getCSRF(),
-        },
+        headers: { "X-Requested-With": "fetch", "X-CSRFToken": getCSRF() },
         credentials: "same-origin",
       });
 
@@ -247,42 +297,31 @@
       if (!ct.includes("application/json")) { location.reload(); return; }
 
       const j = await res.json();
-      if (!j.ok) {
-        showInlineError(j.error || "No fue posible eliminar las canciones.");
-        return;
-      }
+      if (!j.ok) { showInlineError(j.error || "No fue posible eliminar las canciones."); return; }
 
       if (j.undo_label) showUndo(j.undo_label);
-      if (j.catalogo_html) {
-        replaceCatalogo(j.catalogo_html);
-      } else {
-        (j.removed_ids || []).forEach(id => {
-          const card = document.querySelector(`.js-song-card[data-song-id="${id}"]`);
-          if (card) card.remove();
-        });
-      }
+      if (j.catalogo_html) replaceCatalogo(j.catalogo_html);
+      else (j.removed_ids || []).forEach(id => {
+        const card = document.querySelector(`.js-song-card[data-song-id="${id}"]`);
+        if (card) card.remove();
+      });
     } catch {
       location.reload();
     } finally {
-      pendingBulkIds = null;
       resetSelection();
     }
   }
 
-  /**
-   * Ejecuta una acción de eliminación individual.
-   * @param {HTMLFormElement} form
-   */
+  // ---------------------------------------------------------------------------
+  // Delete individual
+  // ---------------------------------------------------------------------------
   async function doDelete(form) {
     try {
       const fd  = new FormData(form);
       const res = await fetch(form.action, {
         method: "POST",
         body: fd,
-        headers: {
-          "X-Requested-With": "fetch",
-          "X-CSRFToken": getCSRF(),
-        },
+        headers: { "X-Requested-With": "fetch", "X-CSRFToken": getCSRF() },
         redirect: "follow",
         credentials: "same-origin",
       });
@@ -290,22 +329,17 @@
       const ct = (res.headers.get("content-type") || "").toLowerCase();
       if (ct.includes("application/json")) {
         const j = await res.json();
+        if (j.ok === false) { showInlineError(j.error || "No se pudo completar la acción."); return; }
 
-        if (j.ok === false) {
-          showInlineError(j.error || "No se pudo completar la acción.");
-          return;
-        }
-
-        if (j.undo_label)   showUndo(j.undo_label);
-        if (j.usuarios_html) replaceUsuariosTab(j.usuarios_html);
-        if (j.catalogo_html) replaceCatalogo(j.catalogo_html);
+        if (j.undo_label)     showUndo(j.undo_label);
+        if (j.usuarios_html)  replaceUsuariosTab(j.usuarios_html);
+        if (j.catalogo_html)  replaceCatalogo(j.catalogo_html);
         else if (!j.usuarios_html) {
           const rowOrCard = form.closest(".js-song-card, tr, .song");
           if (rowOrCard) rowOrCard.remove();
         }
         return;
       }
-
       location.reload();
     } catch {
       location.reload();
@@ -313,12 +347,10 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Selección múltiple en Catálogo
+  // Selección múltiple (Catálogo)
   // ---------------------------------------------------------------------------
-  /** @type {Set<number>} */
   const selected = new Set();
 
-  /** Sincroniza controles y contador del modo de selección. */
   function updateBulkUI() {
     const btn = $("#bulk-delete");
     const count = selected.size;
@@ -334,18 +366,14 @@
       all.indeterminate = count > 0 && count < checks.length;
     }
   }
-
-  /** Limpia el conjunto de selección y actualiza UI. */
   function resetSelection() {
     selected.clear();
     updateBulkUI();
   }
 
-  // Delegación de cambios en checkboxes
   document.addEventListener("change", (e) => {
     const t = e.target;
 
-    // (1) selección por ítem
     if (t && t.classList && t.classList.contains("song-select")) {
       const id = parseInt(t.value, 10);
       if (!isNaN(id)) {
@@ -355,7 +383,6 @@
       }
     }
 
-    // (2) seleccionar todo
     if (t && t.id === "sel-all") {
       const checks = $all("#catalogo-grid .song-select");
       checks.forEach(ch => {
@@ -370,7 +397,7 @@
     }
   });
 
-  // Eliminar seleccionadas (con modal; sin confirm nativo)
+  // Abrir modal para eliminación múltiple
   document.addEventListener("click", async (e) => {
     const btn = e.target.closest("#bulk-delete");
     if (!btn) return;
@@ -383,17 +410,16 @@
     const noun = n === 1 ? "canción seleccionada" : "canciones seleccionadas";
 
     if (openModal(`¿Eliminar ${n} ${noun}?`)) {
-      pendingBulkIds = ids; // será consumido por el handler de btnAccept
+      pendingBulkIds = ids;
       return;
     }
 
-    // Fallback si no existiera el modal
     if (!window.confirm(`¿Eliminar ${n} ${noun}?`)) return;
     await doBulkDelete(ids);
   });
 
   // ---------------------------------------------------------------------------
-  // Intercepción de formularios
+  // Intercepción de formularios con undo 
   // ---------------------------------------------------------------------------
   document.addEventListener("submit", async (e) => {
     const form = e.target;
@@ -403,7 +429,9 @@
 
     // 1) Borrados con modal
     if (form.classList.contains("js-delete-form")) {
-      e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
       const t = form.dataset.title || "este elemento";
       pendingForm = form;
       if (!openModal(`¿Eliminar “${t}”?`)) {
@@ -412,7 +440,7 @@
       return;
     }
 
-    // 2) Deshacer (barra)
+    // 2) Deshacer
     const isUndo = href.includes("/revertir_accion") || href.endsWith("/gestion/undo/");
     if (isUndo) {
       e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
@@ -421,14 +449,10 @@
         const res = await fetch(href, {
           method: "POST",
           body: fd,
-          headers: {
-            "X-Requested-With": "fetch",
-            "X-CSRFToken": getCSRF(),
-          },
+          headers: { "X-Requested-With": "fetch", "X-CSRFToken": getCSRF() },
           redirect: "follow",
           credentials: "same-origin",
         });
-
         const ct = (res.headers.get("content-type") || "").toLowerCase();
         if (ct.includes("application/json")) {
           const j = await res.json();
@@ -446,7 +470,7 @@
       return;
     }
 
-    // 3) Toggle / Registrar (acciones con deshacer)
+    // 3) Toggle / Registrar / Eliminar
     const isEliminar = href.includes("/gestion/usuarios/eliminar/") || href.includes("/gestion/canciones/eliminar/");
     const isToggle   = href.includes("/gestion/usuarios/desactivar/") || href.includes("/gestion/usuarios/activar/");
     const isRegister = /\/gestion\/registrar[-_](?:artista|admin)\/?$/i.test(href);
@@ -456,7 +480,6 @@
     e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
     clearInlineMsg();
 
-    // Validaciones mínimas en registro
     if (isRegister) {
       const u = form.querySelector('input[name="user"]')?.value?.trim() || "";
       const p = form.querySelector('input[name="password"]')?.value || "";
@@ -471,10 +494,7 @@
       const res = await fetch(href, {
         method: "POST",
         body: fd,
-        headers: {
-          "X-Requested-With": "fetch",
-          "X-CSRFToken": getCSRF(),
-        },
+        headers: { "X-Requested-With": "fetch", "X-CSRFToken": getCSRF() },
         redirect: "follow",
         credentials: "same-origin",
       });
@@ -485,16 +505,12 @@
       if (ct.includes("application/json")) {
         const j = await res.json();
 
-        if (j.ok === false) {
-          showInlineError(j.error || "No se pudo completar la acción.");
-          return;
-        }
+        if (j.ok === false) { showInlineError(j.error || "No se pudo completar la acción."); return; }
 
         if (j.undo_label)    showUndo(j.undo_label);
         if (j.usuarios_html) replaceUsuariosTab(j.usuarios_html);
         if (j.catalogo_html) replaceCatalogo(j.catalogo_html);
 
-        // Fallback local si fue eliminación y no vino HTML para reemplazar
         if (isEliminar && !j.usuarios_html && !j.catalogo_html) {
           const rowOrCard = form.closest(".js-song-card, tr, .song");
           if (rowOrCard) rowOrCard.remove();
@@ -511,30 +527,12 @@
   }, true);
 
   // ---------------------------------------------------------------------------
-  // Confirmación desde el modal
-  // ---------------------------------------------------------------------------
-  btnAccept?.addEventListener("click", async (e) => {
-    e.preventDefault();
-
-    if (pendingForm) {
-      await doDelete(pendingForm);
-      closeModal();
-      return;
-    }
-
-    if (pendingBulkIds && pendingBulkIds.length) {
-      await doBulkDelete(pendingBulkIds);
-      closeModal();
-      return;
-    }
-
-    closeModal();
-  });
-
-  // ---------------------------------------------------------------------------
-  // Inicialización
+  // Init
   // ---------------------------------------------------------------------------
   document.addEventListener("DOMContentLoaded", () => {
+    applyHeaderIdentity();
+    initHeaderMenu();
+    initSideToggle();
     initTabs();
     resetSelection();
   });
