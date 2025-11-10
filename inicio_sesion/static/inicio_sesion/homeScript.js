@@ -1,7 +1,7 @@
 // static/inicio_sesion/homeScript.js
 
-// Guard: si una vista de servidor (como /mi-muro o /gestion) puso window.__DISABLE_HOME_SCRIPT__,
-// no ejecutamos la SPA. Solo quitamos la clase del main-content para evitar layout raro.
+// Si la vista de servidor establece window.__DISABLE_HOME_SCRIPT__, se evita inicializar la SPA.
+// Se retira la clase del contenedor principal para mantener el layout estable.
 const __SPA_DISABLED__ = !!window.__DISABLE_HOME_SCRIPT__;
 
 if (__SPA_DISABLED__) {
@@ -11,7 +11,7 @@ if (__SPA_DISABLED__) {
   });
 } else {
   document.addEventListener('DOMContentLoaded', async () => {
-    // ========= Carga del reproductor con fallback y ruta dinámica =========
+    // Carga dinámica del módulo del reproductor con mecanismo de reserva (fallback).
     let RP;
     try {
       const src = (window.REPRODUCTOR_SRC || '/static/reproductor/reproductor.js?v=1');
@@ -24,7 +24,7 @@ if (__SPA_DISABLED__) {
       };
     }
 
-    // ========= Nodos base =========
+    // Referencias a nodos base del layout.
     const $ = (s, r=document) => r.querySelector(s);
     const menuLateral   = $('#menuLateral');
     const mainContent   = $('#main-content');
@@ -36,28 +36,15 @@ if (__SPA_DISABLED__) {
 
     if (!mainContent || !contentDiv) return;
 
-    // ========= Hooks del buscador (UI, sin lógica) =========
+    // Elementos del buscador (solo UI; la lógica de búsqueda se define en otro módulo).
     const searchForm  = $('#search-form');
     const searchInput = $('#search-input');
     const searchPanel = $('#search-panel');
 
-    // Evita submit/recarga con Enter
+    // Evita la recarga por submit.
     searchForm?.addEventListener('submit', (e) => e.preventDefault());
-    // Ejemplo de dónde pegar tu lógica:
-    // searchInput?.addEventListener('input', async () => {
-    //   const term = (searchInput.value || '').trim();
-    //   // 1) fetch/filtrado
-    //   // 2) pintar en #search-panel y mostrarlo: searchPanel.hidden = false;
-    // });
-    // Cerrar panel al hacer clic fuera (si lo usas):
-    // document.addEventListener('click', (e) => {
-    //   if (searchPanel && !searchPanel.contains(e.target) && e.target !== searchInput) {
-    //     searchPanel.hidden = true;
-    //     searchInput.setAttribute('aria-expanded', 'false');
-    //   }
-    // });
 
-    // ========= Datos inyectados por plantilla =========
+    // Datos inyectados por la plantilla.
     let ROLE        = (mainContent.dataset.role || '').toLowerCase();
     let USERNAME    = (mainContent.dataset.username || '').trim();
     const AVATAR      = (mainContent.dataset.avatar || '').trim();
@@ -74,17 +61,17 @@ if (__SPA_DISABLED__) {
     const hashView     = (location.hash || '').replace(/^#/, '');
     const INITIAL_VIEW = (urlParams.get('view') || hashView || mainContent.dataset.initialView || 'home').trim();
 
-    // Si no vino el rol, inferimos por el título de la página de gestión
+    // Inferencia de rol en ausencia de dato explícito.
     if (!ROLE) {
       const h1 = document.querySelector('.page h1')?.textContent?.toLowerCase() || '';
       if (h1.includes('gestión')) ROLE = 'administrador';
     }
 
-    // ========= Estado SPA =========
+    // Estado de navegación SPA.
     let currentView  = null;
     let historyStack = [];
 
-    // ========= Playlists iniciales (JSON embebido) =========
+    // Playlists iniciales provenientes del JSON embebido por plantilla.
     let playlists = [];
     try {
       const jsonEl = $('#playlists-data-json');
@@ -95,7 +82,7 @@ if (__SPA_DISABLED__) {
     }
     window._playlists = playlists;
 
-    // ========= Utils =========
+    // Utilidades de presentación.
     function escapeHtml(s) {
       return String(s ?? '').replace(/&/g,'&amp;')
                             .replace(/</g,'&lt;')
@@ -108,7 +95,7 @@ if (__SPA_DISABLED__) {
     }
     function pushHistory(html){ historyStack.push({ view: currentView, content: html }); }
 
-    // ========= Header: Avatar y nombre =========
+    // Pinta datos de usuario en el encabezado.
     function aplicarAvatarHeader() {
       const iconEl = $('#user-trigger .user-icon');
       const nameEl = $('#username');
@@ -122,7 +109,7 @@ if (__SPA_DISABLED__) {
       }
     }
 
-    // ========= Menú por rol =========
+    // Visibilidad de entradas del menú lateral según rol.
     function aplicarPermisosMenu() {
       const showSel  = (selector, v) => { const el = $(selector); if (el) el.style.display = v ? '' : 'none'; };
       const showView = (view, v) => showSel(`#menuLateral .menu-item[data-view="${view}"]`, v);
@@ -151,7 +138,7 @@ if (__SPA_DISABLED__) {
       }
     }
 
-    // ========= Vistas =========
+    // Vistas SPA (render mínimo para estados base).
     function renderMenuHome() {
       mainContent.dataset.view = 'home';
 
@@ -177,7 +164,7 @@ if (__SPA_DISABLED__) {
       showContent(html);
     }
 
-    // Fallback simple por si no tienes showPlaylists() en tu playListScript.js
+    // Fallback de listas de reproducción (si no existe implementación específica en otro módulo).
     function renderMenuPlaylists() {
       mainContent.dataset.view = 'playlist';
       const isArtist = ROLE === 'artista';
@@ -225,7 +212,7 @@ if (__SPA_DISABLED__) {
       showContent(html);
     }
 
-    // ========= Router / navegación =========
+    // Router / navegación principal.
     function clickMenuToggleBtn() {
       menuLateral?.classList.toggle('collapsed');
       mainContent.classList.toggle('menuLateral-collapsed');
@@ -235,13 +222,13 @@ if (__SPA_DISABLED__) {
     menuToggleBtn?.addEventListener('click', clickMenuToggleBtn);
     toggleLogo?.addEventListener('click', clickMenuToggleBtn);
 
-    // Ignoramos navegación SPA en enlaces marcados explícitamente como externos
+    // Evita capturar enlaces marcados como externos; delega al navegador.
     document.addEventListener('click', (e) => {
       const a = e.target.closest?.('a[data-external="true"]');
-      if (a) return; // navegación nativa
+      if (a) return;
     }, true);
 
-    // Menú de usuario (header)
+    // Menú de usuario en encabezado.
     const userTrigger = $('#user-trigger');
     const userMenu    = $('#user-menu');
     if (userTrigger && userMenu) {
@@ -256,7 +243,7 @@ if (__SPA_DISABLED__) {
       });
     }
 
-    // Sidebar: SOLO ítems SPA
+    // Ítems del sidebar que forman parte de la SPA.
     document.querySelectorAll('#menuLateral .menu-item[data-view]').forEach(item => {
       item.addEventListener('click', (e) => {
         if (item.tagName === 'A') { e.preventDefault(); e.stopPropagation(); }
@@ -273,7 +260,7 @@ if (__SPA_DISABLED__) {
       });
     }
 
-    // Botón BACK (permite delegar a vistas si tienes funciones propias)
+    // Botón de retorno. Permite delegar comportamiento específico cuando la vista lo provea.
     function clickBackBtn() {
       switch (currentView) {
         case 'playlist':
@@ -295,11 +282,11 @@ if (__SPA_DISABLED__) {
       clickBackBtn();
     });
 
-    // Navegación SPA principal
+    // Controlador central de navegación SPA.
     async function navegarSPA(view) {
       currentView = view;
       mainContent.dataset.view = view || '';
-      historyStack = []; // reset por vista
+      historyStack = [];
 
       switch (view) {
         case 'home':
@@ -309,28 +296,30 @@ if (__SPA_DISABLED__) {
         case 'playlist':
           await RP.stopReproductorIfLoaded();
           if (typeof window.showPlaylists === 'function') {
-            window.showPlaylists(); // tu función si existe
+            window.showPlaylists();
           } else {
-            renderMenuPlaylists();  // fallback
+            renderMenuPlaylists();
           }
           break;
         case 'reproductor':
+          window.__SKIP_MY_MUSIC_REFRESH__ = true; // bandera interna para evitar refrescos redundantes
           await RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON });
           break;
+
         case 'perfil':
           await RP.stopReproductorIfLoaded();
           renderMenuPerfil();
           break;
-        case 'gestion':     // servidor
+        case 'gestion':     // vista servida por el servidor
           await RP.stopReproductorIfLoaded();
           window.location.href = URL_GESTION + '?no_spa=1';
           break;
-        case 'mi-muro':     // servidor
-        case 'mi-musica':   // alias
+        case 'mi-muro':     // vista servida por el servidor
+        case 'mi-musica':
           await RP.stopReproductorIfLoaded();
           window.location.href = URL_MI_MURO + '?no_spa=1';
           return;
-        case 'musica':      // servidor
+        case 'musica':      // vista servida por el servidor
           await RP.stopReproductorIfLoaded();
           window.location.href = URL_MUSICA + '?no_spa=1';
           break;
@@ -341,7 +330,7 @@ if (__SPA_DISABLED__) {
       }
     }
 
-    // Decorado de acciones peligrosas
+    // Marcado visual de acciones peligrosas (eliminar, borrar, etc.).
     function decorateDangerButtons(root = document) {
       const attrMatches = root.querySelectorAll(
         'button[name*="delete" i], button[id*="delete" i], button[data-action="delete"], button[data-danger],' +
@@ -358,29 +347,33 @@ if (__SPA_DISABLED__) {
       });
     }
 
-    // ========= Arranque =========
+    // Inicialización de la aplicación.
     function inicializarApp() {
       if (!USERNAME) USERNAME = 'Usuario';
       aplicarAvatarHeader();
       aplicarPermisosMenu();
 
-      // Wire del reproductor
+      // Conexión de eventos del reproductor.
       RP.wireReproductorPlaylistEvents({ mainContent, ROLE, URL_MI_MUSICA_JSON });
 
       const first = INITIAL_VIEW || 'home';
       activarItemMenu(first);
       mainContent.dataset.view = first;
 
-      if (first === 'home') renderMenuHome();
-      else if (first === 'playlist') {
+      if (first === 'home') {
+        renderMenuHome();
+      } else if (first === 'playlist') {
         if (typeof window.showPlaylists === 'function') window.showPlaylists();
         else renderMenuPlaylists();
+      } else if (first === 'perfil') {
+        renderMenuPerfil();
+      } else if (first === 'reproductor') {
+        RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON });
+      } else {
+        renderMenuHome();
       }
-      else if (first === 'perfil') renderMenuPerfil();
-      else if (first === 'reproductor') RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON });
-      else renderMenuHome();
 
-      // Mantener data-view sincronizado cuando se pulse menú SPA
+      // Mantiene sincronizado data-view al interactuar con el menú lateral.
       const main = $('#main-content');
       if (main) {
         const SPA_VIEWS = new Set(['home', 'playlist', 'reproductor', 'perfil']);

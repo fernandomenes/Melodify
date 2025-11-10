@@ -1,7 +1,7 @@
 /* ==========================================================================
    Reproductor central (cola + audio) — SIN control de la barra
    - Emite eventos para que barra_reproduccion.js pinte/controle la UI
-   - Exponen 'window.MDFCore' para la barra clásica
+   - Expone 'window.MDFCore' para la barra
    - Exporta funciones para la SPA (render, hooks, etc.)
    ========================================================================== */
 
@@ -43,6 +43,103 @@ function fmtTime(t){
 }
 function fire(name, detail) {
   document.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
+}
+
+// ------------------------- Helpers de normalización ------------------------
+const pickFirst = (...c) => c.find(v => typeof v === 'string' && v.trim().length) || "";
+
+function normalizeSong(song){
+  const audio = pickFirst(
+    song.audioUrl, song.audio_url, song.audio,
+    song.file, song.file_url, song.filePath, song.file_path,
+    song.audioFile, song.audio_file, song.audioPath, song.audio_path,
+    song.src, song.source, song.stream_url, song.streamUrl,
+    song?.audio?.url, song?.file?.url, song?.media?.audio, song?.media?.url
+  );
+  if (!audio) return null;
+
+  const cover  = pickFirst(
+    song.coverUrl, song.cover_url, song.cover, song.thumbnail, song.thumb,
+    song?.cover?.url, song?.image?.url, song?.media?.cover
+  ) || "/static/inicio_sesion/img_song.png";
+
+  const title  = pickFirst(song.title, song.name) || "—";
+  const author = pickFirst(song.artist_display_name, song.artist, song.author, song.singer) || "—";
+  const genre  = pickFirst(song.genre, song.genero, song.gen) || "";
+
+  return { title, author, coverUrl: cover, audioUrl: audio, genre };
+}
+
+// ------------------ Carga playlists reales (devuelve array) ----------------
+async function fetchAllPlaylistsWithSongs() {
+  try {
+    const res = await fetch('/playlist/getAllList', { credentials: 'same-origin', cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const lists = await res.json(); // [{id, name, ...}, ...]
+
+    if (!Array.isArray(lists) || !lists.length) return [];
+
+    const byId = async (pl) => {
+      const r = await fetch(`/playlist/${pl.id}/songs/`, { credentials:'same-origin', cache:'no-store' });
+      if (!r.ok) return { id: `pl:${pl.id}`, name: pl.name || `Playlist ${pl.id}`, songs: [] };
+      const data  = await r.json();
+      const raw   = Array.isArray(data?.songs) ? data.songs : [];
+      const norm  = raw.map(normalizeSong).filter(Boolean);
+      return { id: `pl:${pl.id}`, name: pl.name || `Playlist ${pl.id}`, songs: norm };
+    };
+
+    const all = await Promise.all(lists.map(byId));
+    return all;
+  } catch (e) {
+    console.warn('fetchAllPlaylistsWithSongs() falló:', e);
+    return [];
+  }
+}
+
+// --------------------- “Mi música” (del artista actual) --------------------
+async function fetchMyMusic(URL_MI_MUSICA_JSON){
+  try{
+    if(!URL_MI_MUSICA_JSON) return [];
+    const res = await fetch(URL_MI_MUSICA_JSON, {
+      credentials:'same-origin',
+      cache:'no-store',
+      headers:{'X-Requested-With':'fetch'}
+    });
+    if(!res.ok) return [];
+    const data  = await res.json();
+    const raw   = (Array.isArray(data?.songs) && data.songs)
+               || (Array.isArray(data?.results) && data.results)
+               || (Array.isArray(data?.playlist?.songs) && data.playlist.songs)
+               || [];
+    return raw.map(normalizeSong).filter(Boolean);
+  }catch(e){
+    console.warn('fetchMyMusic() falló:', e);
+    return [];
+  }
+}
+
+// ------- Construye modelo final: Todas + Mi música + playlists reales ------
+function buildPlaylistsModel({allPlaylists, mySongs}){
+  const dedup = (arr, keyFn) => {
+    const seen = new Set(); const out = [];
+    for (const it of arr) {
+      const k = keyFn(it);
+      if (!k || seen.has(k)) continue;
+      seen.add(k); out.push(it);
+    }
+    return out;
+  };
+  const abs = (u)=>{ try{ return u? new URL(u, location.origin).href : ""; }catch{ return u||""; } };
+
+  const flattenAll = allPlaylists.flatMap(pl => Array.isArray(pl.songs) ? pl.songs : []);
+  const allUnique  = dedup(flattenAll, s => abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
+  const allPlaylist  = { id:'pl:all',  name:'Todas las canciones', songs: allUnique };
+
+  const mineUnique   = dedup(mySongs||[], s => abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
+  const minePlaylist = { id:'pl:mine', name:'Mi música', songs: mineUnique };
+
+  // Orden: Todas → Mi música → el resto
+  return [allPlaylist, minePlaylist, ...allPlaylists];
 }
 
 // -------------------- Gestión de selección / cola --------------------------
@@ -188,7 +285,7 @@ function next(){
 }
 
 // ------------------------------- Vistas ------------------------------------
-const PLAYABLE_VIEWS = new Set(["reproductor","playlist","musica","genero","generos","home"]);
+const PLAYABLE_VIEWS = new Set(["reproductor", "playlist"]);
 function getCurrentView(){
   const m=document.getElementById("main-content");
   return (m?.dataset.view||m?.dataset.initialView||"").trim();
@@ -244,7 +341,7 @@ function _playlistSongRow(song){
   const author=isStr?'—':(song?.author||song?.artist_display_name||song?.artist||'—');
   const cover=isStr?null:ensureAbs(song?.coverUrl||song?.cover_url||song?.cover||'');
   const audio=isStr?'':ensureAbs(song?.audioUrl||song?.audio_url||song?.audio||'');
-  const genre=!isStr?(song?.genre||song?.genero||''):''; // para trackmeta
+  const genre=!isStr?(song?.genre||song?.genero||''):'';
   const coverHTML = cover?`<img src="${_esc(cover)}" alt="${_esc(title)}" class="song-cover">`:`<div class="song-cover song-cover--placeholder"></div>`;
   return `
     <div class="song-item" data-audio-url="${_esc(audio)}" data-title="${_esc(title)}" data-author="${_esc(author)}" data-genre="${_esc(genre)}">
@@ -256,7 +353,7 @@ function _playlistSongRow(song){
     </div>`;
 }
 
-export function renderLeftSongs(songs, titleForEmpty='Mi música'){
+export function renderLeftSongs(songs, titleForEmpty='Playlist'){
   const left=q('.rep-left'); if(!left) return;
   if(!songs||!songs.length){
     left.innerHTML=`<div class="rep-empty"><div><h3 style="margin:0">${_esc(titleForEmpty)}</h3><p>No hay canciones.</p></div></div>`;
@@ -266,20 +363,28 @@ export function renderLeftSongs(songs, titleForEmpty='Mi música'){
   try{ inicializarReproductor(); }catch{}
 }
 
+// ---------- Sidebar: Playlists (todas) + Géneros ---------------------------
 export function buildRightSidebarHTML({playlists, genres=DEFAULT_GENRES}){
-  const P=Array.isArray(playlists)?playlists:[]; const pl=P[0]||{id:1,name:'Mi música',songs:[]};
-  const songs=Array.isArray(pl.songs)?pl.songs:[];
-  const playlistsHTML=`
+  const P = Array.isArray(playlists) ? playlists : [];
+  const liHTML = P.map(pl=>{
+    const songs = Array.isArray(pl.songs) ? pl.songs : [];
+    return `
+      <li data-pl="${_esc(pl.id)}"
+          style="display:flex;align-items:center;gap:10px;background:#181818;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;cursor:pointer">
+        <span style="flex:1">${_esc(pl.name || 'Playlist')}</span>
+        <span class="rep-badge">${songs.length}</span>
+      </li>`;
+  }).join('');
+
+  const playlistsHTML = `
     <div class="rep-panel">
       <div class="rep-head"><h3 style="margin:0">Playlists</h3></div>
       <ul id="rep-playlists" class="rep-list" style="list-style:none;margin:0;padding:0">
-        <li data-pl="${_esc(pl.id)}" style="display:flex;align-items:center;gap:10px;background:#181818;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;cursor:pointer">
-          <span style="flex:1">${_esc(pl.name || 'Mi música')}</span>
-          <span class="rep-badge">${songs.length}</span>
-        </li>
+        ${liHTML || '<li class="muted" style="padding:8px 10px;">(sin playlists)</li>'}
       </ul>
     </div>`;
-  const chipsHTML = genres.map(g=>`<span class="rep-chip" data-genre="${_esc(g.value)}">${_esc(g.label)}</span>`).join('');
+
+  const chipsHTML = (genres||[]).map(g=>`<span class="rep-chip" data-genre="${_esc(g.value)}">${_esc(g.label)}</span>`).join('');
   const genresHTML=`
     <div class="rep-panel">
       <div class="rep-head"><h3 style="margin:0">Géneros</h3></div>
@@ -304,7 +409,9 @@ export function attachSidebarHandlers(){
         renderLeftSongs(Array.isArray(pl.songs)?pl.songs:[], pl.name||'Playlist');
       });
     });
-    const first=ul.querySelector('li[data-pl]'); if(first){ first.classList.add('active'); clearGenres(); }
+    // Prioriza seleccionar “pl:all” al abrir
+    const first=ul.querySelector('li[data-pl="pl:all"]') || ul.querySelector('li[data-pl]');
+    if(first){ first.classList.add('active'); clearGenres(); }
   }
 
   const chipsWrap=document.getElementById('rep-genres');
@@ -330,40 +437,39 @@ export function attachSidebarHandlers(){
 }
 
 // -------------------- Integración con la SPA -------------------------------
-async function _refreshMyMusic(ROLE, URL_MI_MUSICA_JSON){
-  try{
-    if(!URL_MI_MUSICA_JSON) return;
-    const res=await fetch(URL_MI_MUSICA_JSON,{credentials:'same-origin',cache:'no-store',headers:{'X-Requested-With':'fetch'}});
-    if(!res.ok) return;
-    const data=await res.json();
-    const songs=(Array.isArray(data?.songs)&&data.songs)||(Array.isArray(data?.results)&&data.results)||(Array.isArray(data?.playlist?.songs)&&data.playlist.songs)||[];
-    if(songs.length) window._playlists=[{id:1,name:'Mi música',songs}];
-  }catch{}
-}
-
-export async function renderMenuReproductor({mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON}){
+export async function renderMenuReproductor({mainContent, contentDiv, URL_MI_MUSICA_JSON}){
   const u=new URL(location.href); u.searchParams.set('view','reproductor'); history.replaceState(null,'',u.toString());
   mainContent.dataset.view='reproductor';
-  await _refreshMyMusic(ROLE, URL_MI_MUSICA_JSON);
 
-  const P=Array.isArray(window._playlists)?window._playlists:[]; const pl=P[0]||{id:1,name:'Mi música',songs:[]};
-  const songs=Array.isArray(pl.songs)?pl.songs:[];
+  // 1) Obtiene playlists reales + mis canciones
+  const [allPlaylists, mySongs] = await Promise.all([
+    fetchAllPlaylistsWithSongs(),
+    fetchMyMusic(URL_MI_MUSICA_JSON)
+  ]);
 
-  const rightHTML=buildRightSidebarHTML({playlists:P, genres:DEFAULT_GENRES||[]})||'';
-  contentDiv.innerHTML=`<div class="rep-grid"><div class="rep-left"></div><div class="rep-right">${rightHTML}</div></div>`;
+  // 2) Construye el modelo final y publica
+  window._playlists = buildPlaylistsModel({ allPlaylists, mySongs });
+
+  // 3) UI
+  const P = Array.isArray(window._playlists) ? window._playlists : [];
+  const initial = P.find(p => p.id==='pl:all') || P[0] || { id:'pl:tmp', name:'(sin playlists)', songs:[] };
+  const songs   = Array.isArray(initial.songs) ? initial.songs : [];
+
+  const rightHTML = buildRightSidebarHTML({playlists:P, genres:DEFAULT_GENRES||[]}) || '';
+  contentDiv.innerHTML = `<div class="rep-grid"><div class="rep-left"></div><div class="rep-right">${rightHTML}</div></div>`;
 
   inicializarReproductor();
-  renderLeftSongs(songs, pl.name||'Mi música');
+  renderLeftSongs(songs, initial.name || 'Playlist');
   attachSidebarHandlers();
 }
 
 export async function stopReproductorIfLoaded(){ try{ stopReproductor(); }catch{} }
 
-export function wireReproductorPlaylistEvents({ mainContent, ROLE, URL_MI_MUSICA_JSON }){
+export function wireReproductorPlaylistEvents({ mainContent }){
   window.addEventListener('melodify:playlistChanged', async ()=>{
     if((mainContent?.dataset.view||'')==='reproductor'){
-      try{ await renderMenuReproductor({ mainContent, contentDiv:document.getElementById('content'), ROLE, URL_MI_MUSICA_JSON }); }catch{}
-    }else{ await _refreshMyMusic(ROLE, URL_MI_MUSICA_JSON); }
+      try{ await renderMenuReproductor({ mainContent, contentDiv:document.getElementById('content') }); }catch{}
+    }
   });
 }
 

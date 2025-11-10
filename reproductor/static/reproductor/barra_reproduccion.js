@@ -189,17 +189,21 @@
   function show(){ els.bar?.classList.add("is-visible"); }
   function hide(){ els.bar?.classList.remove("is-visible"); }
 
-  // ---------- Mostrar solo en “reproductor” ----------
-  const PLAYABLE_VIEWS = new Set(["reproductor"]);
-  function getCurrentView(){
-    const m=document.getElementById("main-content");
-    return (m?.dataset.view||m?.dataset.initialView||"").trim();
-  }
-  function enforceVisibility(){
-    const playable = PLAYABLE_VIEWS.has(getCurrentView());
-    const hasAudio = !!(audio && audio.src);
-    if (playable && hasAudio) { show(); } else { hide(); }
-  }
+// ---------- Visibilidad de la barra ----------
+// Mostramos la barra si hay audio y NO estamos en vistas de servidor
+function getCurrentView(){
+  const m=document.getElementById("main-content");
+  return (m?.dataset.view||m?.dataset.initialView||"").trim();
+}
+function enforceVisibility(){
+  const hasAudio = !!(audio && audio.src);
+  const spaEnabled = !window.__DISABLE_HOME_SCRIPT__;         // false en /mi-muro, /gestion, etc.
+  const view = getCurrentView();
+  const spaViews = new Set(["home","playlist","reproductor","perfil"]);
+  const inSpaView = spaViews.has(view);
+  if (spaEnabled && inSpaView && hasAudio) { show(); } else { hide(); }
+}
+
   function hookViewObserver(){
     const main=document.getElementById("main-content");
     if(!main) return;
