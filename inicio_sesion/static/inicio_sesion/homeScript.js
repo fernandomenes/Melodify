@@ -1,7 +1,7 @@
 // static/inicio_sesion/homeScript.js
 
 document.addEventListener('DOMContentLoaded', async () => {
-const RP = await import('/static/reproductor/reproductor.js?v=1');
+  const RP = await import('/static/reproductor/reproductor.js?v=1');
 
   // ====== Nodos base y dataset ======
   const menuLateral   = document.getElementById('menuLateral');
@@ -10,6 +10,10 @@ const RP = await import('/static/reproductor/reproductor.js?v=1');
   const contentDiv    = document.getElementById('content');
   const menuToggleBtn = document.getElementById('menu-toggle-btn');
   const toggleLogo    = document.getElementById('toggle-menu');
+  const botonBack     = document.getElementById('back-btn');
+
+  botonBack.addEventListener('click', clickBackBtn);
+
   if (!mainContent || !contentDiv) return;
 
   // Datos inyectados por plantilla
@@ -35,7 +39,6 @@ const RP = await import('/static/reproductor/reproductor.js?v=1');
   const INITIAL_VIEW = (urlParams.get('view') || hashView || mainContent.dataset.initialView || '').trim();
 
   // ====== Estado SPA ======
-  let historyStack = [];
   let currentView  = null;
 
   // ====== Playlists iniciales (JSON embebido) ======
@@ -50,9 +53,14 @@ const RP = await import('/static/reproductor/reproductor.js?v=1');
   window._playlists = playlists;
 
   // ====== Utils de la SPA ======
-  function showContent(html){ contentDiv.innerHTML = html; decorateDangerButtons(contentDiv); }
-  function pushHistory(html){ historyStack.push({ view: currentView, content: html }); }
-  function escapeHtml(s){ return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function showContent(html){
+    contentDiv.innerHTML = html;
+    decorateDangerButtons(contentDiv);
+  }
+
+  function escapeHtml(s){
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
 
   function aplicarAvatarHeader() {
     const iconEl = document.querySelector('#user-trigger .user-icon');
@@ -96,30 +104,9 @@ const RP = await import('/static/reproductor/reproductor.js?v=1');
   function renderMenuHome() {
     mainContent.dataset.view = 'home';
     const html = `<h2>HOME • Bienvenido a Melodify</h2><p>Selecciona una opción del menú para comenzar.</p>`;
-    pushHistory(html); showContent(html);
+    showContent(html)
   }
 
-  function renderMenuPlaylists() {
-    mainContent.dataset.view = 'playlist';
-    const isArtist = ROLE === 'artista';
-    const P = Array.isArray(window._playlists) ? window._playlists : [];
-    let html = '';
-
-    if (isArtist) {
-      html += '<ul class="item-list"><li data-playlist-id="1">Mi música</li></ul>';
-    } else if (P.length) {
-      html += '<ul class="item-list">' +
-        P.map(pl => `<li data-playlist-id="${pl.id}">${escapeHtml(pl.name || '—')}</li>`).join('') +
-      '</ul>';
-    } else {
-      html += '<p style="color:#b3b3b3;">No hay playlists.</p>';
-    }
-
-    pushHistory(html); showContent(html);
-    document.querySelectorAll('[data-playlist-id]').forEach(item => {
-      item.addEventListener('click', () => console.log('Abrir playlist', item.getAttribute('data-playlist-id')));
-    });
-  }
 
   function renderMenuPerfil() {
     mainContent.dataset.view = 'perfil';
@@ -141,8 +128,11 @@ const RP = await import('/static/reproductor/reproductor.js?v=1');
           ${descHTML}
         </div>
       </div>`;
-    pushHistory(html); showContent(html);
+      showContent(html);
   }
+
+
+
 
   // ====== Router / menú ======
   function clickMenuToggleBtn() {
@@ -175,38 +165,92 @@ const RP = await import('/static/reproductor/reproductor.js?v=1');
       navegarSPA(item.getAttribute('data-view') || '');
     });
   });
+
   document.querySelectorAll('.menu-item[data-view] a[href]').forEach(a => {
     a.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
   });
+
+
   function activarItemMenu(view) {
     document.querySelectorAll('.menu-item').forEach(el => {
       el.classList.toggle('active', el.getAttribute('data-view') === view);
     });
   }
 
-  async function navegarSPA(view) {
-    currentView = view;
-    mainContent.dataset.view = view || '';
-    historyStack = [];
 
+
+//desde esta funcion se delega el uso del back a la respectiva vista en su script
+  function clickBackBtn() {
+    console.log("Botón de retroceso presionado");
+    switch (currentView) {
+      case 'home':
+        break;
+      case 'playlist':
+        clickBackBtnPlaylist();//esta funcion esta dentro de playListScript.js gestiona el back
+        break;
+      case 'reproductor':
+
+        break;
+      case 'perfil':
+
+        break;
+      case 'gestion':
+
+        break;
+      case 'mi-musica':
+
+        break;
+      case 'musica':
+
+        break;
+      default:
+        break;
+    }
+  }
+
+
+  async function navegarSPA(view) {
+    mainContent.dataset.view = view || '';
     switch (view) {
       case 'home':
-        await RP.stopReproductorIfLoaded(); window.location.href = URL_HOME; break;
+        await RP.stopReproductorIfLoaded();
+        window.location.href = URL_HOME;
+        currentView = "home";
+        break;
       case 'playlist':
-        await RP.stopReproductorIfLoaded(); renderMenuPlaylists(); break;
+        await RP.stopReproductorIfLoaded();
+        currentView = "playlist";
+        showPlaylists()
+        break;
       case 'reproductor':
-        await RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON }); break;
+        await RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON });
+        currentView = "reproductor";
+        break;
       case 'perfil':
-        await RP.stopReproductorIfLoaded(); renderMenuPerfil(); break;
+        await RP.stopReproductorIfLoaded();
+        renderMenuPerfil();
+        currentView = "perfil";
+        break;
       case 'gestion':
-        await RP.stopReproductorIfLoaded(); window.location.href = URL_GESTION; break;
+        await RP.stopReproductorIfLoaded();
+        window.location.href = URL_GESTION;
+        currentView = "gestion";
+        break;
       case 'mi-muro':
       case 'mi-musica':
-        await RP.stopReproductorIfLoaded(); window.location.href = URL_MI_MURO; return;
+        await RP.stopReproductorIfLoaded();
+        window.location.href = URL_MI_MURO;
+        currentView = "mi-musica";
+        return;
       case 'musica':
-        await RP.stopReproductorIfLoaded(); window.location.href = URL_MUSICA; break;
+        await RP.stopReproductorIfLoaded();
+        window.location.href = URL_MUSICA;
+        currentView = "musica";
+        break;
       default:
-        await RP.stopReproductorIfLoaded(); window.location.href = URL_HOME; break;
+        await RP.stopReproductorIfLoaded();
+        window.location.href = URL_HOME;
+        break;
     }
   }
 
@@ -227,6 +271,8 @@ const RP = await import('/static/reproductor/reproductor.js?v=1');
     });
   }
 
+
+
   // ====== Arranque ======
   function inicializarApp() {
     if (!USERNAME) USERNAME = 'Usuario';
@@ -235,22 +281,37 @@ const RP = await import('/static/reproductor/reproductor.js?v=1');
     aplicarAvatarHeader();
     aplicarPermisosMenu();
 
+    currentView = "home";
+
     // Conectar eventos del reproductor
     RP.wireReproductorPlaylistEvents({ mainContent, ROLE, URL_MI_MUSICA_JSON });
 
-    const first = INITIAL_VIEW || 'home';
+    const first = INITIAL_VIEW || 'playlist';
     activarItemMenu(first);
     mainContent.dataset.view = first;
 
-    if (first === 'home') renderMenuHome();
-    else if (first === 'playlist') renderMenuPlaylists();
-    else if (first === 'perfil') renderMenuPerfil();
-    else if (first === 'reproductor') RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON });
+    if (first === 'home') {
+      renderMenuHome();
+    } else if (first === 'perfil'){
+      renderMenuPerfil();
+    } else if (first === 'reproductor'){
+      RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON });
+    }
 
-    if (!contentDiv.innerHTML.trim()) { activarItemMenu('home'); mainContent.dataset.view = 'home'; renderMenuHome(); }
+    if (!contentDiv.innerHTML.trim()) {
+      activarItemMenu('home');
+      mainContent.dataset.view = 'home';
+      renderMenuHome();
+    }
+
+
   }
 
+
+
   inicializarApp();
+
+
 
   // Mantiene data-view sincronizado durante navegación en el menu
   const main = document.getElementById('main-content');
@@ -263,4 +324,8 @@ const RP = await import('/static/reproductor/reproductor.js?v=1');
       item.addEventListener('click', () => { main.dataset.view = view || 'home'; });
     });
   }
+
+
+
+
 });

@@ -83,3 +83,27 @@ class Song(models.Model):
 
     def __str__(self) -> str:
         return f"{self.title} — {self.artist_display_name}"
+
+
+class PlayList(models.Model):
+    id = models.AutoField(primary_key=True)
+    idUser = models.IntegerField()
+    name = models.CharField(max_length=200)
+    portada = models.URLField()  # o ImageField si subes imágenes
+    isprivate = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'PlayList'  # ¡IMPORTANTE!
+        managed = False  # ← Django NO la modificará
+
+class PlayListSong(models.Model):
+    playlist_id = models.IntegerField()
+    song_id = models.IntegerField()
+    position = models.IntegerField()
+
+    class Meta:
+        db_table = 'PlayListSongs'     # ← Nombre exacto de la tabla en DB
+        managed = False               # ← ¡¡CRUCIAL!! Django NO crea ni modifica la tabla
+        # unique_together = ('playlist_id', 'song_id')  # ← Quita esto si da error
+        # ordering = ['position']                      # ← Quita si da error

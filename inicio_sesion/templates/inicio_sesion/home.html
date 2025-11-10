@@ -19,6 +19,12 @@
     // Ruta del módulo JS del reproductor (usada por homeScript.js para el import dinámico)
     window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
   </script>
+
+  <script src="{% static 'inicio_sesion/playListScript.js' %}"></script>
+  <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
+
+
+
 </head>
 
 <body>
@@ -41,15 +47,12 @@
       <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
       <span class="logo-text">Melodify</span>
     </div>
-
     <!-- Home: enlace directo -->
     <a class="menu-item" data-view="home" href="{% url 'home' %}">Home</a>
-
     <!-- Vistas internas del SPA (las renderiza homeScript.js) -->
     <div class="menu-item" data-view="playlist">PlayList</div>
     <div class="menu-item" data-view="reproductor">Reproductor</div>
     <div class="menu-item" data-view="perfil">Perfil</div>
-
     <!-- Vistas de servidor (navegación) -->
     <div class="menu-item" data-view="mi-muro">Muro del artista</div>
     <div class="menu-item" data-view="gestion">Gestión</div>
@@ -70,51 +73,56 @@
        data-url-revertir="{% url 'revertir' %}"
        data-url-mi-musica-json="{% url 'mi_musica_json' %}">
 
+
     <button id="menu-toggle-btn">☰</button>
 
-    <!-- Botón Back universal (se oculta en Home por CSS) -->
-    <a id="back-btn" class="back" href="{% url 'home' %}"
-       title="Volver a inicio" aria-label="Regresar">←</a>
 
-    <div id="content"></div>
+    <!-- Botón Back universal (se oculta en Home por CSS) el click lo maneja homeScript.js-->
+    <a id="back-btn" class="back" >←</a>
+
+    <div id="content">
+
+    </div>
   </div>
+
+
+
+  <!--   ///////////////////////////////////////    SCRIPTS      ///////////////////////////////////////////-->
 
   <!-- Playlists para el reproductor (solo “Mi música” para artistas, inyectado desde views.py) -->
   <script id="playlists-data-json" type="application/json">
     {{ playlists_json|default:"[]"|safe }}
   </script>
-
   <!-- SPA principal -->
   <script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
-
   <!-- Script adicional para logout -->
   <script>
   // Script único para logout - sin duplicados
   document.addEventListener('DOMContentLoaded', function() {
     const logoutLink = document.getElementById('menu-logout');
     const logoutUrl = "{% url 'logout' %}";  <!-- URL procesada por Django -->
-    
+
     if (logoutLink) {
       logoutLink.addEventListener('click', function(e) {
         e.preventDefault();
-        
+
         if (confirm('¿Seguro que deseas cerrar sesión?')) {
           // Crear formulario para POST
           const form = document.createElement('form');
           form.method = 'POST';
           form.action = logoutUrl;
-          
+
           // Agregar CSRF token
           const csrfInput = document.createElement('input');
           csrfInput.type = 'hidden';
           csrfInput.name = 'csrfmiddlewaretoken';
           csrfInput.value = '{{ csrf_token }}';
           form.appendChild(csrfInput);
-          
+
           document.body.appendChild(form);
           form.submit();
         }
-        
+
         // Cerrar menú usuario
         const userMenu = document.getElementById('user-menu');
         if (userMenu) userMenu.classList.remove('show');
@@ -131,7 +139,7 @@
         // Si la página se cargó desde cache (navegación hacia atrás)
         window.location.href = "{% url 'home' %}";
     }
-    
+
     // Deshabilitar cache para esta página
     window.onpageshow = function(event) {
         if (event.persisted) {
@@ -145,6 +153,9 @@
     window.history.replaceState(null, null, window.location.href);
   }
 </script>
+
+
+
 
 </body>
 </html>

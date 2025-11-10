@@ -1,0 +1,42 @@
+/* Botones reutilizables (rosa) */
+.btnRoundPlaylist{
+    width:70px;
+    height: 25px;
+    background-color:#ff0066;
+    color:#fff;
+    border:none;
+    border-radius:7px;
+    font-size: 10px;
+    cursor:pointer;
+}
+.btnRoundPlaylist:hover{ background-color: #fa5b9a; }
+
+
+.songItem{
+    width: 400px;
+    display: grid;
+    grid-template-columns: 72px 1fr auto;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    margin: 10px 0;
+    transition: background .2s, border-color .2s, transform .12s, box-shadow .2s;
+    cursor: pointer;
+}
+.songItem:hover {
+    background: #232323;
+    border-color: #333;
+    box-shadow: 0 2px 14px rgba(0,0,0,.25);
+}
+
+.songItem.selected {
+    background: linear-gradient(180deg, var(--glow-bg-1), var(--glow-bg-2));
+    border-color: var(--glow-border);
+    box-shadow:
+            0 0 0 1px rgba(122,60,255,.35) inset,
+            0 0 18px var(--glow-outer);
+}
+
