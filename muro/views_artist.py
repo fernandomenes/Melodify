@@ -15,6 +15,7 @@ from typing import Optional
 from uuid import uuid4
 
 from django.contrib import messages
+from django.contrib import messages as _msgs
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -39,6 +40,22 @@ _MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 _ALLOWED_EXTS = {"mp3", "wav", "ogg", "m4a", "flac"}
 
 STRICT_TITLE_FILTER = True  # heurística de depuración de títulos
+
+
+# =============================================================================
+# Helpers de request / mensajes / login
+# =============================================================================
+
+def _is_fetch(request) -> bool:
+    """Indica si la petición proviene de fetch() usando cabecera X-Requested-With."""
+    return (request.headers.get("X-Requested-With") or "").lower() == "fetch"
+
+
+def _redirect_login_clean(request):
+    """Redirige a login limpiando cualquier mensaje pendiente (evita sangrado en login)."""
+    for _ in _msgs.get_messages(request):
+        pass
+    return redirect("login")
 
 
 # =============================================================================
@@ -235,7 +252,7 @@ def mi_muro(request):
     """Redirige al muro del artista autenticado. Requiere rol de artista."""
     username = _require_session_user(request)
     if not username:
-        return redirect("login")
+        return _redirect_login_clean(request)
     if not _is_artist(_get_user_role(username)):
         return HttpResponse("No autorizado", status=403)
     return muro_publico(request, username)
@@ -259,11 +276,11 @@ def subir_cancion_en_muro(request):
     """
     username = _require_session_user(request)
     if not username:
-        return redirect("login")
+        return _redirect_login_clean(request)
     if not _is_artist(_get_user_role(username)):
         return HttpResponse("No autorizado", status=403)
 
-    is_fetch = (request.headers.get("x-requested-with", "") or "").lower() == "fetch"
+    is_fetch = _is_fetch(request)
 
     def _json_err(msg, status=400):
         """Atajo para respuestas JSON de error en flujos fetch."""
@@ -404,7 +421,8 @@ def subir_cancion_en_muro(request):
 
 def _redirect_error(request, msg: str, to_name: str):
     """Redirige con mensaje de error a una vista Django por nombre."""
-    messages.error(request, msg)
+    if not _is_fetch(request):
+        messages.error(request, msg)
     return redirect(to_name)
 
 
@@ -413,7 +431,7 @@ def editar_mi_cancion_en_muro(request, song_id: int):
     """Edita título, intérprete, género y portada de una canción propia del artista."""
     username = _require_session_user(request)
     if not username:
-        return redirect("login")
+        return _redirect_login_clean(request)
     if not _is_artist(_get_user_role(username)):
         return HttpResponse("No autorizado", status=403)
 
@@ -429,7 +447,8 @@ def editar_mi_cancion_en_muro(request, song_id: int):
         new_cover = request.FILES.get("cover_image")
 
         if not new_title or not new_artist:
-            messages.error(request, "Título e intérprete son obligatorios.")
+            if not _is_fetch(request):
+                messages.error(request, "Título e intérprete son obligatorios.")
             return redirect("editar_mi_cancion_en_muro", song_id=song.id)
 
         try:
@@ -445,7 +464,8 @@ def editar_mi_cancion_en_muro(request, song_id: int):
                     .exclude(pk=song.id)
                     .exists()
                 ):
-                    messages.error(request, "Ya tienes otra canción con ese título.")
+                    if not _is_fetch(request):
+                        messages.error(request, "Ya tienes otra canción con ese título.")
                     return redirect("editar_mi_cancion_en_muro", song_id=song.id)
 
                 song.title = new_title
@@ -465,10 +485,12 @@ def editar_mi_cancion_en_muro(request, song_id: int):
 
                 song.save(update_fields=["title", "artist_display_name", "cover_image", "genre"])
 
-            messages.success(request, "Cambios guardados.")
+            if not _is_fetch(request):
+                messages.success(request, "Cambios guardados.")
             return redirect("mi_muro")
         except Exception:
-            messages.error(request, "No se pudieron guardar los cambios.")
+            if not _is_fetch(request):
+                messages.error(request, "No se pudieron guardar los cambios.")
             return redirect("editar_mi_cancion_en_muro", song_id=song.id)
 
     # GET: formulario con contexto
@@ -485,7 +507,7 @@ def eliminar_cancion(request, song_id: int):
     """Marca una canción propia como 'removed' y registra la acción para deshacer."""
     username = _require_session_user(request)
     if not username:
-        return redirect("login")
+        return _redirect_login_clean(request)
     if not _is_artist(_get_user_role(username)):
         return HttpResponse("No autorizado", status=403)
 
@@ -518,7 +540,7 @@ def revertir(request):
     """
     username = _require_session_user(request)
     if not username:
-        return redirect("login")
+        return _redirect_login_clean(request)
     if not _is_artist(_get_user_role(username)):
         return HttpResponse("No autorizado", status=403)
 
@@ -565,7 +587,7 @@ def subir_cancion(request):
 
     username = _require_session_user(request)
     if not username:
-        return redirect("login")
+        return _redirect_login_clean(request)
     if not _is_artist(_get_user_role(username)):
         return HttpResponse("No autorizado", status=403)
     return redirect("mi_muro")
@@ -696,7 +718,7 @@ def subida_masiva(request):
     # === Requiere sesión y rol artista ===
     username = _require_session_user(request)
     if not username:
-        return redirect("login")
+        return _redirect_login_clean(request)
     if not _is_artist(_get_user_role(username)):
         return HttpResponse("No autorizado", status=403)
 
@@ -818,7 +840,7 @@ def subida_masiva(request):
             results.append({"name": f.name, "ok": False, "error": f"Error al guardar: {e}"})
 
     # ¿Respuesta JSON (fetch)?
-    if (request.headers.get("X-Requested-With") or "").lower() == "fetch":
+    if _is_fetch(request):
         ok_any = any(r.get("ok") for r in results)
         return JsonResponse({"ok": ok_any, "results": results})
 

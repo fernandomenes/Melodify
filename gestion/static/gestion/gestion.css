@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Melodify – Gestión/Catálogo: estilos de acciones destructivas (danger)
+   Melodify – Gestión/Catálogo/Usuarios: estilos de acciones destructivas
    Consistencia visual con Muro/Admin
    ========================================================================== */
 
@@ -13,7 +13,7 @@
 }
 
 /* --------------------------------------------------------------------------
-   Botón base en Gestión (alcance limitado a Catálogo)
+   Botón base en Gestión (alcance limitado a bloques de Gestión)
    -------------------------------------------------------------------------- */
 #tab-catalogo .btn,
 #catalogo-grid .js-delete-form button {
@@ -26,18 +26,52 @@
 }
 
 /* --------------------------------------------------------------------------
-   Variante “danger” (bulk y acciones por ítem)
+   Variante reutilizable “danger” por clase (por si se usa .btnDanger)
+   -------------------------------------------------------------------------- */
+.btnDanger {
+  border-color: var(--danger-border) !important;
+  background: var(--danger-bg) !important;
+  color: #eee !important;
+}
+.btnDanger:hover { background: var(--danger-bg-hover) !important; }
+
+/* --------------------------------------------------------------------------
+   Forzamos “danger” en las acciones de eliminar del Catálogo
    -------------------------------------------------------------------------- */
 #tab-catalogo #bulk-delete,
 #catalogo-grid .js-delete-form button {
   border-color: var(--danger-border);
   background: var(--danger-bg);
 }
-
 #tab-catalogo #bulk-delete:hover,
 #catalogo-grid .js-delete-form button:hover {
   background: var(--danger-bg-hover);
 }
+
+/* --------------------------------------------------------------------------
+   Danger en pestaña Usuarios 
+   -------------------------------------------------------------------------- */
+#tab-usuarios .js-delete-form button {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+  color: #eee;
+  cursor: pointer;
+}
+#tab-usuarios .js-delete-form button:hover {
+  background: var(--danger-bg-hover);
+}
+
+/* --------------------------------------------------------------------------
+   Modal de confirmación en rojo
+   -------------------------------------------------------------------------- */
+#confirm-accept {
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+  color: #eee;
+}
+#confirm-accept:hover { background: var(--danger-bg-hover); }
 
 /* --------------------------------------------------------------------------
    Accesibilidad y estados
@@ -47,8 +81,12 @@
   cursor: not-allowed;
 }
 
+/* Enfoque visible coherente para acciones “danger” */
 #tab-catalogo #bulk-delete:focus-visible,
-#catalogo-grid .js-delete-form button:focus-visible {
+#catalogo-grid .js-delete-form button:focus-visible,
+#tab-usuarios .js-delete-form button:focus-visible,
+#confirm-accept:focus-visible,
+.btnDanger:focus-visible {
   outline: 2px solid #ff4d4d;
   outline-offset: 1px;
 }

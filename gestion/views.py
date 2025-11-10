@@ -8,6 +8,8 @@ Supone autenticación previa y utiliza modelos/utilidades de la app
 """
 
 from django.contrib import messages
+from django.contrib import messages as _msgs
+
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import JsonResponse, HttpResponse
@@ -87,6 +89,30 @@ def _is_fetch(request) -> bool:
     return request.headers.get("X-Requested-With") == "fetch"
 
 
+# --- Evita que mensajes previos "sangren" al login ---
+def _redirect_login_clean(request):
+    # Consume y descarta cualquier mensaje pendiente
+    for _ in _msgs.get_messages(request):
+        pass
+    return redirect("login")
+
+
+# --- No guardar mensajes en sesión cuando la llamada es vía fetch/JSON ---
+def _msg_success(request, text: str):
+    if not _is_fetch(request):
+        messages.success(request, text)
+
+
+def _msg_error(request, text: str):
+    if not _is_fetch(request):
+        messages.error(request, text)
+
+
+def _msg_info(request, text: str):
+    if not _is_fetch(request):
+        messages.info(request, text)
+
+
 def _require_admin(request):
     """
     Comprueba sesión válida y rol de administrador.
@@ -98,11 +124,11 @@ def _require_admin(request):
     """
     username = _require_session_user(request)
     if not username:
-        return None, redirect("login")
+        return None, _redirect_login_clean(request)
     try:
         u = Users.objects.only("type", "is_superadmin").get(user=username)
     except Users.DoesNotExist:
-        return None, redirect("login")
+        return None, _redirect_login_clean(request)
     role = (u.type or "").lower()
     if getattr(u, "is_superadmin", False) or role == "administrador":
         return username, None
@@ -213,19 +239,19 @@ def registrar_artista(request):
     avatar = request.FILES.get("avatar")
 
     if not artist_id or not password:
-        messages.error(request, "Completa: usuario y contraseña.")
+        _msg_error(request, "Completa: usuario y contraseña.")
         if _is_fetch(request):
             return JsonResponse({"ok": False})
         return redirect("gestion")
 
     if len(password) < 6:
-        messages.error(request, "La contraseña debe tener al menos 6 caracteres.")
+        _msg_error(request, "La contraseña debe tener al menos 6 caracteres.")
         if _is_fetch(request):
             return JsonResponse({"ok": False})
         return redirect("gestion")
 
     if description and len(description) > 200:
-        messages.error(request, "La descripción no puede superar 200 caracteres.")
+        _msg_error(request, "La descripción no puede superar 200 caracteres.")
         if _is_fetch(request):
             return JsonResponse({"ok": False})
         return redirect("gestion")
@@ -238,16 +264,16 @@ def registrar_artista(request):
                 user.save(update_fields=["avatar"])
             ArtistProfile.objects.create(user=user, description=description)
 
-        messages.success(request, f"Artista '{artist_id}' agregado correctamente.")
+        _msg_success(request, f"Artista '{artist_id}' agregado correctamente.")
         _put_undo(
             request,
             f"Se creó el artista “{artist_id}”.",
             {"kind": "delete_user_created", "username": artist_id, "actor": username},
         )
     except IntegrityError:
-        messages.error(request, "El usuario ya existe.")
+        _msg_error(request, "El usuario ya existe.")
     except Exception:
-        messages.error(request, "No se pudo agregar el artista. Inténtelo más tarde.")
+        _msg_error(request, "No se pudo agregar el artista. Inténtelo más tarde.")
 
     if _is_fetch(request):
         return JsonResponse(
@@ -281,14 +307,14 @@ def registrar_admin(request):
         return None
 
     if not admin_id or not password:
-        messages.error(request, "Completa: usuario y contraseña.")
+        _msg_error(request, "Completa: usuario y contraseña.")
         j = _json(False, error="Completa: usuario y contraseña.")
         if j:
             return j
         return redirect("gestion")
 
     if len(password) < 6:
-        messages.error(request, "La contraseña debe tener al menos 6 caracteres.")
+        _msg_error(request, "La contraseña debe tener al menos 6 caracteres.")
         j = _json(False, error="La contraseña debe tener al menos 6 caracteres.")
         if j:
             return j
@@ -301,20 +327,20 @@ def registrar_admin(request):
                 user.avatar = avatar
                 user.save(update_fields=["avatar"])
 
-            messages.success(request, f"Administrador '{admin_id}' agregado.")
+            _msg_success(request, f"Administrador '{admin_id}' agregado.")
             _put_undo(
                 request,
                 f"Se creó el administrador “{admin_id}”.",
                 {"kind": "delete_user_created", "username": admin_id, "actor": session_user},
             )
     except IntegrityError:
-        messages.error(request, "El usuario ya existe.")
+        _msg_error(request, "El usuario ya existe.")
         j = _json(False, error="El usuario ya existe.")
         if j:
             return j
         return redirect("gestion")
     except Exception:
-        messages.error(request, "No se pudo agregar el administrador.")
+        _msg_error(request, "No se pudo agregar el administrador.")
         j = _json(False, error="No se pudo agregar el administrador.")
         if j:
             return j
@@ -336,15 +362,15 @@ def desactivar_usuario(request, username: str):
     u = get_object_or_404(Users, user=username)
 
     if u.is_superadmin:
-        messages.error(request, "La cuenta principal no puede desactivarse.")
+        _msg_error(request, "La cuenta principal no puede desactivarse.")
         return redirect("gestion")
     if session_user == username:
-        messages.error(request, "No es posible desactivar la propia cuenta.")
+        _msg_error(request, "No es posible desactivar la propia cuenta.")
         return redirect("gestion")
 
     u.is_active = False
     u.save(update_fields=["is_active"])
-    messages.success(request, f"Cuenta '{username}' desactivada.")
+    _msg_success(request, f"Cuenta '{username}' desactivada.")
     _put_undo(
         request,
         f"Se desactivó “{username}”.",
@@ -373,7 +399,7 @@ def activar_usuario(request, username: str):
     u = get_object_or_404(Users, user=username)
     u.is_active = True
     u.save(update_fields=["is_active"])
-    messages.success(request, f"Cuenta '{username}' activada.")
+    _msg_success(request, f"Cuenta '{username}' activada.")
     _put_undo(
         request,
         f"Se activó “{username}”.",
@@ -426,15 +452,15 @@ def editar_usuario(request, username: str):
 
         allowed_roles = {"administrador", "artista", "usuario"}
         if new_role not in allowed_roles:
-            messages.error(request, "Rol inválido.")
+            _msg_error(request, "Rol inválido.")
             return redirect("editar_usuario", username=u.user)
 
         if not new_user:
-            messages.error(request, "El nombre de usuario no puede estar vacío.")
+            _msg_error(request, "El nombre de usuario no puede estar vacío.")
             return redirect("editar_usuario", username=u.user)
 
         if new_role == "artista" and not target_is_super and not description:
-            messages.error(request, "La descripción es obligatoria para artistas.")
+            _msg_error(request, "La descripción es obligatoria para artistas.")
             return redirect("editar_usuario", username=u.user)
 
         try:
@@ -442,7 +468,7 @@ def editar_usuario(request, username: str):
                 # Cambio de username (propaga ownership de canciones)
                 if new_user != u.user:
                     if Users.objects.filter(user=new_user).exclude(pk=u.pk).exists():
-                        messages.error(request, "Ese nombre de usuario ya existe.")
+                        _msg_error(request, "Ese nombre de usuario ya existe.")
                         return redirect("editar_usuario", username=u.user)
                     old_user = u.user
                     u.user = new_user
@@ -482,11 +508,11 @@ def editar_usuario(request, username: str):
                         except ArtistProfile.DoesNotExist:
                             pass
 
-            messages.success(request, "Cambios guardados.")
+            _msg_success(request, "Cambios guardados.")
             _clear_undo(request)
             return redirect("gestion")
         except Exception:
-            messages.error(request, "No se pudieron guardar los cambios.")
+            _msg_error(request, "No se pudieron guardar los cambios.")
             return redirect("editar_usuario", username=username)
 
     ctx = {"user_obj": u, "session_is_superadmin": session_is_super}
@@ -505,10 +531,10 @@ def eliminar_usuario(request, username: str):
 
     u = get_object_or_404(Users, user=username)
     if u.is_superadmin:
-        messages.error(request, "La cuenta principal no puede eliminarse.")
+        _msg_error(request, "La cuenta principal no puede eliminarse.")
         return redirect("gestion")
     if session_user == username:
-        messages.error(request, "No es posible eliminar la propia cuenta.")
+        _msg_error(request, "No es posible eliminar la propia cuenta.")
         return redirect("gestion")
 
     try:
@@ -544,10 +570,10 @@ def eliminar_usuario(request, username: str):
 
             u.delete()
 
-        messages.success(request, f"Cuenta '{username}' eliminada.")
+        _msg_success(request, f"Cuenta '{username}' eliminada.")
         _put_undo(request, f"Se eliminó “{username}”.", undo_payload)
     except Exception:
-        messages.error(request, "No se pudo eliminar la cuenta.")
+        _msg_error(request, "No se pudo eliminar la cuenta.")
     if _is_fetch(request):
         return JsonResponse(
             {
@@ -570,7 +596,7 @@ def revertir_accion(request):
 
     data = request.session.get("gestion_undo")
     if not data:
-        messages.info(request, "No hay ninguna acción para deshacer.")
+        _msg_info(request, "No hay ninguna acción para deshacer.")
         if _is_fetch(request):
             return JsonResponse({"ok": False})
         return redirect("gestion")
@@ -586,7 +612,7 @@ def revertir_accion(request):
                 u = get_object_or_404(Users, user=uname)
                 u.is_active = not bool(to)
                 u.save(update_fields=["is_active"])
-                messages.success(request, f"Se revirtió el estado de “{uname}”.")
+                _msg_success(request, f"Se revirtió el estado de “{uname}”.")
                 _clear_undo(request)
                 resp["usuarios_html"] = _usuarios_tab_html(request)
 
@@ -595,24 +621,24 @@ def revertir_accion(request):
                 try:
                     u = Users.objects.get(user=uname)
                 except Users.DoesNotExist:
-                    messages.info(request, "Nada que deshacer: la cuenta no existe.")
+                    _msg_info(request, "Nada que deshacer: la cuenta no existe.")
                 else:
                     if u.is_superadmin:
-                        messages.error(request, "No se puede deshacer sobre la cuenta principal.")
+                        _msg_error(request, "No se puede deshacer sobre la cuenta principal.")
                     else:
                         try:
                             u.artist_profile.delete()
                         except ArtistProfile.DoesNotExist:
                             pass
                         u.delete()
-                        messages.success(request, f"Se deshizo la creación de “{uname}”.")
+                        _msg_success(request, f"Se deshizo la creación de “{uname}”.")
                 _clear_undo(request)
                 resp["usuarios_html"] = _usuarios_tab_html(request)
 
             elif kind == "restore_deleted_user":
                 uname = data.get("username")
                 if Users.objects.filter(user=uname).exists():
-                    messages.error(request, f"No se puede deshacer: ya existe “{uname}”.")
+                    _msg_error(request, f"No se puede deshacer: ya existe “{uname}”.")
                     _clear_undo(request)
                 else:
                     u = Users.objects.create(
@@ -630,7 +656,7 @@ def revertir_accion(request):
                     song_ids = data.get("song_ids") or []
                     if song_ids:
                         Song.objects.filter(id__in=song_ids).update(visibility="public")
-                    messages.success(request, f"Se restauró la cuenta “{uname}”.")
+                    _msg_success(request, f"Se restauró la cuenta “{uname}”.")
                     _clear_undo(request)
                 resp["usuarios_html"] = _usuarios_tab_html(request)
 
@@ -640,14 +666,14 @@ def revertir_accion(request):
                 song = get_object_or_404(Song, id=sid)
                 song.visibility = prev
                 song.save(update_fields=["visibility"])
-                messages.success(request, f"Se restauró “{song.title}”.")
+                _msg_success(request, f"Se restauró “{song.title}”.")
                 _clear_undo(request)
                 resp["catalogo_html"] = _catalogo_html(request)
 
             elif kind == "bulk_restore_song_visibility":
                 items = data.get("items") or []
                 if not items:
-                    messages.info(request, "Nada que deshacer.")
+                    _msg_info(request, "Nada que deshacer.")
                     _clear_undo(request)
                 else:
                     prev_map = {
@@ -660,19 +686,19 @@ def revertir_accion(request):
                     for s in songs:
                         s.visibility = prev_map.get(s.id, "public")
                         s.save(update_fields=["visibility"])
-                    messages.success(request, f"Se restauraron {len(songs)} canciones.")
+                    _msg_success(request, f"Se restauraron {len(songs)} canciones.")
                     _clear_undo(request)
 
                 resp["catalogo_html"] = _catalogo_html(request)
 
             else:
-                messages.info(request, "Esta acción no admite deshacer.")
+                _msg_info(request, "Esta acción no admite deshacer.")
                 _clear_undo(request)
 
     except Exception:
         if _is_fetch(request):
             return JsonResponse({"ok": False})
-        messages.error(request, "No fue posible deshacer la última acción.")
+        _msg_error(request, "No fue posible deshacer la última acción.")
         return redirect("gestion")
 
     if _is_fetch(request):

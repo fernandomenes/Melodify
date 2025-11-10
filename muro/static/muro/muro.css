@@ -1,139 +1,102 @@
 /* ==========================================================================
-   Melodify – Estilos de “Música” (alineación consistente con Admin)
+   Melodify — Estilos del MURO (aislados)
    ========================================================================== */
 
-/* --------------------------------------------------------------------------
-   Variables de tema y tamaños
-   -------------------------------------------------------------------------- */
 :root {
   --bg:    #121212;
   --card:  #1e1e1e;
   --line:  #2b2b2b;
   --muted: #9aa0a6;
-
-  --btn:  #2a2a2a;
-  --btnb: #3a3a3a;
-
-  /* Tamaño estándar de portada para tarjetas de canciones */
+  --btn:   #2a2a2a;
+  --btnb:  #3a3a3a;
   --cover-size: 96px;
 }
 
-/* --------------------------------------------------------------------------
-   Base visual
-   -------------------------------------------------------------------------- */
-html,
-body {
-  background: var(--bg);
-  color: #eee;
+/* Base */
+.page-muro html, .page-muro body,
+html.page-muro, body.page-muro { background: var(--bg); color: #eee; }
+.page { padding: 16px 24px; max-width: 1800px; margin: 0 auto; }
+
+header.muro { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; }
+.avatar { width: 64px; height: 64px; border-radius: 50%; background: #2a2a2a; object-fit: cover; }
+.muted { color: var(--muted); font-size: 12px; }
+
+/* Footer fijo del sidebar */
+#menuLateral { display: flex; flex-direction: column; }
+#menuLateral .menu-scroll { flex: 1 1 auto; overflow-y: auto; padding-bottom: 12px; }
+#menuLateral .menu-footer { margin-top: auto; border-top: 1px solid #363636; padding: 12px; background: #0c0c0c; }
+.menu-item--footer.is-current {
+  background-color: #ff0066; border: 1px solid #ff2a7f; color: #fff; pointer-events: none;
 }
 
-/* --------------------------------------------------------------------------
-   Layout
-   -------------------------------------------------------------------------- */
+/* Grid de canciones */
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 14px;
 }
-
-/* --------------------------------------------------------------------------
-   Tarjeta de canción
-   -------------------------------------------------------------------------- */
 .song {
-  position: static;
-  background: #1b1b1b;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 12px;
+  background: #1b1b1b; border: 1px solid var(--line); border-radius: 10px; padding: 12px;
 }
-
 .song .select-wrap {
-  position: static;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 12px;
-  margin: -2px 0 8px;
+  display: flex; align-items: center; gap: 6px; color: var(--muted);
+  font-size: 12px; margin: -2px 0 8px;
+}
+.song .select-wrap input { margin: 0; }
+.row { display: flex; gap: 12px; align-items: center; }
+
+.preview {
+  width: var(--cover-size); height: var(--cover-size);
+  border-radius: 8px; background: #2a2a2a; object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.2);
 }
 
-.song .select-wrap input {
-  margin: 0;
-}
+/* Toolbar */
+.toolbar { display: flex; align-items: center; gap: 12px; margin: 6px 0 12px; }
+.toolbar .spacer { flex: 1; }
+#sel-count { margin-left: 2px; }
 
-/* --------------------------------------------------------------------------
-   Barra de herramientas de listado
-   -------------------------------------------------------------------------- */
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 6px 0 12px;
-}
+/* Botones */
+.btn { display: inline-block; padding: 10px 14px; border-radius: 8px;
+  border: 1px solid var(--btnb); background: var(--btn); color: #eee; text-decoration: none; cursor: pointer; }
+.btn:hover { background: #333; }
+.btnDanger { border-color: #743d3d; background: #592626; }
+.btnDanger:hover { background: #6a2d2d; }
 
-.toolbar .spacer {
-  flex: 1;
+/* Mensajes / Undo */
+.undo-bar {
+  display: flex; align-items: center; gap: 10px;
+  background: #202020; border: 1px solid #2c2c2c;
+  padding: 10px; border-radius: 10px; margin: 12px 0;
 }
+.msg { background: #202020; border: 1px solid #333; color: #eee; border-radius: 8px; padding: 8px 10px; margin: 10px 0; display: none; }
+.msg.error { border-color: #743d3d; background: #2a1818; }
 
-#sel-count {
-  margin-left: 2px;
-}
+/* Modal */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 999; opacity: 0; pointer-events: none; transition: opacity .15s; }
+.modal.show { opacity: 1; pointer-events: auto; }
+.modal .dialog { background:#1f1f1f; border:1px solid #2b2b2b; border-radius:12px; padding:16px; max-width:420px; width:92%; }
+.modal .title { margin: 0 0 8px; font-weight: 600; }
+.modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
 
-/* --------------------------------------------------------------------------
-   Botones
-   -------------------------------------------------------------------------- */
-.btn {
-  display: inline-block;
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--btnb);
-  background: var(--btn);
-  color: #eee;
-  text-decoration: none;
-  cursor: pointer;
-}
+/* Tabs */
+.tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--line); margin: 8px 0 0; }
+.tab-btn { appearance: none; border: 1px solid var(--line); border-bottom: none;
+  background: #181818; color: #ddd; padding: 10px 14px;
+  border-top-left-radius: 10px; border-top-right-radius: 10px; cursor: pointer; }
+.tab-btn.active { background: #232323; color: #fff; }
 
-.btn:hover {
-  background: #333;
-}
+.tab[hidden] { display: none !important; }
+.tab.active { display: block; }
 
-.btnDanger {
-  border-color: #743d3d;
-  background: #592626;
-}
+/* Cards */
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 16px 0; }
 
-.btnDanger:hover {
-  background: #6a2d2d;
-}
-
-/* --------------------------------------------------------------------------
-   Ajustes específicos de la pestaña “Songs”
-   -------------------------------------------------------------------------- */
-#tab-songs .preview {
-  width: var(--cover-size);
-  height: var(--cover-size);
-  object-fit: cover;
-  border-radius: 8px;
-}
-
-#tab-songs .song {
-  position: static;
-}
-
-#tab-songs .song .select-wrap {
-  position: static;
-  margin: -2px 0 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-}
-
-#tab-songs .grid {
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 14px;
-}
-
-#tab-songs .row {
-  gap: 12px;
+/* Inputs */
+label { display: block; margin: 10px 0 6px; font-size: 14px; color: #bbb; }
+input[type="text"], input[type="file"], select {
+  width: 100%; max-width: 520px; padding: 10px;
+  border-radius: 8px; border: 1px solid #333; background: #191919; color: #eee;
 }

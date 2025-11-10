@@ -6,31 +6,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Melodify</title>
 
+  <!-- Fuentes -->
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
 
-  <!-- Estilos generales de la app -->
+  <!-- Estilos generales -->
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
 
-  <!-- Reproductor movido a la app 'reproductor' -->
+  <!-- Reproductor (CSS): reproductor primero, barra UI al final para sobrescribir -->
   <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
 
   <script>
-    // Ruta del módulo JS del reproductor (usada por homeScript.js para el import dinámico)
+    /* Ruta del módulo JS del reproductor — el homeScript usa import dinámico */
     window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
   </script>
 
+  <!-- (Opcional) playlists UI propia -->
   <script src="{% static 'inicio_sesion/playListScript.js' %}"></script>
   <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
-
-
-
 </head>
 
-<body>
-
+<body class="page-home">
   <!-- Header -->
   <div id="header">
+    <!-- Buscador centrado (UI sin lógica; hooks #search-input y #search-panel) -->
+    <div id="search" class="search">
+      <form id="search-form" role="search" aria-label="Buscar">
+        <input
+          id="search-input"
+          type="search"
+          placeholder="Buscar canciones o artistas…"
+          autocomplete="off"
+          aria-controls="search-panel"
+          aria-expanded="false" />
+      </form>
+      <div id="search-panel" class="search-panel" hidden></div>
+    </div>
+
+    <!-- Usuario -->
     <div class="user-info" id="user-trigger">
       <div class="user-icon">U</div>
       <span id="username">Usuario</span>
@@ -47,12 +61,15 @@
       <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
       <span class="logo-text">Melodify</span>
     </div>
-    <!-- Home: enlace directo -->
+
+    <!-- Home (ruta real) -->
     <a class="menu-item" data-view="home" href="{% url 'home' %}">Home</a>
+
     <!-- Vistas internas del SPA (las renderiza homeScript.js) -->
     <div class="menu-item" data-view="playlist">PlayList</div>
     <div class="menu-item" data-view="reproductor">Reproductor</div>
     <div class="menu-item" data-view="perfil">Perfil</div>
+
     <!-- Vistas de servidor (navegación) -->
     <div class="menu-item" data-view="mi-muro">Muro del artista</div>
     <div class="menu-item" data-view="gestion">Gestión</div>
@@ -60,7 +77,7 @@
 
   <!-- Contenido -->
   <div id="main-content"
-       data-initial-view="mi-muro"
+       data-initial-view="home"
        data-username="{{ session_user }}"
        data-role="{{ session_role }}"
        data-avatar="{{ session_avatar_url }}"
@@ -73,89 +90,61 @@
        data-url-revertir="{% url 'revertir' %}"
        data-url-mi-musica-json="{% url 'mi_musica_json' %}">
 
-
     <button id="menu-toggle-btn">☰</button>
 
+    <!-- Botón Back universal (lo maneja la SPA; oculto en Home por CSS) -->
+    <a id="back-btn" class="back" href="{% url 'home' %}" title="Volver a inicio" aria-label="Regresar">←</a>
 
-    <!-- Botón Back universal (se oculta en Home por CSS) el click lo maneja homeScript.js-->
-    <a id="back-btn" class="back" >←</a>
-
-    <div id="content">
-
-    </div>
+    <div id="content"></div>
   </div>
 
-
-
-  <!--   ///////////////////////////////////////    SCRIPTS      ///////////////////////////////////////////-->
-
-  <!-- Playlists para el reproductor (solo “Mi música” para artistas, inyectado desde views.py) -->
+  <!-- Playlists para el reproductor (inyectadas desde views.py cuando aplique) -->
   <script id="playlists-data-json" type="application/json">
     {{ playlists_json|default:"[]"|safe }}
   </script>
-  <!-- SPA principal -->
+
+  <!-- Scripts (en orden): barra UI → SPA -->
+  <script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
   <script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
-  <!-- Script adicional para logout -->
+
+  <!-- Logout (POST con CSRF) + anti-cache -->
   <script>
-  // Script único para logout - sin duplicados
-  document.addEventListener('DOMContentLoaded', function() {
-    const logoutLink = document.getElementById('menu-logout');
-    const logoutUrl = "{% url 'logout' %}";  <!-- URL procesada por Django -->
+    document.addEventListener('DOMContentLoaded', function() {
+      const logoutLink = document.getElementById('menu-logout');
+      const logoutUrl  = "{% url 'logout' %}";
+      if (logoutLink) {
+        logoutLink.addEventListener('click', function(e) {
+          e.preventDefault();
+          if (confirm('¿Seguro que deseas cerrar sesión?')) {
+            const form  = document.createElement('form');
+            form.method = 'POST';
+            form.action = logoutUrl;
 
-    if (logoutLink) {
-      logoutLink.addEventListener('click', function(e) {
-        e.preventDefault();
+            const csrfInput = document.createElement('input');
+            csrfInput.type  = 'hidden';
+            csrfInput.name  = 'csrfmiddlewaretoken';
+            csrfInput.value = '{{ csrf_token }}';
+            form.appendChild(csrfInput);
 
-        if (confirm('¿Seguro que deseas cerrar sesión?')) {
-          // Crear formulario para POST
-          const form = document.createElement('form');
-          form.method = 'POST';
-          form.action = logoutUrl;
+            document.body.appendChild(form);
+            form.submit();
+          }
+          const userMenu = document.getElementById('user-menu');
+          if (userMenu) userMenu.classList.remove('show');
+        });
+      }
 
-          // Agregar CSRF token
-          const csrfInput = document.createElement('input');
-          csrfInput.type = 'hidden';
-          csrfInput.name = 'csrfmiddlewaretoken';
-          csrfInput.value = '{{ csrf_token }}';
-          form.appendChild(csrfInput);
-
-          document.body.appendChild(form);
-          form.submit();
-        }
-
-        // Cerrar menú usuario
-        const userMenu = document.getElementById('user-menu');
-        if (userMenu) userMenu.classList.remove('show');
-      });
-    }
-  });
-</script>
-
-<script>
-  // Prevenir navegación hacia atrás después de logout
-  document.addEventListener('DOMContentLoaded', function() {
-    // Limpiar el estado de la aplicación al cargar
-    if (performance.navigation.type === 2) {
-        // Si la página se cargó desde cache (navegación hacia atrás)
+      // Prevenir navegación hacia atrás en cache tras logout
+      if (performance.navigation && performance.navigation.type === 2) {
         window.location.href = "{% url 'home' %}";
-    }
+      }
+      window.onpageshow = function(ev){ if (ev.persisted) window.location.reload(); };
 
-    // Deshabilitar cache para esta página
-    window.onpageshow = function(event) {
-        if (event.persisted) {
-            window.location.reload();
-        }
-    };
-  });
-
-  // Prevenir que el formulario se reenvíe al refrescar
-  if (window.history.replaceState) {
-    window.history.replaceState(null, null, window.location.href);
-  }
-</script>
-
-
-
-
+      // Evitar re-envío de formularios al refrescar
+      if (window.history.replaceState) {
+        window.history.replaceState(null, null, window.location.href);
+      }
+    });
+  </script>
 </body>
 </html>

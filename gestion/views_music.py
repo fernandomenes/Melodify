@@ -23,6 +23,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from django.contrib import messages
+from django.contrib import messages as _msgs
 from django.db import transaction
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -92,6 +93,29 @@ def _is_fetch(request) -> bool:
     return (request.headers.get("X-Requested-With") or "").lower() == "fetch"
 
 
+def _redirect_login_clean(request):
+    """Redirige a login limpiando cualquier mensaje pendiente (evita sangrado en login)."""
+    for _ in _msgs.get_messages(request):
+        pass
+    return redirect("login")
+
+
+# --- Wrappers: no persistir mensajes cuando la llamada es fetch/JSON ---
+def _msg_success(request, text: str):
+    if not _is_fetch(request):
+        messages.success(request, text)
+
+
+def _msg_error(request, text: str):
+    if not _is_fetch(request):
+        messages.error(request, text)
+
+
+def _msg_info(request, text: str):
+    if not _is_fetch(request):
+        messages.info(request, text)
+
+
 def _get_gestion_undo(request):
     """Obtiene de sesión la acción de deshacer del flujo de gestión/admin."""
     return request.session.get("gestion_undo")
@@ -143,7 +167,7 @@ def editar_cancion(request, song_id: int):
     """
     username = _require_session_user(request)
     if not username:
-        return redirect("login")
+        return _redirect_login_clean(request)
 
     role = _get_user_role(username)
     if not _is_admin(role):
@@ -159,10 +183,10 @@ def editar_cancion(request, song_id: int):
         new_cover = request.FILES.get("cover_image")
 
         if not new_title:
-            messages.error(request, "El título no puede estar vacío.")
+            _msg_error(request, "El título no puede estar vacío.")
             return redirect("editar_cancion", song_id=song.id)
         if not new_artist:
-            messages.error(request, "El intérprete no puede estar vacío.")
+            _msg_error(request, "El intérprete no puede estar vacío.")
             return redirect("editar_cancion", song_id=song.id)
 
         try:
@@ -178,7 +202,7 @@ def editar_cancion(request, song_id: int):
                     .exists()
                 )
                 if dup:
-                    messages.error(
+                    _msg_error(
                         request,
                         "Ya existe otra canción de este propietario con ese título.",
                     )
@@ -206,10 +230,10 @@ def editar_cancion(request, song_id: int):
                     ]
                 )
 
-            messages.success(request, "Cambios guardados.")
+            _msg_success(request, "Cambios guardados.")
             return redirect("gestion")
         except Exception:
-            messages.error(request, "No se pudieron guardar los cambios.")
+            _msg_error(request, "No se pudieron guardar los cambios.")
             return redirect("editar_cancion", song_id=song.id)
 
     return render(request, "gestion/editar_cancion.html", {"song": song})
@@ -233,7 +257,7 @@ def eliminar_cancion(request, song_id: int):
     """
     username = _require_session_user(request)
     if not username:
-        return redirect("login")
+        return _redirect_login_clean(request)
 
     role = _get_user_role(username)
     song = get_object_or_404(Song, id=song_id)
@@ -248,7 +272,7 @@ def eliminar_cancion(request, song_id: int):
             prev_visibility = song.visibility
             song.visibility = "removed"
             song.save(update_fields=["visibility"])
-            messages.success(request, "Canción eliminada.")
+            _msg_success(request, "Canción eliminada.")
 
             if is_admin:
                 # Deshacer (gestión/admin)
@@ -275,7 +299,7 @@ def eliminar_cancion(request, song_id: int):
                     },
                 )
     except Exception:
-        messages.error(request, "Error al eliminar la canción.")
+        _msg_error(request, "Error al eliminar la canción.")
 
     # Respuesta: fetch() vs navegación clásica
     if _is_fetch(request):
@@ -307,7 +331,7 @@ def eliminar_canciones_bulk(request):
     """
     username = _require_session_user(request)
     if not username:
-        return redirect("login")
+        return _redirect_login_clean(request)
 
     role = _get_user_role(username)
     is_admin = _is_admin(role)
@@ -417,7 +441,7 @@ def revertir_cancion(request):
     """
     username = _require_session_user(request)
     if not username:
-        return redirect("login")
+        return _redirect_login_clean(request)
 
     role = _get_user_role(username)
     if not _is_admin(role):
@@ -425,7 +449,7 @@ def revertir_cancion(request):
 
     data = _get_gestion_undo(request)
     if not data or data.get("kind") != "restore_song_visibility":
-        messages.info(request, "No hay ninguna eliminación para deshacer.")
+        _msg_info(request, "No hay ninguna eliminación para deshacer.")
         return redirect("gestion")
 
     song_id = data.get("song_id")
@@ -436,10 +460,10 @@ def revertir_cancion(request):
             song = get_object_or_404(Song, id=song_id)
             song.visibility = prev_visibility
             song.save(update_fields=["visibility"])
-            messages.success(request, f"Se restauró la canción “{song.title}”.")
+            _msg_success(request, f"Se restauró la canción “{song.title}”.")
             _clear_gestion_undo(request)
     except Exception:
-        messages.error(request, "No fue posible deshacer la eliminación.")
+        _msg_error(request, "No fue posible deshacer la eliminación.")
 
     if _is_fetch(request):
         return HttpResponse(status=204)
@@ -462,7 +486,7 @@ def revertir_mi_cancion(request):
     """
     username = _require_session_user(request)
     if not username:
-        return redirect("login")
+        return _redirect_login_clean(request)
 
     role = _get_user_role(username)
     if not _is_artist(role):
@@ -472,7 +496,7 @@ def revertir_mi_cancion(request):
     if not data:
         if _is_fetch(request):
             return JsonResponse({"ok": False}, status=400)
-        messages.info(request, "No hay ninguna eliminación para deshacer.")
+        _msg_info(request, "No hay ninguna eliminación para deshacer.")
         return redirect("mi_muro")
 
     kind = data.get("kind")
@@ -516,7 +540,7 @@ def revertir_mi_cancion(request):
     except Exception:
         if _is_fetch(request):
             return JsonResponse({"ok": False}, status=500)
-        messages.error(request, "No fue posible deshacer la eliminación.")
+        _msg_error(request, "No fue posible deshacer la eliminación.")
         return redirect("mi_muro")
 
     if _is_fetch(request):

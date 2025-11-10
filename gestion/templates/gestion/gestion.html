@@ -7,6 +7,10 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Gestión (Administrador) | Melodify</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Bloquea la SPA del Home en esta carga -->
+  <script>window.__DISABLE_HOME_SCRIPT__ = true;</script>
+
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
@@ -57,18 +61,16 @@
     .modal .dialog{background:#1f1f1f;border:1px solid #2b2b2b;border-radius:12px;padding:16px;max-width:420px;width:92%}
     .modal .title{margin:0 0 8px;font-weight:600}
     .modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
-  /* Gating estático por rol (admin solo ve Gestión y Perfil) */
-body[data-role="administrador"] .menu-item[data-view="playlist"],
-body[data-role="administrador"] .menu-item[data-view="reproductor"],
-body[data-role="administrador"] .menu-item[data-view="mi-muro"] { display:none !important; }
   </style>
 </head>
 <body data-role="{{ role|lower }}">
 
 <div id="header">
   <div class="user-info" id="user-trigger">
-    <div class="user-icon">U</div>
-    <span id="username">Usuario</span>
+    <div class="user-icon">
+      {{ username|default:"Usuario"|first|upper }}
+    </div>
+    <span id="username">{{ username|default:"Usuario" }}</span>
     <div id="user-menu">
       <a href="#" id="menu-perfil">Perfil</a>
       <a href="{% url 'logout' %}" id="menu-logout">Cerrar sesión</a>
@@ -76,21 +78,16 @@ body[data-role="administrador"] .menu-item[data-view="mi-muro"] { display:none !
   </div>
 </div>
 
+
 <div id="menuLateral">
   <div class="logo" id="toggle-menu">
     <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
     <span class="logo-text">Melodify</span>
   </div>
 
-  <a class="menu-item" data-view="home" href="{% url 'home' %}">Home</a>
-
-  {% if role|lower == 'administrador' %}
-    <div class="menu-item active" data-view="gestion">Gestión</div>
-    <div class="menu-item" data-view="perfil">Perfil</div>
-  {% else %}
-    <!-- fallback por si llega aquí alguien sin ser admin -->
-    <div class="menu-item" data-view="perfil">Perfil</div>
-  {% endif %}
+  <!-- Sidebar mínimo (sin “Gestión” para evitar interferencias) -->
+  <a class="menu-item" data-view="home" href="{% url 'home' %}?no_spa=1">Home</a>
+  <div class="menu-item" data-view="perfil"><a href="{% url 'home' %}?view=perfil&no_spa=1" style="display:block;color:inherit;text-decoration:none">Perfil</a></div>
 </div>
 
 <div id="main-content"
@@ -106,12 +103,12 @@ body[data-role="administrador"] .menu-item[data-view="mi-muro"] { display:none !
      data-url-mi-musica-json="{% url 'mi_musica_json' %}"
      data-url-catalogo-json="{% url 'catalogo_admin_json' %}"
      data-url-catalogo-fragment="{% url 'catalogo_admin_fragment' %}"
-     data-live="1"
+     data-live="0"
      data-feed-scope="catalogo-admin">
 
   <button id="menu-toggle-btn">☰</button>
 
-  <a id="back-btn" class="back" href="{% url 'home' %}" title="Volver a inicio" aria-label="Regresar">←</a>
+  <a id="back-btn" class="back" href="{% url 'home' %}?no_spa=1" title="Volver a inicio" aria-label="Regresar">←</a>
 
   <div id="content">
     <div class="page">
@@ -186,13 +183,14 @@ body[data-role="administrador"] .menu-item[data-view="mi-muro"] { display:none !
           <input id="f-q" type="text" placeholder="Buscar por título o intérprete">
           <button class="btn" id="f-apply">Aplicar</button>
         </div>
-<div class="filters" id="bulk-bar">
-  <label style="display:flex;align-items:center;gap:8px">
-    <input type="checkbox" id="sel-all"> Seleccionar todo
-  </label>
-  <button class="btn" id="bulk-delete" disabled>Eliminar seleccionadas</button>
-  <span id="sel-count" class="muted"></span>
-</div>
+
+        <div class="filters" id="bulk-bar">
+          <label style="display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="sel-all"> Seleccionar todo
+          </label>
+          <button class="btn" id="bulk-delete" disabled>Eliminar seleccionadas</button>
+          <span id="sel-count" class="muted"></span>
+        </div>
 
         <div id="catalogo-songs" class="card" style="margin:0">
           {% include "gestion/admin_catalogo_songs.html" with songs=songs %}
@@ -201,14 +199,12 @@ body[data-role="administrador"] .menu-item[data-view="mi-muro"] { display:none !
     </div>
 
     <div id="confirm-modal" class="modal" aria-hidden="true">
-      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-        <h4 class="title" id="confirm-title">Confirmar</h4>
-        <p id="confirm-text" class="muted" style="margin:0 0 8px">¿Eliminar este elemento?</p>
-        <div class="actions">
-          <button class="btn" id="confirm-cancel">Cancelar</button>
-          <button class="btn" id="confirm-accept">Eliminar</button>
-        </div>
-      </div>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <h4 class="title" id="confirm-title">Confirmar</h4>
+    <p id="confirm-text" class="muted" style="margin:0 0 8px">¿Eliminar este elemento?</p>
+    <div class="actions">
+      <button class="btn" id="confirm-cancel" type="button">Cancelar</button>
+      <button class="btn" id="confirm-accept" type="button">Eliminar</button>
     </div>
   </div>
 </div>
@@ -220,7 +216,7 @@ body[data-role="administrador"] .menu-item[data-view="mi-muro"] { display:none !
 <!-- Gestion (externo, clásico; NO type="module") -->
 <script src="{% static 'gestion/gestion.js' %}?v={% now 'U' %}"></script>
 
-<!-- Fallback si gestion.js no cargó por alguna razón -->
+<!-- Fallback si gestion.js no cargó -->
 <script>
   if (!window.__gestion_loaded__) {
     console.warn('gestion.js no se cargó, aplicando fallback mínimo');
@@ -246,7 +242,5 @@ body[data-role="administrador"] .menu-item[data-view="mi-muro"] { display:none !
   }
 </script>
 
-<!-- Feed (polling/acciones) -->
-<script src="{% static 'feed/feed.js' %}?v={% now 'U' %}"></script>
 </body>
 </html>

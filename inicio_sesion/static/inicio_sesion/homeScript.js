@@ -1,331 +1,398 @@
 // static/inicio_sesion/homeScript.js
 
-document.addEventListener('DOMContentLoaded', async () => {
-  const RP = await import('/static/reproductor/reproductor.js?v=1');
+// Guard: si una vista de servidor (como /mi-muro o /gestion) puso window.__DISABLE_HOME_SCRIPT__,
+// no ejecutamos la SPA. Solo quitamos la clase del main-content para evitar layout raro.
+const __SPA_DISABLED__ = !!window.__DISABLE_HOME_SCRIPT__;
 
-  // ====== Nodos base y dataset ======
-  const menuLateral   = document.getElementById('menuLateral');
-  const mainContent   = document.getElementById('main-content');
-  const header        = document.getElementById('header');
-  const contentDiv    = document.getElementById('content');
-  const menuToggleBtn = document.getElementById('menu-toggle-btn');
-  const toggleLogo    = document.getElementById('toggle-menu');
-  const botonBack     = document.getElementById('back-btn');
-
-  botonBack.addEventListener('click', clickBackBtn);
-
-  if (!mainContent || !contentDiv) return;
-
-  // Datos inyectados por plantilla
-  let ROLE = (mainContent.dataset.role || '').toLowerCase();
-  if (!ROLE) {
-    const h1 = document.querySelector('.page h1')?.textContent?.toLowerCase() || '';
-    if (h1.includes('gestión')) ROLE = 'administrador';
-  }
-
-  let   USERNAME    = (mainContent.dataset.username || '').trim();
-  const AVATAR      = (mainContent.dataset.avatar || '').trim();
-  const DESCRIPTION = (mainContent.dataset.description || '').trim();
-  const CREATED_AT  = (mainContent.dataset.createdAt || '').trim();
-
-  const URL_MI_MURO        = mainContent.dataset.urlMiMuro        || '/mi-muro/';
-  const URL_MUSICA         = mainContent.dataset.urlMusica        || '/musica/';
-  const URL_GESTION        = mainContent.dataset.urlGestion       || '/gestion/';
-  const URL_HOME           = mainContent.dataset.urlHome          || '/home/';
-  const URL_MI_MUSICA_JSON = mainContent.dataset.urlMiMusicaJson  || '/mi-musica/json/';
-
-  const urlParams    = new URLSearchParams(location.search);
-  const hashView     = (location.hash || '').replace(/^#/, '');
-  const INITIAL_VIEW = (urlParams.get('view') || hashView || mainContent.dataset.initialView || '').trim();
-
-  // ====== Estado SPA ======
-  let currentView  = null;
-
-  // ====== Playlists iniciales (JSON embebido) ======
-  let playlists = [];
-  try {
-    const jsonEl = document.getElementById('playlists-data-json');
-    playlists = JSON.parse(jsonEl?.textContent || '[]');
-  } catch {}
-  if (ROLE === 'artista' && (!Array.isArray(playlists) || playlists.length === 0)) {
-    playlists = [{ id: 1, name: 'Mi música', songs: [] }];
-  }
-  window._playlists = playlists;
-
-  // ====== Utils de la SPA ======
-  function showContent(html){
-    contentDiv.innerHTML = html;
-    decorateDangerButtons(contentDiv);
-  }
-
-  function escapeHtml(s){
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  function aplicarAvatarHeader() {
-    const iconEl = document.querySelector('#user-trigger .user-icon');
-    if (!iconEl) return;
-    if (AVATAR) {
-      iconEl.innerHTML = `<img src="${AVATAR}" alt="${escapeHtml(USERNAME)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">`;
-    } else {
-      iconEl.textContent = (USERNAME || 'U').trim().charAt(0).toUpperCase();
-    }
-  }
-  function aplicarPermisosMenu() {
-    const show = (sel, v) => { const el = document.querySelector(sel); if (el) el.style.display = v ? 'block' : 'none'; };
-    if (ROLE === 'administrador') {
-      show('.menu-item[data-view="home"]', true);
-      show('.menu-item[data-view="playlist"]', false);
-      show('.menu-item[data-view="reproductor"]', false);
-      show('.menu-item[data-view="perfil"]', true);
-      show('.menu-item[data-view="mi-muro"]', false);
-      show('.menu-item[data-view="gestion"]', true);
-      show('.menu-item[data-view="musica"]', true);
-    } else if (ROLE === 'artista') {
-      show('.menu-item[data-view="gestion"]', false);
-      show('.menu-item[data-view="musica"]', false);
-      show('.menu-item[data-view="mi-muro"]', true);
-      show('.menu-item[data-view="reproductor"]', true);
-      show('.menu-item[data-view="playlist"]', true);
-      show('.menu-item[data-view="perfil"]', true);
-      show('.menu-item[data-view="home"]', true);
-    } else {
-      show('.menu-item[data-view="gestion"]', false);
-      show('.menu-item[data-view="musica"]', false);
-      show('.menu-item[data-view="mi-muro"]', false);
-      show('.menu-item[data-view="home"]', true);
-      show('.menu-item[data-view="playlist"]', true);
-      show('.menu-item[data-view="reproductor"]', true);
-      show('.menu-item[data-view="perfil"]', true);
-    }
-  }
-
-  // ====== Vistas  ======
-  function renderMenuHome() {
-    mainContent.dataset.view = 'home';
-    const html = `<h2>HOME • Bienvenido a Melodify</h2><p>Selecciona una opción del menú para comenzar.</p>`;
-    showContent(html)
-  }
-
-
-  function renderMenuPerfil() {
-    mainContent.dataset.view = 'perfil';
-    const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const avatarHTML = AVATAR
-      ? `<img src="${esc(AVATAR)}" alt="${esc(USERNAME)}" style="width:96px;height:96px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px #2b2b2b;">`
-      : `<div style="width:96px;height:96px;border-radius:50%;background:#2a2a2a;display:flex;align-items:center;justify-content:center;font-size:36px;">${esc((USERNAME || 'U').charAt(0).toUpperCase())}</div>`;
-    const roleLabel = (ROLE ? ROLE.charAt(0).toUpperCase() + ROLE.slice(1) : '—');
-    const descHTML  = (ROLE === 'artista') ? `<p style="margin:6px 0 0;color:#bbb;">Descripción: ${esc(DESCRIPTION || '—')}</p>` : '';
-    const fechaHTML = `<p style="margin:0 0 4px;">Registrado: ${esc(CREATED_AT || '—')}</p>`;
-    const html = `
-      <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;"><h2 style="margin:0;">Perfil</h2></div>
-      <div style="display:flex;gap:16px;align-items:center;background:#1e1e1e;border:1px solid #2b2b2b;border-radius:12px;padding:16px;max-width:720px;">
-        ${avatarHTML}
-        <div>
-          <p style="margin:0 0 4px;">Nombre: ${esc(USERNAME || '—')}</p>
-          <p style="margin:0 0 4px;">Rol: ${esc(roleLabel)}</p>
-          ${fechaHTML}
-          ${descHTML}
-        </div>
-      </div>`;
-      showContent(html);
-  }
-
-
-
-
-  // ====== Router / menú ======
-  function clickMenuToggleBtn() {
-    if (menuLateral) menuLateral.classList.toggle('collapsed');
-    mainContent.classList.toggle('menuLateral-collapsed');
-    if (header) header.classList.toggle('menuLateral-collapsed');
-    const bar = document.querySelector('._mdf-player-bar');
-    if (bar) bar.classList.toggle('menuLateral-collapsed');
-  }
-  menuToggleBtn?.addEventListener('click', clickMenuToggleBtn);
-  toggleLogo?.addEventListener('click', clickMenuToggleBtn);
-
-  const userTrigger = document.getElementById('user-trigger');
-  const userMenu    = document.getElementById('user-menu');
-  if (userTrigger && userMenu) {
-    userTrigger.addEventListener('click', (e) => { e.stopPropagation(); userMenu.classList.toggle('show'); });
-    document.addEventListener('click', () => userMenu.classList.remove('show'));
-    userMenu.addEventListener('click', (e) => e.stopPropagation());
-    document.getElementById('menu-perfil')?.addEventListener('click', (e) => {
-      e.preventDefault(); userMenu.classList.remove('show'); activarItemMenu('perfil'); navegarSPA('perfil');
-    });
-
-    //---------------------------------
-  }
-
-  document.querySelectorAll('.menu-item').forEach(item => {
-    item.addEventListener('click', () => {
-      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
-      item.classList.add('active');
-      navegarSPA(item.getAttribute('data-view') || '');
-    });
+if (__SPA_DISABLED__) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const mc = document.getElementById('main-content');
+    if (mc) mc.classList.remove('menuLateral-collapsed');
   });
-
-  document.querySelectorAll('.menu-item[data-view] a[href]').forEach(a => {
-    a.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
-  });
-
-
-  function activarItemMenu(view) {
-    document.querySelectorAll('.menu-item').forEach(el => {
-      el.classList.toggle('active', el.getAttribute('data-view') === view);
-    });
-  }
-
-
-
-//desde esta funcion se delega el uso del back a la respectiva vista en su script
-  function clickBackBtn() {
-    console.log("Botón de retroceso presionado");
-    switch (currentView) {
-      case 'home':
-        break;
-      case 'playlist':
-        clickBackBtnPlaylist();//esta funcion esta dentro de playListScript.js gestiona el back
-        break;
-      case 'reproductor':
-
-        break;
-      case 'perfil':
-
-        break;
-      case 'gestion':
-
-        break;
-      case 'mi-musica':
-
-        break;
-      case 'musica':
-
-        break;
-      default:
-        break;
-    }
-  }
-
-
-  async function navegarSPA(view) {
-    mainContent.dataset.view = view || '';
-    switch (view) {
-      case 'home':
-        await RP.stopReproductorIfLoaded();
-        window.location.href = URL_HOME;
-        currentView = "home";
-        break;
-      case 'playlist':
-        await RP.stopReproductorIfLoaded();
-        currentView = "playlist";
-        showPlaylists()
-        break;
-      case 'reproductor':
-        await RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON });
-        currentView = "reproductor";
-        break;
-      case 'perfil':
-        await RP.stopReproductorIfLoaded();
-        renderMenuPerfil();
-        currentView = "perfil";
-        break;
-      case 'gestion':
-        await RP.stopReproductorIfLoaded();
-        window.location.href = URL_GESTION;
-        currentView = "gestion";
-        break;
-      case 'mi-muro':
-      case 'mi-musica':
-        await RP.stopReproductorIfLoaded();
-        window.location.href = URL_MI_MURO;
-        currentView = "mi-musica";
-        return;
-      case 'musica':
-        await RP.stopReproductorIfLoaded();
-        window.location.href = URL_MUSICA;
-        currentView = "musica";
-        break;
-      default:
-        await RP.stopReproductorIfLoaded();
-        window.location.href = URL_HOME;
-        break;
-    }
-  }
-
-  // ====== Decorado de acciones peligrosas (eliminar) ======
-  function decorateDangerButtons(root = document) {
-    const attrMatches = root.querySelectorAll(
-      'button[name*="delete" i], button[id*="delete" i], button[data-action="delete"], button[data-danger],' +
-      'input[type="submit"][value*="eliminar" i], input[type="submit"][name*="delete" i],' +
-      'a[href*="eliminar" i].button, a[role="button"][data-danger]'
-    );
-    attrMatches.forEach(el => el.classList.add('btnDanger'));
-    root.querySelectorAll('button, input[type="submit"], a[href], [role="button"]').forEach(el => {
-      if (el.classList?.contains('btnDanger')) return;
-      const txt = (el.value || el.textContent || '').trim().toLowerCase();
-      const looksDelete = ['eliminar','borrar','suprimir','remove','delete'].some(w => txt.includes(w));
-      const hrefDelete = (el.getAttribute?.('href') || '').toLowerCase().includes('eliminar');
-      if (looksDelete || hrefDelete) el.classList.add('btnDanger');
-    });
-  }
-
-
-
-  // ====== Arranque ======
-  function inicializarApp() {
-    if (!USERNAME) USERNAME = 'Usuario';
-    const userLbl = document.getElementById('username'); if (userLbl) userLbl.textContent = USERNAME;
-
-    aplicarAvatarHeader();
-    aplicarPermisosMenu();
-
-    currentView = "home";
-
-    // Conectar eventos del reproductor
-    RP.wireReproductorPlaylistEvents({ mainContent, ROLE, URL_MI_MUSICA_JSON });
-
-    const first = INITIAL_VIEW || 'playlist';
-    activarItemMenu(first);
-    mainContent.dataset.view = first;
-
-    if (first === 'home') {
-      renderMenuHome();
-    } else if (first === 'perfil'){
-      renderMenuPerfil();
-    } else if (first === 'reproductor'){
-      RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON });
+} else {
+  document.addEventListener('DOMContentLoaded', async () => {
+    // ========= Carga del reproductor con fallback y ruta dinámica =========
+    let RP;
+    try {
+      const src = (window.REPRODUCTOR_SRC || '/static/reproductor/reproductor.js?v=1');
+      RP = await import(src);
+    } catch {
+      RP = {
+        stopReproductorIfLoaded: async () => {},
+        renderMenuReproductor:   async () => {},
+        wireReproductorPlaylistEvents: () => {}
+      };
     }
 
-    if (!contentDiv.innerHTML.trim()) {
-      activarItemMenu('home');
+    // ========= Nodos base =========
+    const $ = (s, r=document) => r.querySelector(s);
+    const menuLateral   = $('#menuLateral');
+    const mainContent   = $('#main-content');
+    const header        = $('#header');
+    const contentDiv    = $('#content');
+    const menuToggleBtn = $('#menu-toggle-btn');
+    const toggleLogo    = $('#toggle-menu');
+    const botonBack     = $('#back-btn');
+
+    if (!mainContent || !contentDiv) return;
+
+    // ========= Hooks del buscador (UI, sin lógica) =========
+    const searchForm  = $('#search-form');
+    const searchInput = $('#search-input');
+    const searchPanel = $('#search-panel');
+
+    // Evita submit/recarga con Enter
+    searchForm?.addEventListener('submit', (e) => e.preventDefault());
+    // Ejemplo de dónde pegar tu lógica:
+    // searchInput?.addEventListener('input', async () => {
+    //   const term = (searchInput.value || '').trim();
+    //   // 1) fetch/filtrado
+    //   // 2) pintar en #search-panel y mostrarlo: searchPanel.hidden = false;
+    // });
+    // Cerrar panel al hacer clic fuera (si lo usas):
+    // document.addEventListener('click', (e) => {
+    //   if (searchPanel && !searchPanel.contains(e.target) && e.target !== searchInput) {
+    //     searchPanel.hidden = true;
+    //     searchInput.setAttribute('aria-expanded', 'false');
+    //   }
+    // });
+
+    // ========= Datos inyectados por plantilla =========
+    let ROLE        = (mainContent.dataset.role || '').toLowerCase();
+    let USERNAME    = (mainContent.dataset.username || '').trim();
+    const AVATAR      = (mainContent.dataset.avatar || '').trim();
+    const DESCRIPTION = (mainContent.dataset.description || '').trim();
+    const CREATED_AT  = (mainContent.dataset.createdAt || '').trim();
+
+    const URL_MI_MURO        = mainContent.dataset.urlMiMuro       || '/mi-muro/';
+    const URL_MUSICA         = mainContent.dataset.urlMusica       || '/musica/';
+    const URL_GESTION        = mainContent.dataset.urlGestion      || '/gestion/';
+    const URL_HOME           = mainContent.dataset.urlHome         || '/home/';
+    const URL_MI_MUSICA_JSON = mainContent.dataset.urlMiMusicaJson || '/mi-musica/json/';
+
+    const urlParams    = new URLSearchParams(location.search);
+    const hashView     = (location.hash || '').replace(/^#/, '');
+    const INITIAL_VIEW = (urlParams.get('view') || hashView || mainContent.dataset.initialView || 'home').trim();
+
+    // Si no vino el rol, inferimos por el título de la página de gestión
+    if (!ROLE) {
+      const h1 = document.querySelector('.page h1')?.textContent?.toLowerCase() || '';
+      if (h1.includes('gestión')) ROLE = 'administrador';
+    }
+
+    // ========= Estado SPA =========
+    let currentView  = null;
+    let historyStack = [];
+
+    // ========= Playlists iniciales (JSON embebido) =========
+    let playlists = [];
+    try {
+      const jsonEl = $('#playlists-data-json');
+      playlists = JSON.parse(jsonEl?.textContent || '[]');
+    } catch {}
+    if (ROLE === 'artista' && (!Array.isArray(playlists) || playlists.length === 0)) {
+      playlists = [{ id: 1, name: 'Mi música', songs: [] }];
+    }
+    window._playlists = playlists;
+
+    // ========= Utils =========
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/&/g,'&amp;')
+                            .replace(/</g,'&lt;')
+                            .replace(/>/g,'&gt;')
+                            .replace(/"/g,'&quot;');
+    }
+    function showContent(html){
+      contentDiv.innerHTML = html;
+      decorateDangerButtons(contentDiv);
+    }
+    function pushHistory(html){ historyStack.push({ view: currentView, content: html }); }
+
+    // ========= Header: Avatar y nombre =========
+    function aplicarAvatarHeader() {
+      const iconEl = $('#user-trigger .user-icon');
+      const nameEl = $('#username');
+      if (nameEl) nameEl.textContent = USERNAME || 'Usuario';
+      if (!iconEl) return;
+      if (AVATAR) {
+        iconEl.innerHTML = `<img src="${escapeHtml(AVATAR)}" alt="${escapeHtml(USERNAME || 'Usuario')}"
+                             style="width:32px;height:32px;border-radius:50%;object-fit:cover;">`;
+      } else {
+        iconEl.textContent = (USERNAME || 'U').trim().charAt(0).toUpperCase();
+      }
+    }
+
+    // ========= Menú por rol =========
+    function aplicarPermisosMenu() {
+      const showSel  = (selector, v) => { const el = $(selector); if (el) el.style.display = v ? '' : 'none'; };
+      const showView = (view, v) => showSel(`#menuLateral .menu-item[data-view="${view}"]`, v);
+
+      if (ROLE === 'administrador') {
+        showView('home', true);
+        showView('playlist', false);
+        showView('reproductor', false);
+        showView('perfil', true);
+        showView('mi-muro', false);
+        showView('gestion', true);
+      } else if (ROLE === 'artista') {
+        showView('home', true);
+        showView('playlist', true);
+        showView('reproductor', true);
+        showView('perfil', true);
+        showView('mi-muro', true);
+        showView('gestion', false);
+      } else {
+        showView('home', true);
+        showView('playlist', true);
+        showView('reproductor', true);
+        showView('perfil', true);
+        showView('mi-muro', false);
+        showView('gestion', false);
+      }
+    }
+
+    // ========= Vistas =========
+    function renderMenuHome() {
       mainContent.dataset.view = 'home';
-      renderMenuHome();
+
+      const ctaMuro = (ROLE === 'artista')
+        ? `<a id="muro-fab" class="fab-muro" href="${URL_MI_MURO}?no_spa=1" data-external="true">
+             Muro del artista <span class="sub">creador</span>
+           </a>`
+        : '';
+
+      const ctaGestion = (ROLE === 'administrador')
+        ? `<a id="gestion-fab" class="fab-gestion" href="${URL_GESTION}?no_spa=1" data-external="true">
+             Gestión <span class="sub">moderador</span>
+           </a>`
+        : '';
+
+      const html = `
+        ${ctaMuro}
+        ${ctaGestion}
+        <h2>HOME • Bienvenido a Melodify</h2>
+        <p>Selecciona una opción del menú para comenzar.</p>
+      `;
+      pushHistory(html);
+      showContent(html);
     }
 
+    // Fallback simple por si no tienes showPlaylists() en tu playListScript.js
+    function renderMenuPlaylists() {
+      mainContent.dataset.view = 'playlist';
+      const isArtist = ROLE === 'artista';
+      const P = Array.isArray(window._playlists) ? window._playlists : [];
+      let html = '';
 
-  }
+      if (isArtist) {
+        html += '<ul class="item-list"><li data-playlist-id="1">Mi música</li></ul>';
+      } else if (P.length) {
+        html += '<ul class="item-list">' +
+          P.map(pl => `<li data-playlist-id="${pl.id}">${escapeHtml(pl.name || '—')}</li>`).join('') +
+        '</ul>';
+      } else {
+        html += '<p style="color:#b3b3b3;">No hay playlists.</p>';
+      }
 
+      pushHistory(html);
+      showContent(html);
+    }
 
+    function renderMenuPerfil() {
+      mainContent.dataset.view = 'perfil';
+      const avatarHTML = AVATAR
+        ? `<img src="${escapeHtml(AVATAR)}" alt="${escapeHtml(USERNAME)}"
+                 style="width:96px;height:96px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px #2b2b2b;">`
+        : `<div style="width:96px;height:96px;border-radius:50%;background:#2a2a2a;display:flex;align-items:center;justify-content:center;font-size:36px;">
+             ${escapeHtml((USERNAME || 'U').charAt(0).toUpperCase())}
+           </div>`;
+      const roleLabel = (ROLE ? ROLE.charAt(0).toUpperCase() + ROLE.slice(1) : '—');
+      const descHTML  = (ROLE === 'artista') ? `<p style="margin:6px 0 0;color:#bbb;">Descripción: ${escapeHtml(DESCRIPTION || '—')}</p>` : '';
+      const fechaHTML = `<p style="margin:0 0 4px;">Registrado: ${escapeHtml(CREATED_AT || '—')}</p>`;
 
-  inicializarApp();
+      const html = `
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;"><h2 style="margin:0;">Perfil</h2></div>
+        <div style="display:flex;gap:16px;align-items:center;background:#1e1e1e;border:1px solid #2b2b2b;border-radius:12px;padding:16px;max-width:720px;">
+          ${avatarHTML}
+          <div>
+            <p style="margin:0 0 4px;">Nombre: ${escapeHtml(USERNAME || '—')}</p>
+            <p style="margin:0 0 4px;">Rol: ${escapeHtml(roleLabel)}</p>
+            ${fechaHTML}
+            ${descHTML}
+          </div>
+        </div>`;
+      pushHistory(html);
+      showContent(html);
+    }
 
+    // ========= Router / navegación =========
+    function clickMenuToggleBtn() {
+      menuLateral?.classList.toggle('collapsed');
+      mainContent.classList.toggle('menuLateral-collapsed');
+      header?.classList.toggle('menuLateral-collapsed');
+      document.querySelector('._mdf-player-bar')?.classList.toggle('menuLateral-collapsed');
+    }
+    menuToggleBtn?.addEventListener('click', clickMenuToggleBtn);
+    toggleLogo?.addEventListener('click', clickMenuToggleBtn);
 
+    // Ignoramos navegación SPA en enlaces marcados explícitamente como externos
+    document.addEventListener('click', (e) => {
+      const a = e.target.closest?.('a[data-external="true"]');
+      if (a) return; // navegación nativa
+    }, true);
 
-  // Mantiene data-view sincronizado durante navegación en el menu
-  const main = document.getElementById('main-content');
-  if (main) {
-    const SPA_VIEWS = new Set(['home', 'playlist', 'reproductor', 'perfil']);
-    main.dataset.view = (main.dataset.view || INITIAL_VIEW || 'home');
+    // Menú de usuario (header)
+    const userTrigger = $('#user-trigger');
+    const userMenu    = $('#user-menu');
+    if (userTrigger && userMenu) {
+      userTrigger.addEventListener('click', (e) => { e.stopPropagation(); userMenu.classList.toggle('show'); });
+      document.addEventListener('click', () => userMenu.classList.remove('show'));
+      userMenu.addEventListener('click', (e) => e.stopPropagation());
+      $('#menu-perfil')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        userMenu.classList.remove('show');
+        activarItemMenu('perfil');
+        navegarSPA('perfil');
+      });
+    }
+
+    // Sidebar: SOLO ítems SPA
     document.querySelectorAll('#menuLateral .menu-item[data-view]').forEach(item => {
-      const view = item.getAttribute('data-view');
-      if (!SPA_VIEWS.has(view)) return;
-      item.addEventListener('click', () => { main.dataset.view = view || 'home'; });
+      item.addEventListener('click', (e) => {
+        if (item.tagName === 'A') { e.preventDefault(); e.stopPropagation(); }
+        document.querySelectorAll('#menuLateral .menu-item[data-view]').forEach(el => el.classList.remove('active'));
+        item.classList.add('active');
+        const view = item.getAttribute('data-view') || '';
+        navegarSPA(view);
+      });
     });
-  }
 
+    function activarItemMenu(view) {
+      document.querySelectorAll('#menuLateral .menu-item[data-view]').forEach(el => {
+        el.classList.toggle('active', el.getAttribute('data-view') === view);
+      });
+    }
 
+    // Botón BACK (permite delegar a vistas si tienes funciones propias)
+    function clickBackBtn() {
+      switch (currentView) {
+        case 'playlist':
+          if (typeof window.clickBackBtnPlaylist === 'function') {
+            window.clickBackBtnPlaylist();
+          } else {
+            activarItemMenu('home');
+            navegarSPA('home');
+          }
+          break;
+        default:
+          activarItemMenu('home');
+          navegarSPA('home');
+          break;
+      }
+    }
+    botonBack?.addEventListener('click', (e) => {
+      e.preventDefault();
+      clickBackBtn();
+    });
 
+    // Navegación SPA principal
+    async function navegarSPA(view) {
+      currentView = view;
+      mainContent.dataset.view = view || '';
+      historyStack = []; // reset por vista
 
-});
+      switch (view) {
+        case 'home':
+          await RP.stopReproductorIfLoaded();
+          renderMenuHome();
+          break;
+        case 'playlist':
+          await RP.stopReproductorIfLoaded();
+          if (typeof window.showPlaylists === 'function') {
+            window.showPlaylists(); // tu función si existe
+          } else {
+            renderMenuPlaylists();  // fallback
+          }
+          break;
+        case 'reproductor':
+          await RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON });
+          break;
+        case 'perfil':
+          await RP.stopReproductorIfLoaded();
+          renderMenuPerfil();
+          break;
+        case 'gestion':     // servidor
+          await RP.stopReproductorIfLoaded();
+          window.location.href = URL_GESTION + '?no_spa=1';
+          break;
+        case 'mi-muro':     // servidor
+        case 'mi-musica':   // alias
+          await RP.stopReproductorIfLoaded();
+          window.location.href = URL_MI_MURO + '?no_spa=1';
+          return;
+        case 'musica':      // servidor
+          await RP.stopReproductorIfLoaded();
+          window.location.href = URL_MUSICA + '?no_spa=1';
+          break;
+        default:
+          await RP.stopReproductorIfLoaded();
+          renderMenuHome();
+          break;
+      }
+    }
+
+    // Decorado de acciones peligrosas
+    function decorateDangerButtons(root = document) {
+      const attrMatches = root.querySelectorAll(
+        'button[name*="delete" i], button[id*="delete" i], button[data-action="delete"], button[data-danger],' +
+        'input[type="submit"][value*="eliminar" i], input[type="submit"][name*="delete" i],' +
+        'a[href*="eliminar" i].button, a[role="button"][data-danger]'
+      );
+      attrMatches.forEach(el => el.classList.add('btnDanger'));
+      root.querySelectorAll('button, input[type="submit"], a[href], [role="button"]').forEach(el => {
+        if (el.classList?.contains('btnDanger')) return;
+        const txt = (el.value || el.textContent || '').trim().toLowerCase();
+        const looksDelete = ['eliminar','borrar','suprimir','remove','delete'].some(w => txt.includes(w));
+        const hrefDelete = (el.getAttribute?.('href') || '').toLowerCase().includes('eliminar');
+        if (looksDelete || hrefDelete) el.classList.add('btnDanger');
+      });
+    }
+
+    // ========= Arranque =========
+    function inicializarApp() {
+      if (!USERNAME) USERNAME = 'Usuario';
+      aplicarAvatarHeader();
+      aplicarPermisosMenu();
+
+      // Wire del reproductor
+      RP.wireReproductorPlaylistEvents({ mainContent, ROLE, URL_MI_MUSICA_JSON });
+
+      const first = INITIAL_VIEW || 'home';
+      activarItemMenu(first);
+      mainContent.dataset.view = first;
+
+      if (first === 'home') renderMenuHome();
+      else if (first === 'playlist') {
+        if (typeof window.showPlaylists === 'function') window.showPlaylists();
+        else renderMenuPlaylists();
+      }
+      else if (first === 'perfil') renderMenuPerfil();
+      else if (first === 'reproductor') RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON });
+      else renderMenuHome();
+
+      // Mantener data-view sincronizado cuando se pulse menú SPA
+      const main = $('#main-content');
+      if (main) {
+        const SPA_VIEWS = new Set(['home', 'playlist', 'reproductor', 'perfil']);
+        main.dataset.view = (main.dataset.view || first);
+        document.querySelectorAll('#menuLateral .menu-item[data-view]').forEach(item => {
+          const view = item.getAttribute('data-view');
+          if (!SPA_VIEWS.has(view)) return;
+          item.addEventListener('click', () => { main.dataset.view = view || 'home'; });
+        });
+      }
+    }
+
+    inicializarApp();
+  });
+}
