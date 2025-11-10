@@ -5,9 +5,17 @@ from django.shortcuts import redirect, render
 from django.contrib.auth import logout as django_logout
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.utils import timezone
+
+import logging
+logger = logging.getLogger(__name__)
+
+from .models import ArtistProfile, Song, Users, PlayList, PlayListSong
 
 
-from .models import ArtistProfile, Song, Users
 
 
 def pantallaPrincipal(request):
@@ -196,3 +204,59 @@ def pantallaLogout(request):
         request.session.flush()
     
     return response
+
+
+
+def playlist_getAll(request):
+    data = list(PlayList.objects.values(
+        'id', 'idUser', 'name', 'portada', 'isprivate', 'created_at'
+    ))
+    return JsonResponse(data, safe=False)
+
+
+@csrf_exempt
+def playlist_insert(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        PlayList.objects.create(
+            idUser=data['idUser'],
+            name=data['name'],
+            portada=data['portada'],
+            isprivate=data.get('isprivate', False),
+            created_at=timezone.now()
+        )
+        return JsonResponse({'status': 'creada'})
+    return JsonResponse({'error': 'usa POST'}, status=400)
+
+
+def get_songs_by_playlist(request, playlist_id):
+    try:
+        logger.info(f"Buscando canciones para playlist_id: {playlist_id}")
+
+        # 1. Verificar que existan entradas en PlayListSong
+        playlist_songs = PlayListSong.objects.filter(playlist_id=playlist_id).order_by('position')
+
+        if not playlist_songs.exists():
+            logger.warning(f"No se encontraron canciones para playlist_id={playlist_id}")
+            return JsonResponse({'songs': []})
+
+        song_ids = [ps.song_id for ps in playlist_songs]
+        logger.info(f"song_ids encontrados: {song_ids}")
+
+        # 2. Obtener canciones
+        songs = Song.objects.filter(id__in=song_ids).values('id', 'title', 'artist_display_name')
+        songs_dict = {song['id']: song for song in songs}
+
+        # 3. Mantener orden original
+        ordered_songs = []
+        for sid in song_ids:
+            if sid in songs_dict:
+                ordered_songs.append(songs_dict[sid])
+            else:
+                logger.warning(f"Canción con id {sid} no existe en tabla Songs")
+
+        return JsonResponse({'songs': ordered_songs})
+
+    except Exception as e:
+        logger.error(f"Error en get_playlist_songs: {str(e)}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)

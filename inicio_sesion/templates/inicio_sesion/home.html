@@ -13,14 +13,38 @@
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
 
-  <!-- Reproductor (CSS): reproductor primero, barra al final para que sobrescriba -->
+  <!-- Reproductor (CSS): reproductor primero, barra UI al final para sobrescribir -->
   <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
+
+  <script>
+    /* Ruta del módulo JS del reproductor — el homeScript usa import dinámico */
+    window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
+  </script>
+
+  <!-- (Opcional) playlists UI propia -->
+  <script src="{% static 'inicio_sesion/playListScript.js' %}"></script>
+  <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
 </head>
 
 <body class="page-home">
   <!-- Header -->
   <div id="header">
+    <!-- Buscador centrado (UI sin lógica; hooks #search-input y #search-panel) -->
+    <div id="search" class="search">
+      <form id="search-form" role="search" aria-label="Buscar">
+        <input
+          id="search-input"
+          type="search"
+          placeholder="Buscar canciones o artistas…"
+          autocomplete="off"
+          aria-controls="search-panel"
+          aria-expanded="false" />
+      </form>
+      <div id="search-panel" class="search-panel" hidden></div>
+    </div>
+
+    <!-- Usuario -->
     <div class="user-info" id="user-trigger">
       <div class="user-icon">U</div>
       <span id="username">Usuario</span>
@@ -41,10 +65,14 @@
     <!-- Home (ruta real) -->
     <a class="menu-item" data-view="home" href="{% url 'home' %}">Home</a>
 
-    <!-- Vistas internas SPA -->
+    <!-- Vistas internas del SPA (las renderiza homeScript.js) -->
     <div class="menu-item" data-view="playlist">PlayList</div>
     <div class="menu-item" data-view="reproductor">Reproductor</div>
     <div class="menu-item" data-view="perfil">Perfil</div>
+
+    <!-- Vistas de servidor (navegación) -->
+    <div class="menu-item" data-view="mi-muro">Muro del artista</div>
+    <div class="menu-item" data-view="gestion">Gestión</div>
   </div>
 
   <!-- Contenido -->
@@ -61,20 +89,21 @@
        data-url-gestion="{% url 'gestion' %}"
        data-url-revertir="{% url 'revertir' %}"
        data-url-mi-musica-json="{% url 'mi_musica_json' %}">
+
     <button id="menu-toggle-btn">☰</button>
 
-    <a id="back-btn" class="back" href="{% url 'home' %}"
-       title="Volver a inicio" aria-label="Regresar">←</a>
+    <!-- Botón Back universal (lo maneja la SPA; oculto en Home por CSS) -->
+    <a id="back-btn" class="back" href="{% url 'home' %}" title="Volver a inicio" aria-label="Regresar">←</a>
 
     <div id="content"></div>
   </div>
 
-  <!-- Playlists para el reproductor -->
+  <!-- Playlists para el reproductor (inyectadas desde views.py cuando aplique) -->
   <script id="playlists-data-json" type="application/json">
     {{ playlists_json|default:"[]"|safe }}
   </script>
 
-  <!-- Scripts (en orden): núcleo reproductor → barra UI → SPA -->
+  <!-- Scripts (en orden): barra UI → SPA -->
   <script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
   <script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
 
@@ -82,18 +111,18 @@
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       const logoutLink = document.getElementById('menu-logout');
-      const logoutUrl = "{% url 'logout' %}";
+      const logoutUrl  = "{% url 'logout' %}";
       if (logoutLink) {
         logoutLink.addEventListener('click', function(e) {
           e.preventDefault();
           if (confirm('¿Seguro que deseas cerrar sesión?')) {
-            const form = document.createElement('form');
+            const form  = document.createElement('form');
             form.method = 'POST';
             form.action = logoutUrl;
 
             const csrfInput = document.createElement('input');
-            csrfInput.type = 'hidden';
-            csrfInput.name = 'csrfmiddlewaretoken';
+            csrfInput.type  = 'hidden';
+            csrfInput.name  = 'csrfmiddlewaretoken';
             csrfInput.value = '{{ csrf_token }}';
             form.appendChild(csrfInput);
 
@@ -105,11 +134,16 @@
         });
       }
 
+      // Prevenir navegación hacia atrás en cache tras logout
       if (performance.navigation && performance.navigation.type === 2) {
         window.location.href = "{% url 'home' %}";
       }
       window.onpageshow = function(ev){ if (ev.persisted) window.location.reload(); };
-      if (window.history.replaceState) { window.history.replaceState(null, null, window.location.href); }
+
+      // Evitar re-envío de formularios al refrescar
+      if (window.history.replaceState) {
+        window.history.replaceState(null, null, window.location.href);
+      }
     });
   </script>
 </body>
