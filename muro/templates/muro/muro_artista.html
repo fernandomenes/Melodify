@@ -11,12 +11,19 @@
   <script>window.__DISABLE_HOME_SCRIPT__ = true;</script>
   <meta name="csrf-token" content="{{ csrf_token }}"/>
 
-  <!-- Estilos -->
+  <!-- Fuentes -->
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+
+  <!-- Estilos base de la app -->
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
-  <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
+
+  <!-- Estilos específicos del Muro -->
   <link rel="stylesheet" href="{% static 'muro/muro.css' %}?v={% now 'U' %}">
+
+  <!-- Reproductor (CSS): reproductor primero, barra al final -->
+  <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
 </head>
 <body class="page-muro">
 
@@ -37,17 +44,15 @@
     <span class="logo-text">Melodify</span>
   </div>
 
-<nav class="menu-scroll">
-  <a class="menu-item" href="{% url 'home' %}?view=home" data-external="true">Home</a>
-  <a class="menu-item" href="{% url 'home' %}?view=playlist" data-external="true">PlayList</a>
-  <a class="menu-item" href="{% url 'home' %}?view=reproductor" data-external="true">Reproductor</a>
-  <a class="menu-item" href="{% url 'home' %}?view=perfil" data-external="true">Perfil</a>
-
-  {% if session_role|lower == 'administrador' %}
-    <a class="menu-item" href="{% url 'gestion' %}" data-external="true">Gestión</a>
-  {% endif %}
-</nav>
-
+  <nav class="menu-scroll">
+    <a class="menu-item" href="{% url 'home' %}?view=home" data-external="true">Home</a>
+    <a class="menu-item" href="{% url 'home' %}?view=playlist" data-external="true">PlayList</a>
+    <a class="menu-item" href="{% url 'home' %}?view=reproductor" data-external="true">Reproductor</a>
+    <a class="menu-item" href="{% url 'home' %}?view=perfil" data-external="true">Perfil</a>
+    {% if session_role|lower == 'administrador' %}
+      <a class="menu-item" href="{% url 'gestion' %}" data-external="true">Gestión</a>
+    {% endif %}
+  </nav>
 </aside>
 
 <main id="main-content"
@@ -115,7 +120,7 @@
             <option value="" disabled selected>Selecciona un género</option>
             <option value="pop">Pop</option><option value="rock">Rock</option>
             <option value="electronica">Electrónica</option><option value="hiphop">Hip-Hop</option>
-            <option value="reggaeton">Reggaetón</option><option value="regional">Regional Mexicano</option>
+            <option value="reggaeton">Reguetón</option><option value="regional">Regional Mexicano</option>
             <option value="balada">Balada</option><option value="indie">Indie</option>
             <option value="jazz">Jazz</option><option value="clasica">Clásica</option>
             <option value="salsa">Salsa</option>
@@ -220,7 +225,7 @@
     </section>
   </div>
 
-  <!-- Modal propio de confirmación -->
+  <!-- Modal -->
   <div id="confirm-modal" class="modal" aria-hidden="true">
     <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title" tabindex="-1">
       <h4 class="title" id="confirm-title">Confirmar</h4>
@@ -235,6 +240,10 @@
 
 <script id="playlists-data-json" type="application/json">{{ playlists_json|default:"[]"|safe }}</script>
 <script>window.MELODIFY_LOGOUT_URL = "{{ logout_url|default:'/logout/' }}";</script>
-<script src="{% static 'muro/muro.js' %}?v={% now 'U' %}"></script>
+
+<!-- Scripts (en orden): núcleo reproductor → barra UI → JS del muro -->
+<script defer src="{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}"></script>
+<script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
+<script defer src="{% static 'muro/muro.js' %}?v={% now 'U' %}"></script>
 </body>
 </html>

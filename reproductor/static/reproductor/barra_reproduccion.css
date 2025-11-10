@@ -6,6 +6,9 @@
   --accent:#7a3cff; --accent-2:#8b5dff; --text:#efeeee;
   --glow-bg-1:#221a36; --glow-bg-2:#191627;
   --glow-border:#6f58ff; --glow-outer:rgba(122,60,255,.25);
+
+  /* Ganancia visual del glow (subir para mas intensidad) */
+  --viz-k: 3.6;
 }
 
 /* ==========================================================================
@@ -13,16 +16,20 @@
    ========================================================================== */
 ._mdf-player-bar{
   position:fixed; left:50%; transform:translateX(-50%); bottom:16px;
-  width:min(1180px,calc(100vw - 24px));      /* <-- más ancha */
-  height:76px;
+  width:min(1180px,calc(100vw - 24px)); height:76px;
   background:rgba(18,18,18,.92);
   backdrop-filter:saturate(120%) blur(6px);
   border:1px solid var(--line); border-radius:16px;
   display:none;
-  /* 3 columnas con pesos: meta (1.2fr) / controles (auto) / derecha (1fr) */
   grid-template-columns:minmax(260px,1.2fr) auto minmax(420px,1fr);
   align-items:center; gap:16px; padding:0 18px; z-index:1000; color:var(--text);
   box-shadow:0 10px 28px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.03) inset;
+
+  --viz-int: 0;  /* la JS lo actualiza */
+  --viz-hue: 270;
+
+  /* Transiciones cortas para que la respuesta sea “snappy” (fix typo) */
+  transition: box-shadow .04s linear, outline-color .04s linear;
 }
 ._mdf-player-bar.is-visible{ display:grid; }
 
@@ -30,11 +37,16 @@
 ._mdf-now{ display:flex; align-items:center; gap:12px; min-width:0; }
 ._mdf-cover{
   width:48px; height:48px; border-radius:10px; background:#222; object-fit:cover;
-  box-shadow:0 0 0 1px rgba(0,0,0,.35);
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,.35),
+    0 0 calc(8px + 22px * (var(--viz-int) * var(--viz-k)))
+      hsl(var(--viz-hue) 80% 60% / calc(.34 * (var(--viz-int) * var(--viz-k))));
+  transition: box-shadow .02s linear;
+  will-change: box-shadow;
 }
 ._mdf-meta{ display:flex; flex-direction:column; min-width:0; flex:1; }
 
-/* Título recortado, con ancho máximo para no invadir controles */
+/* Título recortado */
 ._mdf-player-title{
   font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   max-width:min(56vw, 560px);
@@ -45,27 +57,49 @@
 
 /* Columna central (controles) */
 ._mdf-ctrls{
+  position:relative;
   display:flex; align-items:center; gap:10px;
 }
 ._mdf-btn, ._mdf-speed{
   height:40px; min-width:40px; border-radius:999px; display:inline-flex;
   align-items:center; justify-content:center; cursor:pointer; color:#fff;
   border:1px solid var(--line); background:#1a1a1a;
-  transition:background .04s, transform .04s, border-color .04s, box-shadow .03s;
+  transition: background .06s, transform .06s, border-color .06s, box-shadow .05s linear;
+  will-change: box-shadow, background, transform;
   -webkit-appearance:none; appearance:none;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.03) inset,
+    0 0 calc(4px + 16px * (var(--viz-int) * var(--viz-k)))
+      hsl(var(--viz-hue) 80% 60% / calc(.32 * (var(--viz-int) * var(--viz-k))));
 }
-._mdf-btn:hover, ._mdf-speed:hover{ background:#242424; }
+._mdf-btn:hover, ._mdf-speed:hover{
+  background:#242424;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.03) inset,
+    0 0 calc(6px + 20px * (var(--viz-int) * var(--viz-k)))
+      hsl(var(--viz-hue) 80% 60% / calc(.38 * (var(--viz-int) * var(--viz-k))));
+}
 ._mdf-btn:active, ._mdf-speed:active{ transform:translateY(1px); }
 ._mdf-btn:focus-visible, ._mdf-speed:focus-visible{ outline:2px solid var(--accent-2); outline-offset:2px; }
 
 ._mdf-btn--primary{
   background:var(--accent)!important; border-color:var(--accent-2)!important;
-  box-shadow:0 0 0 1px rgba(0,0,0,.2) inset, 0 0 12px rgba(122,60,255,.25);
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,.2) inset,
+    0 0 14px rgba(122,60,255,.28),
+    0 0 calc(10px + 24px * (var(--viz-int) * var(--viz-k)))
+      hsl(var(--viz-hue) 80% 60% / calc(.42 * (var(--viz-int) * var(--viz-k))));
 }
 ._mdf-btn--primary:hover{ background:var(--accent-2)!important; }
 
-/* Botón velocidad como “pill” compacto */
+/* Botón velocidad */
 ._mdf-speed{ padding:0 10px; font-weight:600; }
+
+._mdf-circle,
+._mdf-ctrls ._mdf-spikes,
+canvas._mdf-spikes { display:none !important; }
+._mdf-ctrls::before,
+._mdf-ctrls::after { content:none !important; animation:none !important; background:none !important; }
 
 /* Columna derecha (tiempo, seek, volumen) */
 ._mdf-right{
@@ -96,20 +130,11 @@
   box-shadow:0 0 0 2px var(--accent); cursor:pointer;
 }
 
-/* Progreso circular opcional alrededor de los controles */
 .mdf-round-progress{ position:relative; }
-._mdf-circle{ position:absolute; inset:-8px -16px; pointer-events:none; }
-._mdf-circle svg{ width:120px; height:120px; filter:drop-shadow(0 0 10px rgba(122,60,255,.25)); }
-._mdf-circle .trk{
-  fill:none; stroke:rgba(255,255,255,.06); stroke-width:8; stroke-linecap:round;
-}
-._mdf-circle .prg{
-  fill:none; stroke:url(#mdfGrad); stroke-width:8; stroke-linecap:round;
-  stroke-dasharray:314; stroke-dashoffset:314; transition:stroke-dashoffset .12s linear;
-}
+._mdf-circle{ display:none !important; }
 
 /* ==========================================================================
-   Listado de canciones + vista 
+   Listado de canciones + vista
    ========================================================================== */
 .songs-wrap{ width:min(1180px, 92vw); margin:8px 0 120px; }
 .song-item{
@@ -126,9 +151,8 @@
 .song-cover--placeholder{ display:block; }
 .song-info{ min-width:0; }
 .song-title{ font-weight:700; font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.song-author{ color:var(--muted); font-size:.9rem; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.song-author{ color:#9aa0a6; font-size:.9rem; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .song-actions{ display:flex; align-items:center; gap:10px; justify-self:end; }
-
 .song-actions .play-pill{
   display:inline-flex; align-items:center; gap:8px; padding:8px 12px;
   border-radius:999px; background:#232323; border:1px solid var(--line);
@@ -194,10 +218,69 @@
   color:#fff;
 }
 
-/* Panel vacío y margen para no tapar la barra */
 .rep-empty{
   background:var(--card); border:1px solid var(--line); border-radius:12px;
   padding:32px 24px; color:#b3b3b3; min-height:240px;
   display:flex; align-items:center; justify-content:center; text-align:center;
 }
 .rep-left .songs-wrap{ width:100%; max-width:none; margin:8px 0 120px; }
+
+._mdf-player-bar{
+  border-color: hsl(0 0% 16% / 1);
+  outline: 1px solid hsl(var(--viz-hue) 70% 60% / calc(.26 * (var(--viz-int) * var(--viz-k))));
+  outline-offset: 0;
+  box-shadow:
+    0 10px 28px rgba(0,0,0,.45),
+    0 0 calc(12px + 32px * (var(--viz-int) * var(--viz-k)))
+      hsl(var(--viz-hue) 80% 60% / calc(.22 + .26 * (var(--viz-int) * var(--viz-k))));
+}
+
+._mdf-player-bar::before,
+._mdf-player-bar::after{
+  content:none !important;
+  display:none !important;
+}
+
+/* =========================
+   Desplazar barra por sidebar
+   ========================= */
+._mdf-player-bar{
+  --sidebar-open: 248px;
+  --sidebar-collapsed: 72px;
+}
+._mdf-player-bar{
+  left: calc(var(--sidebar-open) + 16px);
+  right: 16px;
+  transform: none;
+  width: auto;
+  max-width: 1180px;
+  margin: 0;
+}
+._mdf-player-bar.menuLateral-collapsed{
+  left: calc(var(--sidebar-collapsed) + 16px);
+}
+@media (max-width: 960px){
+  ._mdf-player-bar,
+  ._mdf-player-bar.menuLateral-collapsed{
+    left: 16px; right: 16px; max-width: none;
+  }
+}
+
+._mdf-player-title{ max-width: min(50vw, 520px); }
+
+/* Más espacio para el seek */
+._mdf-right{ gap: 10px; min-width: 360px; }
+._mdf-time{ min-width: 88px; }
+._mdf-player-seek{ flex: 1 1 440px; }
+._mdf-vol{ width: 128px; }
+
+._mdf-player-bar.mdf-whiteglow{
+  --accent:#ffffff; --accent-2:#dfe4ea;
+  filter:
+    drop-shadow(0 0 10px rgba(255,255,255,.35))
+    drop-shadow(0 0 25px rgba(255,255,255,.20));
+}
+
+._mdf-ctrls { position: relative; }
+._mdf-ctrls.mdf-round-progress { box-shadow: none !important; }
+
