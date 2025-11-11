@@ -53,7 +53,7 @@ function isTop10Active(){
 function _currentSong(){ return _state.queue[_state.index] || null; }
 
 // ---------------------------- Plays (Top 10) -------------------------------
-const PLAYS_KEY = "mdf.plays.v1"; // { "<key>": count }, key = song.id || abs(audioUrl)
+const PLAYS_KEY = "mdf.plays.v1";
 
 function _loadPlays(){
   try{ return JSON.parse(localStorage.getItem(PLAYS_KEY) || "{}") || {}; }catch{ return {}; }
@@ -195,7 +195,6 @@ function buildPlaylistsModel({allPlaylists, mySongs}){
   const mineUnique   = dedup(mySongs||[], s => _songKey(s) || abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
   const minePlaylist = { id:'pl:mine', name:'Mi música', songs: mineUnique };
 
-  // No metemos 'pl:top10' aquí; lo inyectamos en la sidebar dinámicamente
   return [allPlaylist, minePlaylist, ...allPlaylists];
 }
 
@@ -521,7 +520,6 @@ export function attachSidebarHandlers(){
           if(!g||g==='otro') return true;
           return sg && sg===g;
         });
-        // En géneros NO mostramos contador
         renderLeftSongs(filtered, ch.textContent||'Género', {showCounts:false});
       });
     });
@@ -548,7 +546,7 @@ export async function renderMenuReproductor({mainContent, contentDiv, URL_MI_MUS
     fetchMyMusic(URL_MI_MUSICA_JSON)
   ]);
 
-  // 2) Construye el modelo final (sin Top10 aquí)
+  // 2) Construye el modelo final 
   window._playlists = buildPlaylistsModel({ allPlaylists, mySongs });
 
   // 3) UI
@@ -604,7 +602,7 @@ if (document.readyState === "loading") {
 }
 
 /* ==========================
-   Sección playlists (UI antigua)
+   Sección playlists 
    ========================== */
 let currentViewPlaylist  = "allPlayList";
 
