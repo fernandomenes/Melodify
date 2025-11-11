@@ -30,16 +30,17 @@
 <body class="page-home">
   <!-- Header -->
   <div id="header">
-    <!-- Buscador centrado (UI sin lógica; hooks #search-input y #search-panel) -->
+    <!-- Buscador centrado -->
     <div id="search" class="search">
-      <form id="search-form" role="search" aria-label="Buscar">
+      <form id="search-form" role="search" aria-label="Buscar" method="get" action="{% url 'buscar' %}">
         <input
-          id="search-input"
-          type="search"
-          placeholder="Buscar canciones o artistas…"
-          autocomplete="off"
-          aria-controls="search-panel"
-          aria-expanded="false" />
+            id="search-input"
+            name="q"
+            type="search"
+            placeholder="Buscar canciones, artistas o playlists…"
+            autocomplete="off"
+            aria-controls="search-panel"
+            required />
       </form>
       <div id="search-panel" class="search-panel" hidden></div>
     </div>
@@ -146,5 +147,8 @@
       }
     });
   </script>
+
+  <!-- Script para manejo de búsqueda -->
+  <script src="{% static 'inicio_sesion/searchHandler.js' %}?v={% now 'U' %}"></script>
 </body>
 </html>

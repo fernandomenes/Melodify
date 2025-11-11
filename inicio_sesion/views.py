@@ -2,6 +2,7 @@ import json
 import logging
 
 from django.contrib import messages
+from django.db.models import Q 
 from django.contrib.auth import logout as django_logout
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
@@ -221,22 +222,44 @@ def playlist_getAll(request):
     return JsonResponse(data, safe=False)
 
 
+
 @csrf_exempt
-def playlist_insert(request):
-    """
-    Inserta una nueva playlist a partir de un cuerpo JSON en una solicitud POST.
-    """
-    if request.method == 'POST':
+@require_http_methods(["POST"])
+def create_playlist(request):
+    try:
         data = json.loads(request.body)
-        PlayList.objects.create(
-            idUser=data['idUser'],
-            name=data['name'],
-            portada=data['portada'],
-            isprivate=data.get('isprivate', False),
-            created_at=timezone.now()
+        username = data.get('user')
+        playlist_name = data.get('name')
+
+        if not username or not playlist_name:
+            return JsonResponse({'error': 'Faltan campos: user y name'}, status=400)
+
+        # Buscar usuario en la tabla Users
+        try:
+            user_obj = Users.objects.get(user=username)
+        except Users.DoesNotExist:
+            return JsonResponse({'error': 'Usuario no encontrado'}, status=404)
+
+        # Crear playlist
+        new_playlist = PlayList(
+            idUser=user_obj.id,          # ← usamos el id del modelo Users
+            name=playlist_name,
+            portada="",
+            isprivate=False
         )
-        return JsonResponse({'status': 'creada'})
-    return JsonResponse({'error': 'usa POST'}, status=400)
+        new_playlist.save()
+
+        return JsonResponse({
+            'message': 'Playlist creada exitosamente',
+            'playlist_id': new_playlist.id
+        }, status=201)
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 
 
 def get_songs_by_playlist(request, playlist_id):
@@ -311,3 +334,255 @@ def get_songs_by_playlist(request, playlist_id):
     except Exception as e:
         logger.error(f"Error en get_songs_by_playlist: {str(e)}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def delete_playlist(request, playlist_id):
+    try:
+        playlist = PlayList.objects.get(id=playlist_id)
+        playlist.delete()
+        return JsonResponse({'message': 'Playlist eliminada correctamente'}, status=200)
+    except PlayList.DoesNotExist:
+        return JsonResponse({'error': 'Playlist no encontrada'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+
+@csrf_exempt
+@require_http_methods(["PUT"])
+def update_playlist(request, playlist_id):
+    try:
+        # Obtener la playlist
+        playlist = PlayList.objects.get(id=playlist_id)
+
+        # Parsear el cuerpo de la solicitud
+        data = json.loads(request.body)
+        new_name = data.get('name')
+
+        if not new_name or not new_name.strip():
+            return JsonResponse({'error': 'El nombre no puede estar vacío'}, status=400)
+
+        # Actualizar nombre
+        playlist.name = new_name.strip()
+        playlist.save()
+
+        return JsonResponse({
+            'message': 'Playlist actualizada correctamente',
+            'name': playlist.name
+        }, status=200)
+
+    except PlayList.DoesNotExist:
+        return JsonResponse({'error': 'Playlist no encontrada'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+
+@require_http_methods(["GET"])
+def get_all_songs(request):
+    try:
+        songs = Song.objects.filter(visibility="public").values(
+            "id", "title", "artist_display_name"
+        )
+        song_list = list(songs)  # Convertir a lista de dicts
+        return JsonResponse(song_list, safe=False)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def add_song_to_playlist(request):
+    try:
+        data = json.loads(request.body)
+        song_id = data.get('song_id')
+        playlist_id = data.get('playlist_id')
+        position = data.get('position')
+
+        if song_id is None or playlist_id is None or position is None:
+            return JsonResponse({'error': 'Faltan parámetros: song_id, playlist_id, position'}, status=400)
+
+        # Crear la relación en PlayListSong
+        new_entry = PlayListSong(
+            playlist_id=playlist_id,
+            song_id=song_id,
+            position=position
+        )
+        new_entry.save()
+
+        return JsonResponse({
+            'message': 'Canción agregada a la playlist',
+            'position': position
+        }, status=201)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def remove_song_from_playlist(request):
+    try:
+        # Parsear el cuerpo de la solicitud (JSON)
+        data = json.loads(request.body)
+        playlist_id = data.get('playlist_id')
+        song_id = data.get('song_id')
+
+        if playlist_id is None or song_id is None:
+            return JsonResponse(
+                {'error': 'Se requieren playlist_id y song_id'},
+                status=400
+            )
+
+        # Buscar y eliminar el registro
+        deleted_count, _ = PlayListSong.objects.filter(
+            playlist_id=playlist_id,
+            song_id=song_id
+        ).delete()
+
+        if deleted_count == 0:
+            return JsonResponse(
+                {'error': 'Registro no encontrado'},
+                status=404
+            )
+
+        return JsonResponse(
+            {'message': 'Canción eliminada de la playlist'},
+            status=200
+        )
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+def buscar(request):
+    """
+    Vista de búsqueda que consulta canciones, artistas y playlists
+    """
+    if "user" not in request.session:
+        messages.error(request, "Debes iniciar sesión para acceder a esta página.")
+        return redirect('login')
+    
+    query = request.GET.get('q', '').strip()
+    resultados = {
+        'canciones': [],
+        'artistas': [],
+        'playlists': [],
+    }
+    
+    if query:
+        # Buscar canciones (públicas) por título o artista
+        resultados['canciones'] = Song.objects.filter(
+            Q(title__icontains=query) | Q(artist_display_name__icontains=query),
+            visibility='public'
+        ).select_related('owner').only(
+            "id", "title", "artist_display_name", "audio_file", "cover_image", "genre"
+        )[:20]
+        
+        # Buscar artistas (usuarios con tipo 'Artista')
+        resultados['artistas'] = Users.objects.filter(
+            Q(user__icontains=query) & Q(type__iexact='artista')
+        ).only(
+            "id", "user", "avatar", "created_at"
+        )[:20]
+        
+        # Buscar playlists por nombre (públicas)
+        resultados['playlists'] = PlayList.objects.filter(
+            Q(name__icontains=query) & Q(isprivate=False)
+        ).select_related('idUser').only(
+            'id', 'idUser', 'name', 'portada', 'isprivate', 'created_at'
+        )[:20]
+    
+    # Obtener datos de sesión para el template
+    session_user = request.session.get("user", "")
+    session_role = request.session.get("role", "")
+    
+    avatar_url = ""
+    try:
+        u = Users.objects.get(user=session_user)
+        if getattr(u, "avatar", None):
+            try:
+                avatar_url = u.avatar.url
+            except Exception:
+                avatar_url = str(u.avatar)
+    except Users.DoesNotExist:
+        pass
+    
+    ctx = {
+        "query": query,
+        "resultados": resultados,
+        "session_user": session_user,
+        "session_role": session_role,
+        "session_avatar_url": avatar_url,
+        "has_results": any(len(v) > 0 for v in resultados.values()),
+    }
+    
+    return render(request, "inicio_sesion/buscar.html", ctx)
+
+def api_buscar(request):
+    """API para búsqueda en tiempo real"""
+    query = request.GET.get('q', '').strip()
+    
+    if len(query) < 2:
+        return JsonResponse({'canciones': [], 'artistas': [], 'playlists': []})
+    
+    results = {
+        'canciones': [],
+        'artistas': [], 
+        'playlists': [],
+    }
+    
+    try:
+        # Buscar canciones
+        canciones = Song.objects.filter(
+            Q(title__icontains=query) | Q(artist_display_name__icontains=query),
+            visibility='public'
+        )[:5]
+        
+        for cancion in canciones:
+            results['canciones'].append({
+                'id': cancion.id,
+                'title': cancion.title,
+                'artist': cancion.artist_display_name,
+                'audioUrl': _safe_file_url(cancion.audio_file),
+                'coverUrl': _safe_file_url(cancion.cover_image),
+            })
+        
+        # Buscar artistas
+        artistas = Users.objects.filter(
+            Q(user__icontains=query) & Q(type__iexact='artista')
+        )[:5]
+        
+        for artista in artistas:
+            results['artistas'].append({
+                'id': artista.id,
+                'username': artista.user,
+                'avatarUrl': _safe_file_url(artista.avatar),
+            })
+        
+        # Buscar playlists
+        playlists = PlayList.objects.filter(
+            Q(name__icontains=query) & Q(isprivate=False)
+        )[:5]
+        
+        for playlist in playlists:
+            results['playlists'].append({
+                'id': playlist.id,
+                'name': playlist.name,
+                'coverUrl': playlist.portada,
+            })
+            
+    except Exception as e:
+        logger.error(f"Error en api_buscar: {str(e)}")
+    
+    return JsonResponse(results)

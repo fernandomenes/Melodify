@@ -281,3 +281,53 @@ a.back:focus { background: #262626; }
   .fab-muro{ right: 16px; bottom: 16px; padding: 10px 14px; }
   .fab-gestion{ right: 16px; bottom: 16px; padding: 10px 14px; }
 }
+
+/* Estilos para el panel de búsqueda */
+.search-panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    margin-top: 5px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    z-index: 1000;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.search-section {
+    padding: 10px;
+    border-bottom: 1px solid #333;
+}
+
+.search-section:last-child {
+    border-bottom: none;
+}
+
+.search-section h4 {
+    color: #ff0066;
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    text-transform: uppercase;
+}
+
+.search-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    color: #fff;
+    transition: background-color 0.2s;
+}
+
+.search-item:hover {
+    background-color: #2a2a2a;
+}
+
+.search-no-results {
+    padding: 20px;
+    text-align: center;
+    color: #888;
+}

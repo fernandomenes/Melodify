@@ -9,11 +9,22 @@ urlpatterns = [
     path("registro/", v.pantallaRegistro, name="registro"),
     path("home/", v.pantallaHome, name="home"),
     path("logout/", v.pantallaLogout, name="logout"),
+    path('buscar/', v.buscar, name='buscar'),
+    path('api/buscar/', v.api_buscar, name='api-buscar'),
+
     # Secciones
     path("gestion/", include("gestion.urls")),
     path("", include("muro.urls")),
+
     # playlist
     path('playlist/getAllList/', v.playlist_getAll, name='getAllList'),
-    path('playlist/insert/', v.playlist_insert, name='insert'),
+    path('playlist/create/', v.create_playlist, name='create-playlist'),
     path('playlist/<int:playlist_id>/songs/', v.get_songs_by_playlist, name="getSongsByPl"),
+    path('playlist/<int:playlist_id>/delete/', v.delete_playlist, name='delete-playlist'),
+    path('playlist/<int:playlist_id>/update/', v.update_playlist, name='update-playlist'),
+    path('playlist/allsongs/', v.get_all_songs, name='get-all-songs'),
+    path('playlist/addsong/', v.add_song_to_playlist, name='add-song-to-playlist'),
+    path('playlist/removeSong/', v.remove_song_from_playlist, name='remove-song-from-playlist'),
+
+
 ]
