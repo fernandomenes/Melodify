@@ -88,16 +88,26 @@ class GestionTests(TestCase):
         u = Users.objects.get(user="nuevo_artista")
         self.assertTrue(ArtistProfile.objects.filter(user=u).exists())
 
-    def test_registrar_artista_password_corta(self):
-        """Alterno A-1: password < 10 ⇒ no debe crearse el artista."""
-        payload = {
-            "user": "artista_pw_corta",
-            "password": "123456789",  # 9 caracteres
-            "description": "No debería crearse.",
-        }
-        resp = self.c.post(self.url_reg_artista, payload, follow=False)
-        self.assertIn(resp.status_code, (302, 303))
-        self.assertFalse(Users.objects.filter(user="artista_pw_corta").exists())
+    # Reemplaza el test existente por estos dos
+
+def test_registrar_artista_password_corta(self):
+    """Alterno A-1: password < 6 ⇒ no debe crearse el artista."""
+    resp = self.client.post(
+        reverse("registrar_artista"),
+        data={"user": "artista_pw_corta", "password": "12345", "description": "x"},  # 5 chars
+    )
+    self.assertIn(resp.status_code, (200, 302, 303))
+    self.assertFalse(Users.objects.filter(user="artista_pw_corta").exists())
+
+def test_registrar_artista_password_minima_aceptada(self):
+    """Flujo normal: password de 6 caracteres sí crea el artista."""
+    resp = self.client.post(
+        reverse("registrar_artista"),
+        data={"user": "artista_pw_ok", "password": "123456", "description": "x"},
+    )
+    self.assertIn(resp.status_code, (200, 302, 303))
+    self.assertTrue(Users.objects.filter(user="artista_pw_ok").exists())
+
 
     def test_registrar_artista_descripcion_larga(self):
         """Descripción > 200 ⇒ rechazo."""

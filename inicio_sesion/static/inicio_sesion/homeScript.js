@@ -283,52 +283,71 @@ if (__SPA_DISABLED__) {
     });
 
     // Controlador central de navegación SPA.
-    async function navegarSPA(view) {
-      currentView = view;
-      mainContent.dataset.view = view || '';
-      historyStack = [];
+async function navegarSPA(view) {
+  currentView = view;
+  mainContent.dataset.view = view || '';
+  historyStack = [];
 
-      switch (view) {
-        case 'home':
-          await RP.stopReproductorIfLoaded();
-          renderMenuHome();
-          break;
-        case 'playlist':
-          await RP.stopReproductorIfLoaded();
-          if (typeof window.showPlaylists === 'function') {
-            window.initPlayList();
-          } else {
-            renderMenuPlaylists();
-          }
-          break;
-        case 'reproductor':
-          window.__SKIP_MY_MUSIC_REFRESH__ = true; // bandera interna para evitar refrescos redundantes
-          await RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON });
-          break;
+  switch (view) {
+   case 'home':
+  window.__MDF_FORMS_HIDE_BAR__ = false;                // <— añade
+  document.dispatchEvent(new CustomEvent('melodify:bar:shouldShow'));
+  renderMenuHome();
+  break;
 
-        case 'perfil':
-          await RP.stopReproductorIfLoaded();
-          renderMenuPerfil();
-          break;
-        case 'gestion':     // vista servida por el servidor
-          await RP.stopReproductorIfLoaded();
-          window.location.href = URL_GESTION + '?no_spa=1';
-          break;
-        case 'mi-muro':     // vista servida por el servidor
-        case 'mi-musica':
-          await RP.stopReproductorIfLoaded();
-          window.location.href = URL_MI_MURO + '?no_spa=1';
-          return;
-        case 'musica':      // vista servida por el servidor
-          await RP.stopReproductorIfLoaded();
-          window.location.href = URL_MUSICA + '?no_spa=1';
-          break;
-        default:
-          await RP.stopReproductorIfLoaded();
-          renderMenuHome();
-          break;
-      }
-    }
+case 'playlist':
+  window.__MDF_FORMS_HIDE_BAR__ = false;                // <— añade
+  document.dispatchEvent(new CustomEvent('melodify:bar:shouldShow'));
+  if (typeof window.showPlaylists === 'function') {
+    window.initPlayList?.();
+    window.showPlaylists();
+  } else {
+    renderMenuPlaylists();
+  }
+  break;
+
+case 'reproductor':
+  window.__MDF_FORMS_HIDE_BAR__ = false;                // <— añade
+  document.dispatchEvent(new CustomEvent('melodify:bar:shouldShow'));
+  window.__SKIP_MY_MUSIC_REFRESH__ = true;
+  await RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON });
+  break;
+
+case 'perfil':
+  window.__MDF_FORMS_HIDE_BAR__ = false;                // <— añade
+  document.dispatchEvent(new CustomEvent('melodify:bar:shouldShow'));
+  renderMenuPerfil();
+  break;
+
+
+    // Vistas de servidor: abrir en otra pestaña para no interrumpir audio
+    case 'gestion': {
+  // Parar audio y pedir ocultar barra en vistas de servidor
+  try { window.MDFCore?.getAudio()?.pause(); } catch {}
+  window.__MDF_FORMS_HIDE_BAR__ = true;
+  // Redirección en la MISMA pestaña (evitas doble audio)
+  window.location.href = URL_GESTION + '?no_spa=1';
+  return;
+}
+case 'mi-muro':
+case 'mi-musica': {
+  try { window.MDFCore?.getAudio()?.pause(); } catch {}
+  window.__MDF_FORMS_HIDE_BAR__ = true;
+  window.location.href = URL_MI_MURO + '?no_spa=1';
+  return;
+}
+case 'musica': {
+  try { window.MDFCore?.getAudio()?.pause(); } catch {}
+  window.__MDF_FORMS_HIDE_BAR__ = true;
+  window.location.href = URL_MUSICA + '?no_spa=1';
+  return;
+}
+
+    default:
+      renderMenuHome();
+      break;
+  }
+}
 
     // Marcado visual de acciones peligrosas (eliminar, borrar, etc.).
     function decorateDangerButtons(root = document) {
@@ -352,6 +371,15 @@ if (__SPA_DISABLED__) {
       if (!USERNAME) USERNAME = 'Usuario';
       aplicarAvatarHeader();
       aplicarPermisosMenu();
+// Si ya había audio, pide mostrar la barra
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    if (window.MDFCore?.getAudio?.()?.src) {
+      window.__MDF_FORMS_HIDE_BAR__ = false;
+      document.dispatchEvent(new CustomEvent('melodify:bar:shouldShow'));
+    }
+  } catch {}
+});
 
       // Conexión de eventos del reproductor.
       RP.wireReproductorPlaylistEvents({ mainContent, ROLE, URL_MI_MUSICA_JSON });

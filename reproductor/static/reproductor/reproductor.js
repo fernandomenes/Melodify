@@ -52,6 +52,23 @@ function isTop10Active(){
 }
 function _currentSong(){ return _state.queue[_state.index] || null; }
 
+function isArtistUser(){
+  const main = document.getElementById('main-content');
+
+  // 1) Si el rol dice Artista, ya está
+  const role = (main?.dataset.role || '').trim().toLowerCase();
+  if (role.includes('artista')) return true;
+
+  // 2) Las señales “antiguas” que ya tenías
+  const v =
+    (main?.dataset.isArtist ??                       // data-is-artist="1|0"
+     window.__IS_ARTIST__ ??                         // bandera global
+     document.querySelector('meta[name="is-artist"]')?.content // <meta ...>
+    ) ?? '';
+  const s = String(v).trim().toLowerCase();
+  return s === '1' || s === 'true';
+}
+
 // ---------------------------- Fecha / Día ----------------------------------
 function _pad2(n){ return String(n).padStart(2,'0'); }
 function todayStamp(){
@@ -279,16 +296,41 @@ function ensureDailyRoll(playlists){
 
 
 // ------- Construye modelo final: Todas + Mi música + reales ----------------
-function buildPlaylistsModel({allPlaylists, mySongs}){
-  const flattenAll = allPlaylists.flatMap(pl => Array.isArray(pl.songs) ? pl.songs : []);
-  const allUnique  = _dedup(flattenAll, s => _songKey(s) || _abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
-  const allPlaylist  = { id:'pl:all',  name:'Todas las canciones', songs: allUnique };
+// ------- Construye modelo final: Todas + Mi música + reales ----------------
+function buildPlaylistsModel({ allPlaylists, mySongs, isArtist = false }) {
+  const abs = (u) => { try { return u ? new URL(u, location.origin).href : ""; } catch { return u || ""; } };
+  const dedup = (arr, keyFn) => {
+    const seen = new Set(); const out = [];
+    for (const it of (Array.isArray(arr) ? arr : [])) {
+      const k = keyFn(it);
+      if (!k || seen.has(k)) continue;
+      seen.add(k); out.push(it);
+    }
+    return out;
+  };
 
-  const mineUnique   = _dedup(mySongs||[], s => _songKey(s) || _abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
-  const minePlaylist = { id:'pl:mine', name:'Mi música', songs: mineUnique };
+  const flattenAll = (Array.isArray(allPlaylists) ? allPlaylists : [])
+    .flatMap(pl => Array.isArray(pl.songs) ? pl.songs : []);
 
-  return [allPlaylist, minePlaylist, ...allPlaylists];
+  const allUnique = dedup(
+    flattenAll,
+    s => _songKey(s) || abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`
+  );
+  const allPlaylist = { id: 'pl:all', name: 'Todas las canciones', songs: allUnique };
+
+  const mineUnique = dedup(
+    mySongs || [],
+    s => _songKey(s) || abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`
+  );
+
+  // Orden: Todas → (Mi música si aplica) → Playlists reales
+  const out = [allPlaylist, ...(Array.isArray(allPlaylists) ? allPlaylists : [])];
+if (mineUnique.length) {
+  out.splice(1, 0, { id: 'pl:mine', name: 'Mi música', songs: mineUnique });
 }
+return out;
+}
+
 
 // -------------------- Gestión de selección / cola --------------------------
 function clearRowHighlight(){
@@ -300,32 +342,60 @@ function highlightCurrent(){
   if(n) n.classList.add("is-playing");
 }
 
-function collectQueueFromDOM(){
-  const items=qa(".song-item,[data-audio-url]");
-  const curHref=absHref(_state.audio?.src||"");
-  const nextQueue=[]; let k=0;
+function collectQueueFromDOM({ retainIfEmpty = true } = {}) {
+  const items = qa(".song-item,[data-audio-url]");
+  const curHref = absHref(_state.audio?.src || "");
+  const nextQueue = [];
+  let k = 0;
 
-  items.forEach((el)=>{
+  items.forEach((el) => {
     const id = el.dataset.id || el.getAttribute("data-id") || null;
-    const title=el.dataset.title||el.querySelector(".song-title")?.textContent||"—";
-    const author=el.dataset.author||el.querySelector(".song-author")?.textContent||"—";
-    const coverUrl=ensureAbs(el.dataset.coverUrl||el.getAttribute("data-cover-url")||el.querySelector(".song-cover")?.getAttribute("src")||"");
-    const audioUrl=ensureAbs(el.dataset.audioUrl||el.getAttribute("data-audio-url")||"");
+    const title = el.dataset.title || el.querySelector(".song-title")?.textContent || "—";
+    const author = el.dataset.author || el.querySelector(".song-author")?.textContent || "—";
+    const coverUrl = ensureAbs(
+      el.dataset.coverUrl ||
+      el.getAttribute("data-cover-url") ||
+      el.querySelector(".song-cover")?.getAttribute("src") || ""
+    );
+    const audioUrl = ensureAbs(el.dataset.audioUrl || el.getAttribute("data-audio-url") || "");
     const genre = el.dataset.genre || el.getAttribute("data-genre") || "";
-    if(audioUrl){
+    if (audioUrl) {
       nextQueue.push({ id, title, author, coverUrl, audioUrl, genre });
-      el.dataset._idx=String(k++);
-      if(!el.classList.contains("song-item")) el.classList.add("song-item");
-      const img=el.querySelector(".song-cover"); if(img&&coverUrl) img.src=coverUrl;
-    }else{
+      el.dataset._idx = String(k++);
+      if (!el.classList.contains("song-item")) el.classList.add("song-item");
+      const img = el.querySelector(".song-cover"); if (img && coverUrl) img.src = coverUrl;
+    } else {
       el.removeAttribute("data-_idx");
     }
   });
 
-  _state.queue=nextQueue;
-  const want = curHref ? _state.queue.findIndex(s=>absHref(ensureAbs(s.audioUrl))===curHref) : -1;
-  _state.index=want;
+  // 👉 Si no hay nada en el DOM y queremos retener, no toques la cola actual
+  if (nextQueue.length === 0 && retainIfEmpty) {
+    return;
+  }
+
+  // A partir de aquí, SÍ reemplazamos la cola
+  const prevQueue = _state.queue;
+  const prevIndex = _state.index;
+
+  _state.queue = nextQueue;
+
+  // Intenta ubicar el índice por URL actual; si no, conserva el índice anterior si tiene sentido
+  if (nextQueue.length > 0) {
+    const want = curHref ? _state.queue.findIndex(s => absHref(ensureAbs(s.audioUrl)) === curHref) : -1;
+    if (want !== -1) {
+      _state.index = want;
+    } else if (prevQueue === nextQueue && prevIndex >= 0 && prevIndex < nextQueue.length) {
+      _state.index = prevIndex;
+    } else if (_state.index < 0) {
+      _state.index = 0; // fallback suave si nunca hubo índice
+    }
+  }
+
+  // Refresca highlight sólo si hay algo que resaltar
+  highlightCurrent();
 }
+
 
 function bindClicks(enable){
   _state.boundItems.forEach(el=>el.onclick=null);
@@ -355,11 +425,13 @@ function observeListChanges(){
       if(m.type==="childList" || (m.type==="attributes" && m.target instanceof HTMLElement && m.target.hasAttribute("data-audio-url"))){ touched=true; break; }
     }
     if(touched){
-      const hadSrc = !!_state.audio?.src;
-      collectQueueFromDOM();
-      bindClicks(isPlayableView());
-      if(hadSrc) fire("melodify:bar:shouldShow", {});
-    }
+       if (!isPlayableView()) return;
+
+    const hadSrc = !!_state.audio?.src;
+    collectQueueFromDOM();
+    bindClicks(isPlayableView());
+    if (hadSrc) fire("melodify:bar:shouldShow", {});
+  }
   });
   _state.moList.observe(host,{childList:true,subtree:true,attributes:true,attributeFilter:["data-audio-url","data-id","data-title","data-author","data-genre","data-cover-url"]});
 }
@@ -455,11 +527,18 @@ function hookViewGuard(){
   if(_state.guardHooked) return; _state.guardHooked=true;
   const main=document.getElementById("main-content"); if(!main) return;
 
-  const apply=()=>{
-    const playable=isPlayableView();
-    if(playable){ collectQueueFromDOM(); bindClicks(true); observeListChanges(); }
-    else{ bindClicks(false); observeListChanges(); }
-  };
+  const apply = ()=>{
+  const playable = isPlayableView();
+  if (playable) {
+collectQueueFromDOM({ retainIfEmpty: true }); // ⬅️ retiene cola si no hay items
+    bindClicks(true);
+    observeListChanges();
+  } else {
+    bindClicks(false);
+    observeListChanges();
+  }
+};
+
 
   apply();
   if(_state.moView) _state.moView.disconnect();
@@ -636,25 +715,47 @@ function _refreshTop10View(){
 }
 
 // -------------------- Integración con la SPA -------------------------------
-export async function renderMenuReproductor({mainContent, contentDiv, URL_MI_MUSICA_JSON}){
-  const u=new URL(location.href); u.searchParams.set('view','reproductor'); history.replaceState(null,'',u.toString());
-  mainContent.dataset.view='reproductor';
+export async function renderMenuReproductor({ mainContent, contentDiv, URL_MI_MUSICA_JSON }) {
+  // fija la vista y la URL
+  const u = new URL(location.href);
+  u.searchParams.set('view','reproductor');
+  history.replaceState(null,'',u.toString());
+  mainContent.dataset.view = 'reproductor';
 
-  const [allPlaylists, mySongs] = await Promise.all([
+  // 1) detectar artista
+  const IS_ARTIST = isArtistUser();
+
+  // 2) cargar playlists reales + mi música (si artista)
+  let [allPlaylists, mySongs] = await Promise.all([
     fetchAllPlaylistsWithSongs(),
-    fetchMyMusic(URL_MI_MUSICA_JSON)
+    IS_ARTIST ? fetchMyMusic(URL_MI_MUSICA_JSON) : Promise.resolve([])
   ]);
 
-  window._playlists = buildPlaylistsModel({ allPlaylists, mySongs });
+  // 3) Fallback: si "mi música" vino vacío, intenta leer #playlists-data-json
+  if (!mySongs || mySongs.length === 0) {
+    try {
+      const jsonEl   = document.getElementById('playlists-data-json');
+      const injected = JSON.parse(jsonEl?.textContent || '[]');
+      const injectedMine = Array.isArray(injected)
+        ? injected.find(p => String(p.name || '').toLowerCase().includes('mi música'))
+        : null;
+      if (injectedMine && Array.isArray(injectedMine.songs)) {
+        mySongs = injectedMine.songs.map(normalizeSong).filter(Boolean);
+      }
+    } catch {}
+  }
 
-  try{ ensureDailyRoll(window._playlists); }catch{}
+  // 4) construir el modelo y pintar
+  window._playlists = buildPlaylistsModel({ allPlaylists, mySongs, isArtist: IS_ARTIST });
+
+  try { ensureDailyRoll(window._playlists); } catch {}
 
   const P = Array.isArray(window._playlists) ? window._playlists : [];
-  const rightHTML = buildRightSidebarHTML({playlists:P, genres:DEFAULT_GENRES||[]}) || '';
+  const rightHTML = buildRightSidebarHTML({ playlists: P, genres: DEFAULT_GENRES || [] }) || '';
   contentDiv.innerHTML = `<div class="rep-grid"><div class="rep-left"></div><div class="rep-right">${rightHTML}</div></div>`;
 
-  const all = P.find(p => p.id==='pl:all') || P[0] || { id:'pl:tmp', name:'(sin playlists)', songs:[] };
-  renderLeftSongs(Array.isArray(all.songs)?all.songs:[], all.name || 'Playlist', {showCounts:false, countsStamp:null});
+  const all = P.find(p => p.id === 'pl:all') || P[0] || { id: 'pl:tmp', name: '(sin playlists)', songs: [] };
+  renderLeftSongs(Array.isArray(all.songs) ? all.songs : [], all.name || 'Playlist', { showCounts: false, countsStamp: null });
 
   inicializarReproductor();
   attachSidebarHandlers();

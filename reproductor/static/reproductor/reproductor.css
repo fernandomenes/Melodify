@@ -201,3 +201,30 @@
   display:flex; align-items:center; justify-content:center; text-align:center;
 }
 .rep-left .songs-wrap{ width:100%; max-width:none; margin:8px 0 120px; }
+
+/* Ocultar barra con animación */
+.mdf-bar--hidden {
+  transform: translateY(110%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Botón flotante para mostrar/ocultar barra */
+#mdf-bar-toggle {
+  position: fixed;
+  right: 16px;
+  bottom: 88px;   /* justo encima de la barra */
+  z-index: 10001;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--line, #2a2a2a);
+  background: #181818;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 6px 24px rgba(0,0,0,.35);
+}
+#mdf-bar-toggle[aria-pressed="true"] { background: #101010; }
