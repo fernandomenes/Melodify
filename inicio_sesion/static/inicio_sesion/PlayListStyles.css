@@ -13,14 +13,13 @@
 
 
 .btnAddPlaylist {
-    width: 56px;
-    height: 56px;
+    width: 35px;
+    height: 35px;
     border-radius: 50%;
     background: #ff0066; /* verde Spotify-like */
     color: white;
     border: none;
-    font-size: 25px;
-    font-weight: bold;
+    font-size: 13px;
     cursor: pointer;
     display: flex;
     align-items: center;

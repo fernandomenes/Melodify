@@ -296,7 +296,7 @@ if (__SPA_DISABLED__) {
         case 'playlist':
           await RP.stopReproductorIfLoaded();
           if (typeof window.showPlaylists === 'function') {
-            window.initPlayList();
+            window.initPlayList(USERNAME);
           } else {
             renderMenuPlaylists();
           }

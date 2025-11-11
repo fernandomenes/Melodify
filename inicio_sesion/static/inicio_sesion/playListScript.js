@@ -1,10 +1,13 @@
 
 
-let currentViewPlaylist  = "allPlayList";
-let content = null;
+let currentViewPlaylist  = "allPlayList";//vistas dentro de playlist solo hay 2 (allPlayList,"allSongsPlayList")
+let content = null;//se usa para insertar el contenido dentro de div content en home.html
+let USERNAME = null
+let titleAllSongsPlayList = ""
 
 
-function initPlayList(){
+function initPlayList(username){
+    USERNAME = username
     content = document.getElementById('content');
     showPlaylists();
 }
@@ -16,11 +19,38 @@ function clickBackBtnPlaylist(){
         showPlaylists();
 
     }
-
 }
 
 
-function crearPlaylist(){
+function crearPlaylist(namePlaylist){
+
+    fetch('/playlist/create/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            user: USERNAME,
+            name: namePlaylist
+        })
+    })
+        .then(response => {
+            if (!response.ok) {
+                // Intentar leer el cuerpo del error
+                return response.json().then(err => {
+                    throw new Error(err.error || `HTTP ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Playlist creada:', data);
+            showPlaylists(); // recargar lista
+        })
+        .catch(error => {
+            console.error('Error al crear playlist:', error);
+            alert('No se pudo crear la playlist:\n' + error.message);
+        });
 
 }
 
@@ -29,13 +59,69 @@ function likePlaylist(id) {
     console.log('Like en playlist:', id);
 }
 
-function editarPlaylist(id) {
+function editarPlaylist(id,newname) {
     console.log('Editar playlist:', id);
+    fetch(`/playlist/${id}/update/`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            name: newname
+        })
+    })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.error || `Error ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Éxito:', data.message);
+            // Opcional: recargar la lista o actualizar en el DOM
+            showPlaylists(); // tu función existente
+        })
+        .catch(error => {
+            console.error('Error al actualizar:', error);
+            alert('Error: ' + error.message);
+        });
 }
 
 
-function eliminarPlaylist(id) {
-    console.log('Eliminar playlist:', id);
+function eliminarPlaylist(playlistId) {
+
+    if (!confirm('¿Seguro que deseas eliminar esta playlist?')) {
+        return;
+    }
+
+    fetch(`/playlist/${playlistId}/delete/`, {
+        method: 'DELETE',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            // No necesitas Content-Type para DELETE sin body
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.error || `Error ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Éxito:', data.message);
+            // Opcional: recargar la lista de playlists
+            showPlaylists(); // tu función existente
+        })
+        .catch(error => {
+            console.error('Error al eliminar:', error);
+            alert('Error: ' + error.message);
+        });
+
 }
 
 // Función principal que muestra las playlists
@@ -50,8 +136,6 @@ function showPlaylists() {
             }
             content.innerHTML = '';
 
-
-
             // Crear contenedor flexible
             const headerContainer = document.createElement('div');
             headerContainer.style.display = 'flex';
@@ -63,7 +147,7 @@ function showPlaylists() {
             // Crear el título
             const title = document.createElement('h2');
             title.textContent = 'Play List';
-            title.style.fontSize = '40px';
+            title.style.fontSize = '25px';
             title.style.margin = '0'; // resetear márgenes por defecto de <h2>
 
             // Crear el botón
@@ -72,7 +156,7 @@ function showPlaylists() {
             btn.textContent = '+';
             btn.addEventListener('click', function () {
                 const rect = btn.getBoundingClientRect();
-                showAlertNewPlaylist(rect);
+                showAlertNewPlaylist(btn,rect,"new",null);
             });
 
             // Añadir título y botón al contenedor
@@ -86,6 +170,7 @@ function showPlaylists() {
                 li.style.alignItems = 'flex-start';
                 li.style.marginBottom = '20px';
                 li.style.position = 'relative';
+                li.style.flexDirection = 'column';
 
                 // Nombre de la playlist (encima de todo)
                 const nameDiv = document.createElement('div');
@@ -105,7 +190,8 @@ function showPlaylists() {
                 img.height = 222;
                 img.alt = 'portada';
                 img.style.cursor = 'pointer';
-                img.addEventListener('click', () => verSongs(p.id,p.name));
+                titleAllSongsPlayList=p.name
+                img.addEventListener('click', () => verSongs(p.id));
 
                 mediaContainer.appendChild(img);
 
@@ -125,7 +211,6 @@ function showPlaylists() {
                 const editBtn = document.createElement('button');
                 editBtn.textContent = 'Editar';
                 editBtn.className = 'btnRoundPlaylist';
-                editBtn.addEventListener('click', () => editarPlaylist(p.id));
 
                 const deleteBtn = document.createElement('button');
                 deleteBtn.textContent = 'Eliminar';
@@ -139,13 +224,18 @@ function showPlaylists() {
                 mediaContainer.appendChild(buttonsDiv);
                 li.appendChild(mediaContainer);
                 content.appendChild(li);
+
+                const rect = editBtn.getBoundingClientRect();
+                editBtn.addEventListener('click', () => showAlertNewPlaylist(editBtn,rect,"update",p.id)
+
+                );
             });
         })
         .catch(err => console.error('Error al cargar playlists:', err));
 }
 
 
-function showAlertNewPlaylist(rectPosition){
+function showAlertNewPlaylist(btn,rectPosition,option,idPlaylist){
     const formContainer = document.createElement('div');
     formContainer.className = 'playlist-form';
     formContainer.style.left = rectPosition.right + window.scrollX + 'px';
@@ -171,7 +261,8 @@ function showAlertNewPlaylist(rectPosition){
     crearBtn.addEventListener('click', () => {
         const name = input.value.trim();
         if (name) {
-            crearPlaylist(name);
+            if(option==="new")crearPlaylist(name);
+            else if(option==="update")editarPlaylist(idPlaylist,name);
             document.body.removeChild(formContainer);
         } else {
             input.focus();
@@ -208,10 +299,12 @@ function showAlertNewPlaylist(rectPosition){
 }
 
 
-function verSongs(playlistId,namePlaylist) {
+function verSongs(playlistId) {
   currentViewPlaylist = "allSongsPlayList";
 
   console.log("[Playlist] fetch ->", `/playlist/${playlistId}/songs/`);
+
+  let totalSongs=0;
 
   fetch(`/playlist/${playlistId}/songs/`)
     .then(response => {
@@ -219,7 +312,8 @@ function verSongs(playlistId,namePlaylist) {
       return response.json();
     })
     .then(data => {
-      console.log("[Playlist] payload:", data);
+
+      totalSongs = data.songs.length;
 
       if (!content) {
         console.error("No existe #content");
@@ -227,8 +321,46 @@ function verSongs(playlistId,namePlaylist) {
       }
 
       const songs = Array.isArray(data?.songs) ? data.songs : [];
+
+
+        content.innerHTML = '';
+        // Crear contenedor flexible
+        const headerContainer = document.createElement('div');
+        headerContainer.style.display = 'flex';
+        headerContainer.style.justifyContent = 'center'; // centrado horizontal
+        headerContainer.style.alignItems = 'center';     // centrado vertical
+        headerContainer.style.gap = '20px';              // espacio entre título y botón
+        headerContainer.style.margin = '20px 0 50px 0';  // margen superior e inferior
+        // Crear el título
+        const title = document.createElement('h2');
+        title.textContent = titleAllSongsPlayList;
+        title.style.fontSize = '25px';
+        title.style.margin = '0'; // resetear márgenes por defecto de <h2>
+        // Crear el botón
+        const btn = document.createElement('button');
+        btn.className = 'btnAddPlaylist';
+        btn.textContent = '♫+';
+        btn.addEventListener('click', function () {
+            showAlertSongSelector(btn,playlistId,totalSongs);
+        });
+
+        // Añadir título y botón al contenedor
+        headerContainer.appendChild(title);
+        headerContainer.appendChild(btn);
+        content.appendChild(headerContainer);
+
+
+
       if (!songs.length) {
-        content.innerHTML = '<p>No hay canciones en esta playlist.</p>';
+
+        let musHTML = '<p>No hay canciones en esta playlist.</p>';
+        const tempContainer = document.createElement('div');
+        tempContainer.innerHTML = musHTML;
+        const ulElement = tempContainer.firstElementChild;
+        content.appendChild(ulElement);
+
+
+
         const main = document.getElementById('main-content');
         if (main) main.dataset.view = 'playlist';
         try { window.MDFCore?.rebindReproductor?.(); } catch {}
@@ -274,45 +406,11 @@ function verSongs(playlistId,namePlaylist) {
               <div class="song-author"><small style="color:#b3b3b3">${author}</small></div>
               <br>
               <button class="btnRoundPlaylist" onclick="likeSong(${song.id})">like</button>
-              <button class="btnRoundPlaylist" onclick="deleteFromPlaylistSong(${song.id})">eliminar</button>
+              <button class="btnRoundPlaylist" onclick="deleteFromPlaylistSong(${song.id},${playlistId})">eliminar</button>
             </div>
-            
-            
             
           </li>`;
       }).filter(Boolean).join("");
-
-
-
-
-
-        content.innerHTML = '';
-        // Crear contenedor flexible
-        const headerContainer = document.createElement('div');
-        headerContainer.style.display = 'flex';
-        headerContainer.style.justifyContent = 'center'; // centrado horizontal
-        headerContainer.style.alignItems = 'center';     // centrado vertical
-        headerContainer.style.gap = '20px';              // espacio entre título y botón
-        headerContainer.style.margin = '20px 0 50px 0';  // margen superior e inferior
-        // Crear el título
-        const title = document.createElement('h2');
-        title.textContent = namePlaylist;
-        title.style.fontSize = '40px';
-        title.style.margin = '0'; // resetear márgenes por defecto de <h2>
-        // Crear el botón
-        const btn = document.createElement('button');
-        btn.className = 'btnAddPlaylist';
-        btn.textContent = '♫+';
-        btn.addEventListener('click', function () {
-            const rect = btn.getBoundingClientRect();
-            addSongToPlaylist(2)
-        });
-
-
-        // Añadir título y botón al contenedor
-        headerContainer.appendChild(title);
-        headerContainer.appendChild(btn);
-        content.appendChild(headerContainer);
 
 
         let musHTML = `<ul style="list-style:none;padding:0;margin:0">${rowsHTML}</ul>`;
@@ -348,11 +446,136 @@ function verSongs(playlistId,namePlaylist) {
 
 
 
+function showAlertSongSelector(btn,idPlaylist,totalSongs){
+
+    console.log('idSond to add playlist', idPlaylist);
+
+    // Evitar múltiples popups
+    if (document.getElementById('song-selector-popup')) {
+        return;
+    }
+
+    const rect = btn.getBoundingClientRect();
+
+    // Crear overlay oscuro (opcional, pero mejora UX)
+    const overlay = document.createElement('div');
+    overlay.id = 'song-selector-overlay';
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.backgroundColor = 'rgba(0,0,0,0.4)';
+    overlay.style.zIndex = '998';
+
+    // Crear popup
+    const popup = document.createElement('div');
+    popup.id = 'song-selector-popup';
+    popup.style.position = 'absolute';
+    popup.style.left = rect.right + window.scrollX + 'px';
+    popup.style.top = rect.top + window.scrollY + 'px';
+    popup.style.transform = 'translateY(-50%)';
+    popup.style.backgroundColor = '#1a1a1a';
+    popup.style.border = '1px solid #333';
+    popup.style.borderRadius = '8px';
+    popup.style.maxHeight = '900px';
+    popup.style.overflowY = 'auto';
+    popup.style.zIndex = '999';
+    popup.style.minWidth = '280px';
+    popup.style.boxShadow = '0 4px 16px rgba(0,0,0,0.5)';
+    popup.style.fontFamily = 'sans-serif';
+
+    // Mostrar mensaje de carga
+    popup.innerHTML = '<div style="padding:16px; color:#888;">Cargando canciones...</div>';
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(popup);
+
+    // Cargar canciones
+    fetch('/playlist/allsongs')
+        .then(response => response.json())
+        .then(songs => {
+            if (songs.length === 0) {
+                popup.innerHTML = '<div style="padding:16px; color:#888;">No hay canciones disponibles.</div>';
+                return;
+            }
+
+            let html = '';
+            songs.forEach(song => {
+                html += `
+                    <div class="song-item-selector" data-id="${song.id}" 
+                         style="padding:10px 16px; cursor:pointer; border-bottom:1px solid #2a2a2a;">
+                        <strong>${song.title}</strong><br>
+                        <small style="color:#aaa;">${song.artist_display_name}</small>
+                    </div>
+                `;
+            });
+            popup.innerHTML = html;
+
+            // Añadir eventos a cada canción
+            popup.querySelectorAll('.song-item-selector').forEach(item => {
+                item.addEventListener('click', function () {
+                    const idSong = this.dataset.id;
+                    addSongToPlaylist(idSong,idPlaylist,totalSongs);
+                    // Cerrar popup
+                    document.body.removeChild(popup);
+                    document.body.removeChild(overlay);
+                });
+            });
+        })
+        .catch(error => {
+            console.error('Error al cargar canciones:', error);
+            popup.innerHTML = '<div style="padding:16px; color:red;">Error al cargar canciones.</div>';
+        });
+
+    // Cerrar al hacer clic fuera
+    const closePopup = (e) => {
+        if (!popup.contains(e.target) && e.target !== btn) {
+            document.body.removeChild(popup);
+            document.body.removeChild(overlay);
+            document.removeEventListener('click', closePopup);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closePopup), 0);
+
+}
 
 
-function addSongToPlaylist(idSong){
 
-    console.log('idSond to add playlist', idSong);
+function addSongToPlaylist(idSong,idPlaylist,totalSong) {
+    console.log('Agregando canción con ID:'+idSong+ '    totalSongs:'+totalSong);
+
+    const position = totalSong + 1;
+
+    fetch('/playlist/addsong/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            song_id: idSong,
+            playlist_id: idPlaylist,
+            position: position
+        })
+    })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.error || `Error ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Canción agregada en posición:', data.position);
+            // Opcional: recargar la playlist actual
+            verSongs(idPlaylist); // tu función existente
+        })
+        .catch(error => {
+            console.error('Error al agregar canción:', error);
+            alert('No se pudo agregar la canción:\n' + error.message);
+        });
 
 }
 
@@ -363,8 +586,40 @@ function likeSong(idSong){
 }
 
 
-function deleteFromPlaylistSong(idSong){
 
+function deleteFromPlaylistSong(idSong,playlistId){
     console.log('delete', idSong);
+    if (!confirm('¿Quitar esta canción de la playlist?')) {
+        return;
+    }
+
+    fetch('/playlist/removeSong/', {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            playlist_id: playlistId,
+            song_id: idSong
+        })
+    })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.error || `Error ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Éxito:', data.message);
+            // Recargar la playlist actual
+            verSongs(playlistId);
+        })
+        .catch(error => {
+            console.error('Error al eliminar:', error);
+            alert('Error: ' + error.message);
+        });
 
 }

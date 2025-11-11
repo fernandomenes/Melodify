@@ -221,22 +221,44 @@ def playlist_getAll(request):
     return JsonResponse(data, safe=False)
 
 
+
 @csrf_exempt
-def playlist_insert(request):
-    """
-    Inserta una nueva playlist a partir de un cuerpo JSON en una solicitud POST.
-    """
-    if request.method == 'POST':
+@require_http_methods(["POST"])
+def create_playlist(request):
+    try:
         data = json.loads(request.body)
-        PlayList.objects.create(
-            idUser=data['idUser'],
-            name=data['name'],
-            portada=data['portada'],
-            isprivate=data.get('isprivate', False),
-            created_at=timezone.now()
+        username = data.get('user')
+        playlist_name = data.get('name')
+
+        if not username or not playlist_name:
+            return JsonResponse({'error': 'Faltan campos: user y name'}, status=400)
+
+        # Buscar usuario en la tabla Users
+        try:
+            user_obj = Users.objects.get(user=username)
+        except Users.DoesNotExist:
+            return JsonResponse({'error': 'Usuario no encontrado'}, status=404)
+
+        # Crear playlist
+        new_playlist = PlayList(
+            idUser=user_obj.id,          # ← usamos el id del modelo Users
+            name=playlist_name,
+            portada="",
+            isprivate=False
         )
-        return JsonResponse({'status': 'creada'})
-    return JsonResponse({'error': 'usa POST'}, status=400)
+        new_playlist.save()
+
+        return JsonResponse({
+            'message': 'Playlist creada exitosamente',
+            'playlist_id': new_playlist.id
+        }, status=201)
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 
 
 def get_songs_by_playlist(request, playlist_id):
@@ -311,3 +333,134 @@ def get_songs_by_playlist(request, playlist_id):
     except Exception as e:
         logger.error(f"Error en get_songs_by_playlist: {str(e)}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def delete_playlist(request, playlist_id):
+    try:
+        playlist = PlayList.objects.get(id=playlist_id)
+        playlist.delete()
+        return JsonResponse({'message': 'Playlist eliminada correctamente'}, status=200)
+    except PlayList.DoesNotExist:
+        return JsonResponse({'error': 'Playlist no encontrada'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+
+@csrf_exempt
+@require_http_methods(["PUT"])
+def update_playlist(request, playlist_id):
+    try:
+        # Obtener la playlist
+        playlist = PlayList.objects.get(id=playlist_id)
+
+        # Parsear el cuerpo de la solicitud
+        data = json.loads(request.body)
+        new_name = data.get('name')
+
+        if not new_name or not new_name.strip():
+            return JsonResponse({'error': 'El nombre no puede estar vacío'}, status=400)
+
+        # Actualizar nombre
+        playlist.name = new_name.strip()
+        playlist.save()
+
+        return JsonResponse({
+            'message': 'Playlist actualizada correctamente',
+            'name': playlist.name
+        }, status=200)
+
+    except PlayList.DoesNotExist:
+        return JsonResponse({'error': 'Playlist no encontrada'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+
+@require_http_methods(["GET"])
+def get_all_songs(request):
+    try:
+        songs = Song.objects.filter(visibility="public").values(
+            "id", "title", "artist_display_name"
+        )
+        song_list = list(songs)  # Convertir a lista de dicts
+        return JsonResponse(song_list, safe=False)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def add_song_to_playlist(request):
+    try:
+        data = json.loads(request.body)
+        song_id = data.get('song_id')
+        playlist_id = data.get('playlist_id')
+        position = data.get('position')
+
+        if song_id is None or playlist_id is None or position is None:
+            return JsonResponse({'error': 'Faltan parámetros: song_id, playlist_id, position'}, status=400)
+
+        # Crear la relación en PlayListSong
+        new_entry = PlayListSong(
+            playlist_id=playlist_id,
+            song_id=song_id,
+            position=position
+        )
+        new_entry.save()
+
+        return JsonResponse({
+            'message': 'Canción agregada a la playlist',
+            'position': position
+        }, status=201)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def remove_song_from_playlist(request):
+    try:
+        # Parsear el cuerpo de la solicitud (JSON)
+        data = json.loads(request.body)
+        playlist_id = data.get('playlist_id')
+        song_id = data.get('song_id')
+
+        if playlist_id is None or song_id is None:
+            return JsonResponse(
+                {'error': 'Se requieren playlist_id y song_id'},
+                status=400
+            )
+
+        # Buscar y eliminar el registro
+        deleted_count, _ = PlayListSong.objects.filter(
+            playlist_id=playlist_id,
+            song_id=song_id
+        ).delete()
+
+        if deleted_count == 0:
+            return JsonResponse(
+                {'error': 'Registro no encontrado'},
+                status=404
+            )
+
+        return JsonResponse(
+            {'message': 'Canción eliminada de la playlist'},
+            status=200
+        )
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
