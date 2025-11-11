@@ -2,6 +2,7 @@ import json
 import logging
 
 from django.contrib import messages
+from django.db.models import Q 
 from django.contrib.auth import logout as django_logout
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
@@ -464,3 +465,124 @@ def remove_song_from_playlist(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
+def buscar(request):
+    """
+    Vista de búsqueda que consulta canciones, artistas y playlists
+    """
+    if "user" not in request.session:
+        messages.error(request, "Debes iniciar sesión para acceder a esta página.")
+        return redirect('login')
+    
+    query = request.GET.get('q', '').strip()
+    resultados = {
+        'canciones': [],
+        'artistas': [],
+        'playlists': [],
+    }
+    
+    if query:
+        # Buscar canciones (públicas) por título o artista
+        resultados['canciones'] = Song.objects.filter(
+            Q(title__icontains=query) | Q(artist_display_name__icontains=query),
+            visibility='public'
+        ).select_related('owner').only(
+            "id", "title", "artist_display_name", "audio_file", "cover_image", "genre"
+        )[:20]
+        
+        # Buscar artistas (usuarios con tipo 'Artista')
+        resultados['artistas'] = Users.objects.filter(
+            Q(user__icontains=query) & Q(type__iexact='artista')
+        ).only(
+            "id", "user", "avatar", "created_at"
+        )[:20]
+        
+        # Buscar playlists por nombre (públicas)
+        resultados['playlists'] = PlayList.objects.filter(
+            Q(name__icontains=query) & Q(isprivate=False)
+        ).select_related('idUser').only(
+            'id', 'idUser', 'name', 'portada', 'isprivate', 'created_at'
+        )[:20]
+    
+    # Obtener datos de sesión para el template
+    session_user = request.session.get("user", "")
+    session_role = request.session.get("role", "")
+    
+    avatar_url = ""
+    try:
+        u = Users.objects.get(user=session_user)
+        if getattr(u, "avatar", None):
+            try:
+                avatar_url = u.avatar.url
+            except Exception:
+                avatar_url = str(u.avatar)
+    except Users.DoesNotExist:
+        pass
+    
+    ctx = {
+        "query": query,
+        "resultados": resultados,
+        "session_user": session_user,
+        "session_role": session_role,
+        "session_avatar_url": avatar_url,
+        "has_results": any(len(v) > 0 for v in resultados.values()),
+    }
+    
+    return render(request, "inicio_sesion/buscar.html", ctx)
+
+def api_buscar(request):
+    """API para búsqueda en tiempo real"""
+    query = request.GET.get('q', '').strip()
+    
+    if len(query) < 2:
+        return JsonResponse({'canciones': [], 'artistas': [], 'playlists': []})
+    
+    results = {
+        'canciones': [],
+        'artistas': [], 
+        'playlists': [],
+    }
+    
+    try:
+        # Buscar canciones
+        canciones = Song.objects.filter(
+            Q(title__icontains=query) | Q(artist_display_name__icontains=query),
+            visibility='public'
+        )[:5]
+        
+        for cancion in canciones:
+            results['canciones'].append({
+                'id': cancion.id,
+                'title': cancion.title,
+                'artist': cancion.artist_display_name,
+                'audioUrl': _safe_file_url(cancion.audio_file),
+                'coverUrl': _safe_file_url(cancion.cover_image),
+            })
+        
+        # Buscar artistas
+        artistas = Users.objects.filter(
+            Q(user__icontains=query) & Q(type__iexact='artista')
+        )[:5]
+        
+        for artista in artistas:
+            results['artistas'].append({
+                'id': artista.id,
+                'username': artista.user,
+                'avatarUrl': _safe_file_url(artista.avatar),
+            })
+        
+        # Buscar playlists
+        playlists = PlayList.objects.filter(
+            Q(name__icontains=query) & Q(isprivate=False)
+        )[:5]
+        
+        for playlist in playlists:
+            results['playlists'].append({
+                'id': playlist.id,
+                'name': playlist.name,
+                'coverUrl': playlist.portada,
+            })
+            
+    except Exception as e:
+        logger.error(f"Error en api_buscar: {str(e)}")
+    
+    return JsonResponse(results)

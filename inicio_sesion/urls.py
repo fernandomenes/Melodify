@@ -9,9 +9,13 @@ urlpatterns = [
     path("registro/", v.pantallaRegistro, name="registro"),
     path("home/", v.pantallaHome, name="home"),
     path("logout/", v.pantallaLogout, name="logout"),
+    path('buscar/', v.buscar, name='buscar'),
+    path('api/buscar/', v.api_buscar, name='api-buscar'),
+
     # Secciones
     path("gestion/", include("gestion.urls")),
     path("", include("muro.urls")),
+
     # playlist
     path('playlist/getAllList/', v.playlist_getAll, name='getAllList'),
     path('playlist/create/', v.create_playlist, name='create-playlist'),

@@ -138,6 +138,79 @@ if (__SPA_DISABLED__) {
       }
     }
 
+    function initSearch() {
+    const searchForm = $('#search-form');
+    const searchInput = $('#search-input');
+    const searchPanel = $('#search-panel');
+
+    if (searchForm && searchInput) {
+        // Manejar envío del formulario
+        searchForm.addEventListener('submit', (e) => {
+            const query = searchInput.value.trim();
+            if (!query) {
+                e.preventDefault();
+                searchInput.focus();
+                return;
+            }
+            // Permitir que el formulario se envíe normalmente
+            // La acción ya está configurada en el HTML para ir a /buscar/
+        });
+
+        // Búsqueda en tiempo real (opcional)
+        if (searchPanel) {
+            const performSearch = debounce(async (query) => {
+                if (query.length < 2) {
+                    searchPanel.hidden = true;
+                    return;
+                }
+
+                try {
+                    // Aquí puedes implementar búsqueda en tiempo real si lo deseas
+                    // Por ahora, solo mostramos el panel de búsqueda
+                    searchPanel.hidden = false;
+                    searchPanel.innerHTML = `<div style="padding: 10px; color: #888;">
+                        Presiona Enter para buscar "${query}"
+                    </div>`;
+                } catch (error) {
+                    console.error('Error en búsqueda:', error);
+                    searchPanel.hidden = true;
+                }
+            }, 300);
+
+            searchInput.addEventListener('input', (e) => {
+                performSearch(e.target.value.trim());
+            });
+
+            // Ocultar panel al hacer clic fuera
+            document.addEventListener('click', (e) => {
+                if (!searchForm.contains(e.target)) {
+                    searchPanel.hidden = true;
+                }
+            });
+
+            // Manejar tecla Escape
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    searchPanel.hidden = true;
+                    searchInput.blur();
+                }
+            });
+        }
+    }
+}
+
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
     // Vistas SPA (render mínimo para estados base).
     function renderMenuHome() {
       mainContent.dataset.view = 'home';
@@ -352,6 +425,7 @@ if (__SPA_DISABLED__) {
       if (!USERNAME) USERNAME = 'Usuario';
       aplicarAvatarHeader();
       aplicarPermisosMenu();
+      initSearch(); 
 
       // Conexión de eventos del reproductor.
       RP.wireReproductorPlaylistEvents({ mainContent, ROLE, URL_MI_MUSICA_JSON });

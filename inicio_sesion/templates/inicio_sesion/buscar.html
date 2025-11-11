@@ -1,0 +1,381 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Buscar - Melodify</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}?v={% now 'U' %}">
+
+  <style>
+    /* Mejoras para el buscador */
+    .search {
+        position: relative;
+        flex: 1;
+        max-width: 500px;
+        margin: 0 auto; 
+    }
+
+    #search-input {
+        width: 100%;
+        padding: 10px 16px;
+        border: 1px solid #333;
+        border-radius: 20px;
+        background: #2a2a2a;
+        color: white;
+        font-size: 14px;
+        transition: all 0.2s ease;
+    }
+
+    #search-input:focus {
+        outline: none;
+        border-color: #ff0066;
+        background: #1e1e1e;
+    }
+
+    .search-panel {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 8px;
+        margin-top: 5px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        z-index: 1000;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .search {
+        max-width: 300px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .search {
+            max-width: 200px;
+        }
+    
+        #search-input {
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+    }
+
+    .search-results {
+      padding: 20px 0;
+    }
+    
+    .results-section {
+      margin-bottom: 30px;
+    }
+    
+    .results-section h3 {
+      color: #fff;
+      margin-bottom: 15px;
+      border-bottom: 1px solid #333;
+      padding-bottom: 8px;
+    }
+    
+    .result-grid {
+      display: grid;
+      gap: 15px;
+    }
+    
+    .song-result {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      padding: 12px;
+      background: #1e1e1e;
+      border-radius: 8px;
+      border: 1px solid #2b2b2b;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    
+    .song-result:hover {
+      background: #2a2a2a;
+    }
+    
+    .song-cover {
+      width: 50px;
+      height: 50px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: #2a2a2a;
+    }
+    
+    .song-info {
+      flex: 1;
+    }
+    
+    .song-title {
+      color: #fff;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    
+    .song-artist {
+      color: #b3b3b3;
+      font-size: 14px;
+    }
+    
+    .artist-result, .playlist-result {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      padding: 15px;
+      background: #1e1e1e;
+      border-radius: 8px;
+      border: 1px solid #2b2b2b;
+      margin-bottom: 10px;
+    }
+    
+    .artist-avatar, .playlist-cover {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #2a2a2a;
+    }
+    
+    .playlist-cover {
+      border-radius: 8px;
+    }
+    
+    .artist-name, .playlist-name {
+      color: #fff;
+      font-weight: 600;
+      font-size: 16px;
+    }
+    
+    .no-results {
+      text-align: center;
+      color: #b3b3b3;
+      padding: 40px 20px;
+    }
+    
+    .search-header {
+      margin-bottom: 20px;
+    }
+    
+    .search-query {
+      color: #ff0066;
+      font-weight: 600;
+    }
+  </style>
+</head>
+
+<body class="page-buscar">
+  <!-- Header -->
+  <div id="header">
+    <!-- Buscador -->
+    <div id="search" class="search">
+      <form id="search-form" role="search" aria-label="Buscar" method="get" action="{% url 'buscar' %}">
+        <input
+          id="search-input"
+          name="q"
+          type="search"
+          placeholder="Buscar canciones, artistas o playlists…"
+          autocomplete="off"
+          aria-controls="search-panel"
+          value="{{ query }}"
+          required />
+      </form>
+      <div id="search-panel" class="search-panel" hidden></div>
+    </div>
+
+    <!-- Usuario -->
+    <div class="user-info" id="user-trigger">
+      {% if session_avatar_url %}
+        <div class="user-icon">
+          <img src="{{ session_avatar_url }}" alt="{{ session_user }}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">
+        </div>
+      {% else %}
+        <div class="user-icon">{{ session_user|first|upper }}</div>
+      {% endif %}
+      <span id="username">{{ session_user }}</span>
+      <div id="user-menu">
+        <a href="#" id="menu-perfil">Perfil</a>
+        <a href="#" id="menu-logout" data-logout-url="{% url 'logout' %}">Cerrar sesión</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Menú lateral -->
+  <div id="menuLateral">
+    <div class="logo" id="toggle-menu">
+      <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
+      <span class="logo-text">Melodify</span>
+    </div>
+
+    <a class="menu-item" data-view="home" href="{% url 'home' %}">Home</a>
+    <div class="menu-item" data-view="playlist">PlayList</div>
+    <div class="menu-item" data-view="reproductor">Reproductor</div>
+    <div class="menu-item" data-view="perfil">Perfil</div>
+    
+    {% if session_role|lower == "artista" %}
+      <div class="menu-item" data-view="mi-muro">Muro del artista</div>
+    {% endif %}
+    
+    {% if session_role|lower == "administrador" %}
+      <div class="menu-item" data-view="gestion">Gestión</div>
+    {% endif %}
+  </div>
+
+  <!-- Contenido principal -->
+  <div id="main-content"
+       data-initial-view="buscar"
+       data-username="{{ session_user }}"
+       data-role="{{ session_role }}"
+       data-avatar="{{ session_avatar_url }}"
+       data-url-home="{% url 'home' %}"
+       data-url-buscar="{% url 'buscar' %}">
+
+    <button id="menu-toggle-btn">☰</button>
+    <a id="back-btn" class="back" href="{% url 'home' %}" title="Volver a inicio" aria-label="Regresar">←</a>
+
+    <div id="content">
+      <div class="search-results">
+        <div class="search-header">
+          <h2>
+            {% if query %}
+              Resultados para: <span class="search-query">"{{ query }}"</span>
+            {% else %}
+              Buscar en Melodify
+            {% endif %}
+          </h2>
+        </div>
+
+        {% if query and not has_results %}
+          <div class="no-results">
+            <p>No se encontraron resultados para "{{ query }}"</p>
+            <p>Intenta con otros términos de búsqueda.</p>
+          </div>
+        {% elif not query %}
+          <div class="no-results">
+            <p>Ingresa un término de búsqueda para encontrar música, artistas y playlists.</p>
+          </div>
+        {% else %}
+          <!-- Canciones -->
+          {% if resultados.canciones %}
+            <div class="results-section">
+              <h3>Canciones</h3>
+              <div class="result-grid">
+                {% for cancion in resultados.canciones %}
+                  <div class="song-result" 
+                       data-audio-url="{{ cancion.audio_file.url }}" 
+                       data-title="{{ cancion.title }}" 
+                       data-author="{{ cancion.artist_display_name }}"
+                       data-cover-url="{% if cancion.cover_image %}{{ cancion.cover_image.url }}{% else %}{% static 'inicio_sesion/img_song.png' %}{% endif %}"
+                       onclick="playSongFromSearch(this)">
+                    
+                    {% if cancion.cover_image %}
+                      <img class="song-cover" src="{{ cancion.cover_image.url }}" alt="{{ cancion.title }}">
+                    {% else %}
+                      <img class="song-cover" src="{% static 'inicio_sesion/img_song.png' %}" alt="{{ cancion.title }}">
+                    {% endif %}
+                    
+                    <div class="song-info">
+                      <div class="song-title">{{ cancion.title }}</div>
+                      <div class="song-artist">{{ cancion.artist_display_name }}</div>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+          {% endif %}
+
+          <!-- En la sección de Artistas -->
+        {% if resultados.artistas %}
+        <div class="results-section">
+            <h3>Artistas</h3>
+            <div class="result-grid">
+                {% for artista in resultados.artistas %}
+                <div class="artist-result" onclick="viewArtist('{{ artista.user }}')" style="cursor: pointer;">
+                    {% if artista.avatar %}
+                    <img class="artist-avatar" src="{{ artista.avatar.url }}" alt="{{ artista.user }}">
+                    {% else %}
+                    <div class="artist-avatar" style="display: flex; align-items: center; justify-content: center; background: #2a2a2a; color: #fff; font-weight: bold; font-size: 20px;">
+                        {{ artista.user|first|upper }}
+                    </div>
+                    {% endif %}
+                    <div class="artist-name">{{ artista.user }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+          <!-- Playlists -->
+          {% if resultados.playlists %}
+            <div class="results-section">
+              <h3>Playlists</h3>
+              <div class="result-grid">
+                {% for playlist in resultados.playlists %}
+                  <div class="playlist-result" onclick="viewPlaylist({{ playlist.id }})" style="cursor: pointer;">
+                    {% if playlist.portada %}
+                      <img class="playlist-cover" src="{{ playlist.portada }}" alt="{{ playlist.name }}">
+                    {% else %}
+                      <img class="playlist-cover" src="{% static 'inicio_sesion/img_playlist.png' %}" alt="{{ playlist.name }}">
+                    {% endif %}
+                    <div class="playlist-name">{{ playlist.name }}</div>
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script>
+    function playSongFromSearch(element) {
+      const audioUrl = element.dataset.audioUrl;
+      const title = element.dataset.title;
+      const author = element.dataset.author;
+      const coverUrl = element.dataset.coverUrl;
+      
+      // Usar el reproductor global si está disponible
+      if (window.MDFCore && window.MDFCore.playSong) {
+        window.MDFCore.playSong(audioUrl, title, author, coverUrl);
+      } else {
+        // Fallback: redirigir al reproductor con parámetros
+        window.location.href = `{% url 'home' %}?view=reproductor&song=${encodeURIComponent(audioUrl)}&title=${encodeURIComponent(title)}&artist=${encodeURIComponent(author)}`;
+      }
+    }
+    
+    function viewPlaylist(playlistId) {
+      // Redirigir a la vista de playlist
+      window.location.href = `{% url 'home' %}?view=playlist&playlist=${playlistId}`;
+    }
+    
+    // Inicializar búsqueda al cargar la página si hay query
+    document.addEventListener('DOMContentLoaded', function() {
+      const searchInput = document.getElementById('search-input');
+      if (searchInput && searchInput.value) {
+        searchInput.focus();
+        searchInput.select();
+      }
+    });
+  </script>
+
+  <!-- Back universal -->
+  <script>window.MELODIFY_HOME_URL = "{% url 'home' %}";</script>
+  <script src="{% static 'inicio_sesion/backToHome.js' %}?v={% now 'U' %}"></script>
+
+  <!-- Script principal -->
+  <script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
+  <!-- Script para manejo de búsqueda -->
+  <script src="{% static 'inicio_sesion/searchHandler.js' %}?v={% now 'U' %}"></script>
+</body>
+</html>
