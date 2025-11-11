@@ -1,5 +1,7 @@
 from django.core.validators import FileExtensionValidator, MaxLengthValidator
 from django.db import models
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes.fields import GenericForeignKey
 
 
 class Users(models.Model):
@@ -107,3 +109,26 @@ class PlayListSong(models.Model):
         managed = False               # ← ¡¡CRUCIAL!! Django NO crea ni modifica la tabla
         # unique_together = ('playlist_id', 'song_id')  # ← Quita esto si da error
         # ordering = ['position']                      # ← Quita si da error
+
+class LikeMedia(models.Model):
+    """
+    Likes genéricos para Song o PlayList (tabla única).
+    - user: FK a Users
+    - content_type + object_id -> GenericForeignKey al objeto likeado
+    """
+    user = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="likes")
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField(db_index=True)
+    content_object = GenericForeignKey("content_type", "object_id")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "LikeMedia"
+        unique_together = (("user", "content_type", "object_id"),)
+        indexes = [
+            models.Index(fields=["content_type", "object_id"], name="idx_likemedia_ct_obj"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Like by {self.user.user} -> {self.content_type}#{self.object_id}"

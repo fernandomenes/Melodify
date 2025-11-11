@@ -10,8 +10,11 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.http import require_http_methods
+from django.contrib.contenttypes.models import ContentType
+from django.shortcuts import get_object_or_404
+from django.views.decorators.http import require_POST
 
-from .models import ArtistProfile, PlayList, PlayListSong, Song, Users
+from .models import ArtistProfile, PlayList, PlayListSong, Song, Users, LikeMedia
 
 logger = logging.getLogger(__name__)
 
@@ -586,3 +589,58 @@ def api_buscar(request):
         logger.error(f"Error en api_buscar: {str(e)}")
     
     return JsonResponse(results)
+
+def _get_session_user_obj(request):
+    """
+    Devuelve la instancia Users asociada a request.session['user'] o None.
+    (Esto encaja con la forma en que tu proyecto maneja la sesión en views.py)
+    """
+    username = request.session.get("user")
+    if not username:
+        return None
+    try:
+        return Users.objects.get(user=username)
+    except Users.DoesNotExist:
+        return None
+
+
+@require_POST
+def like_song(request, song_id):
+    """Toggle like para canción. POST -> {liked: bool, total: int}"""
+    user = _get_session_user_obj(request)
+    if not user:
+        return JsonResponse({"error": "login_required"}, status=401)
+
+    song = get_object_or_404(Song, id=song_id)
+    ct = ContentType.objects.get_for_model(Song)
+    qs = LikeMedia.objects.filter(user=user, content_type=ct, object_id=song.id)
+    if qs.exists():
+        qs.delete()
+        liked = False
+    else:
+        LikeMedia.objects.create(user=user, content_type=ct, object_id=song.id)
+        liked = True
+
+    total = LikeMedia.objects.filter(content_type=ct, object_id=song.id).count()
+    return JsonResponse({"liked": liked, "total": total})
+
+
+@require_POST
+def like_playlist(request, playlist_id):
+    """Toggle like para playlist. POST -> {liked: bool, total: int}"""
+    user = _get_session_user_obj(request)
+    if not user:
+        return JsonResponse({"error": "login_required"}, status=401)
+
+    playlist = get_object_or_404(PlayList, id=playlist_id)
+    ct = ContentType.objects.get_for_model(PlayList)
+    qs = LikeMedia.objects.filter(user=user, content_type=ct, object_id=playlist.id)
+    if qs.exists():
+        qs.delete()
+        liked = False
+    else:
+        LikeMedia.objects.create(user=user, content_type=ct, object_id=playlist.id)
+        liked = True
+
+    total = LikeMedia.objects.filter(content_type=ct, object_id=playlist.id).count()
+    return JsonResponse({"liked": liked, "total": total})

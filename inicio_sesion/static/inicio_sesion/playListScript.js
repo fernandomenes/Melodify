@@ -55,8 +55,38 @@ function crearPlaylist(namePlaylist){
 }
 
 
-function likePlaylist(id) {
+// Helper para leer cookie CSRF
+function getCookie(name) {
+    const v = document.cookie.split('; ').find(row => row.startsWith(name + '='));
+    return v ? decodeURIComponent(v.split('=')[1]) : null;
+}
+
+async function likePlaylist(id) {
     console.log('Like en playlist:', id);
+    const csrf = getCookie('csrftoken');
+    try {
+        const resp = await fetch(`/api/like/playlist/${id}/`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrf,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: null
+        });
+        const data = await resp.json();
+        if (resp.status === 200) {
+            const btn = document.querySelector(`button[onclick="likePlaylist(${id})"]`);
+            if (btn) btn.textContent = data.liked ? `Liked (${data.total})` : `Like (${data.total})`;
+        } else if (data.error === 'login_required') {
+            window.location.href = '/login/';
+        } else {
+            console.warn('Error likePlaylist', data);
+        }
+    } catch (e) {
+        console.error('Error likePlaylist:', e);
+    }
 }
 
 function editarPlaylist(id,newname) {
@@ -580,9 +610,32 @@ function addSongToPlaylist(idSong,idPlaylist,totalSong) {
 }
 
 
-function likeSong(idSong){
-
+async function likeSong(idSong) {
     console.log('like', idSong);
+    const csrf = getCookie('csrftoken');
+    try {
+        const resp = await fetch(`/api/like/song/${idSong}/`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrf,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: null
+        });
+        const data = await resp.json();
+        if (resp.status === 200) {
+            const btn = document.querySelector(`button[onclick="likeSong(${idSong})"]`);
+            if (btn) btn.textContent = data.liked ? `Liked (${data.total})` : `Like (${data.total})`;
+        } else if (data.error === 'login_required') {
+            window.location.href = '/login/';
+        } else {
+            console.warn('Error likeSong', data);
+        }
+    } catch (e) {
+        console.error('Error likeSong:', e);
+    }
 }
 
 
