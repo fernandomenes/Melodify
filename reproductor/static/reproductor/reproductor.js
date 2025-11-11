@@ -5,7 +5,7 @@
    - Exporta funciones para la SPA (render, hooks, etc.)
    ========================================================================== */
 
-const COUNT_AT_SECONDS = 5; // segundos de escucha para contar un "play"
+const COUNT_AT_SECONDS = 5;
 
 // ---------------------------- Estado interno -------------------------------
 let _state = {
@@ -16,7 +16,7 @@ let _state = {
   guardHooked: false,
   moView: null,
   moList: null,
-  countedForKey: null, // para evitar contar dos veces el mismo track cargado
+  countedForKey: null,
 };
 
 const q  = (s, r=document)=>r.querySelector(s);
@@ -52,33 +52,84 @@ function isTop10Active(){
 }
 function _currentSong(){ return _state.queue[_state.index] || null; }
 
-// ---------------------------- Plays (Top 10) -------------------------------
-const PLAYS_KEY = "mdf.plays.v1";
+// ---------------------------- Fecha / Día ----------------------------------
+function _pad2(n){ return String(n).padStart(2,'0'); }
+function todayStamp(){
+  const d=new Date();
+  return `${d.getFullYear()}${_pad2(d.getMonth()+1)}${_pad2(d.getDate())}`;
+}
+function yesterdayStamp(){
+  const d=new Date(); d.setDate(d.getDate()-1);
+  return `${d.getFullYear()}${_pad2(d.getMonth()+1)}${_pad2(d.getDate())}`;
+}
 
-function _loadPlays(){
-  try{ return JSON.parse(localStorage.getItem(PLAYS_KEY) || "{}") || {}; }catch{ return {}; }
+function _hasAnyPlays(stamp){
+  const db = _loadDailyPlays(stamp);
+  if (!db || typeof db !== 'object') return false;
+  for (const k in db) if (db[k] > 0) return true;
+  return false;
 }
-function _savePlays(obj){
-  try{ localStorage.setItem(PLAYS_KEY, JSON.stringify(obj || {})); }catch{}
+
+function _findLastFrozenOrderBefore(today){
+  let best = null, bestStamp = null;
+  for (let i = 0; i < localStorage.length; i++){
+    const key = localStorage.key(i);
+    if (key && key.startsWith(ORDER_PREFIX)){
+      const stamp = key.slice(ORDER_PREFIX.length);
+      if (/^\d{8}$/.test(stamp) && stamp < today){
+        const arr = _loadJSON(key, []);
+        if (Array.isArray(arr) && arr.length){
+          if (!bestStamp || stamp > bestStamp){ best = arr; bestStamp = stamp; }
+        }
+      }
+    }
+  }
+  return { order: best, stamp: bestStamp };
 }
+
+function _countsStampForToday(){
+  const y = yesterdayStamp();
+  if (_hasAnyPlays(y)) return y;
+  const { stamp } = _findLastFrozenOrderBefore(todayStamp());
+  return stamp || y;
+}
+
+// ---------------------------- Plays (Top 10) -------------------------------
+const PLAYS_PREFIX  = "mdf.plays.";
+const ORDER_PREFIX  = "mdf.top10.order.";
+
 function _songKey(song){
   const byId = song?.id ? `id:${song.id}` : "";
   const byUrl = song?.audioUrl ? `u:${absHref(ensureAbs(song.audioUrl))}` : "";
   return byId || byUrl || "";
 }
+function _loadJSON(key, fallback){
+  try{ const v=localStorage.getItem(key); return v?JSON.parse(v):fallback; }catch{ return fallback; }
+}
+function _saveJSON(key, val){
+  try{ localStorage.setItem(key, JSON.stringify(val)); }catch{}
+}
+
+function _loadDailyPlays(stamp){ return _loadJSON(PLAYS_PREFIX+stamp, {}); }
+function _saveDailyPlays(stamp, obj){ _saveJSON(PLAYS_PREFIX+stamp, obj||{}); }
+
 function registerPlay(song){
-  const key = _songKey(song);
-  if(!key) return;
-  const db = _loadPlays();
-  db[key] = (db[key] || 0) + 1;
-  _savePlays(db);
+  const k=_songKey(song); if(!k) return;
+  const stamp=todayStamp();
+  const db=_loadDailyPlays(stamp);
+  db[k]=(db[k]||0)+1;
+  _saveDailyPlays(stamp, db);
 }
-function getPlayCount(song){
-  const key = _songKey(song);
-  if(!key) return 0;
-  const db = _loadPlays();
-  return db[key] || 0;
+function getPlayCountAtStamp(song, stamp){
+  const k=_songKey(song); if(!k) return 0;
+  const db=_loadDailyPlays(stamp);
+  return db[k]||0;
 }
+function getYesterdayPlayCount(song){
+  return getPlayCountAtStamp(song, yesterdayStamp());
+}
+function _getFrozenOrder(stamp){ return _loadJSON(ORDER_PREFIX+stamp, []); }
+function _setFrozenOrder(stamp, arr){ _saveJSON(ORDER_PREFIX+stamp, Array.isArray(arr)?arr.slice(0,10):[]); }
 
 // ------------------------- Helpers de normalización ------------------------
 const pickFirst = (...c) => c.find(v => typeof v === 'string' && v.trim().length) || "";
@@ -110,7 +161,7 @@ async function fetchAllPlaylistsWithSongs() {
   try {
     const res = await fetch('/playlist/getAllList', { credentials: 'same-origin', cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const lists = await res.json(); // [{id, name, ...}, ...]
+    const lists = await res.json();
 
     if (!Array.isArray(lists) || !lists.length) return [];
 
@@ -153,46 +204,87 @@ async function fetchMyMusic(URL_MI_MUSICA_JSON){
   }
 }
 
-// ------------------------- Top 10 personal (virtual) -----------------------
+// ------------------------- Universo y Top10 congelado ----------------------
+function _abs(u){ try{ return u? new URL(u, location.origin).href : ""; }catch{ return u||""; } }
+function _dedup(arr, keyFn){
+  const seen=new Set(), out=[];
+  for(const it of arr){
+    const k=keyFn(it); if(!k||seen.has(k)) continue;
+    seen.add(k); out.push(it);
+  }
+  return out;
+}
 function _flattenUniqueSongs(playlists){
-  const abs = (u)=>{ try{ return u? new URL(u, location.origin).href : ""; }catch{ return u||""; } };
-  const dedup = (arr, keyFn) => {
-    const seen = new Set(), out = [];
-    for (const it of arr) {
-      const k = keyFn(it); if(!k || seen.has(k)) continue; seen.add(k); out.push(it);
-    }
-    return out;
-  };
-  const all = (Array.isArray(playlists)?playlists:[]).flatMap(pl => Array.isArray(pl.songs)?pl.songs:[]);
-  return dedup(all, s => _songKey(s) || abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
+  const all=(Array.isArray(playlists)?playlists:[]).flatMap(pl=>Array.isArray(pl.songs)?pl.songs:[]);
+  return _dedup(all, s => _songKey(s) || _abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
 }
 
-function buildTop10FromPlaylists(playlists){
-  const base = _flattenUniqueSongs(playlists);
-  const scored = base.map(s => ({ song: s, plays: getPlayCount(s) }));
-  scored.sort((a,b)=> b.plays - a.plays);
-  const top = scored.slice(0,10).map(x => x.song);
-  return { id:'pl:top10', name:'Top 10 personal', songs: top };
+function _buildFrozenOrderFromPlays(playlists, stampForScores){
+  const base=_flattenUniqueSongs(playlists);
+  const plays=_loadDailyPlays(stampForScores);
+  const scored=base.map(s=>({ key:_songKey(s), score:(plays[_songKey(s)]||0) })).filter(x=>!!x.key);
+  scored.sort((a,b)=> b.score - a.score);
+  const order=scored.map(x=>x.key).slice(0,10);
+  if(order.length<10){
+    for(const s of base){
+      const k=_songKey(s); if(!k) continue;
+      if(!order.includes(k)) order.push(k);
+      if(order.length>=10) break;
+    }
+  }
+  return order.slice(0,10);
 }
+
+function buildTop10FromPlaylistsFrozen(playlists){
+  const base=_flattenUniqueSongs(playlists);
+  const byKey=new Map(base.map(s=>[_songKey(s), s]));
+  const frozen=_getFrozenOrder(todayStamp());
+  const out=[];
+  for(const k of frozen){
+    const s=byKey.get(k);
+    if(s) out.push(s);
+  }
+  if(out.length<10){
+    for(const s of base){
+      const k=_songKey(s);
+      if(!k || frozen.includes(k)) continue;
+      out.push(s);
+      if(out.length>=10) break;
+    }
+  }
+  return { id:'pl:top10', name:'Top 10 personal', songs: out };
+}
+
+function ensureDailyRoll(playlists){
+  const today = todayStamp();
+  const exists = _getFrozenOrder(today);
+  if (Array.isArray(exists) && exists.length) return;
+
+  const yday = yesterdayStamp();
+  let order = [];
+
+  if (_hasAnyPlays(yday)){
+    order = _buildFrozenOrderFromPlays(playlists, yday);
+  } else {
+    const { order: prev } = _findLastFrozenOrderBefore(today);
+    if (prev && prev.length){
+      order = prev.slice(0, 10);
+    } else {
+      // último recurso: arma con el universo (sin puntajes)
+      order = _buildFrozenOrderFromPlays(playlists, yday);
+    }
+  }
+  _setFrozenOrder(today, order);
+}
+
 
 // ------- Construye modelo final: Todas + Mi música + reales ----------------
 function buildPlaylistsModel({allPlaylists, mySongs}){
-  const dedup = (arr, keyFn) => {
-    const seen = new Set(); const out = [];
-    for (const it of arr) {
-      const k = keyFn(it);
-      if (!k || seen.has(k)) continue;
-      seen.add(k); out.push(it);
-    }
-    return out;
-  };
-  const abs = (u)=>{ try{ return u? new URL(u, location.origin).href : ""; }catch{ return u||""; } };
-
   const flattenAll = allPlaylists.flatMap(pl => Array.isArray(pl.songs) ? pl.songs : []);
-  const allUnique  = dedup(flattenAll, s => _songKey(s) || abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
+  const allUnique  = _dedup(flattenAll, s => _songKey(s) || _abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
   const allPlaylist  = { id:'pl:all',  name:'Todas las canciones', songs: allUnique };
 
-  const mineUnique   = dedup(mySongs||[], s => _songKey(s) || abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
+  const mineUnique   = _dedup(mySongs||[], s => _songKey(s) || _abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
   const minePlaylist = { id:'pl:mine', name:'Mi música', songs: mineUnique };
 
   return [allPlaylist, minePlaylist, ...allPlaylists];
@@ -248,7 +340,7 @@ function bindClicks(enable){
       const nextH=absHref(ensureAbs(wants?.audioUrl||""));
       const curH =absHref(_state.audio?.src||"");
       if(idx===_state.index && nextH && curH && nextH===curH){ toggle(); }
-      else { load(idx,true); } // reproduce sólo por interacción del usuario
+      else { load(idx,true); }
     };
     _state.boundItems.add(el);
   });
@@ -283,13 +375,12 @@ function ensureAudio(){
     const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
     fire("melodify:time", { currentTime: cur, duration: dur, label: `${fmtTime(cur)} / ${fmtTime(dur)}` });
 
-    // Cuenta el play una sola vez cuando supera COUNT_AT_SECONDS
     const s = _currentSong();
     const k = s ? _songKey(s) : null;
     if (s && k && _state.countedForKey !== k && cur >= COUNT_AT_SECONDS) {
       registerPlay(s);
       _state.countedForKey = k;
-      if (isTop10Active()) _refreshTop10View(); // sólo refresca si Top 10 está abierto
+      if (isTop10Active()) _refreshTop10View();
     }
   });
 
@@ -328,7 +419,7 @@ function load(idx, autoplay=true){
   setMetaFor(s);
   _state.audio.src=url;
   _state.audio.currentTime=0;
-  _state.countedForKey = null; // listo para volver a contar si supera el umbral
+  _state.countedForKey = null;
   highlightCurrent();
 
   fire("melodify:trackchange", { index: idx, song: s });
@@ -402,36 +493,46 @@ export const DEFAULT_GENRES = [
   {value:'balada',label:'Balada'},{value:'jazz',label:'Jazz'},{value:'clasica',label:'Clásica'},{value:'otro',label:'Otro'},
 ];
 
-function _esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _esc(s){
+  return String(s??'')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
 
-function _playlistSongRow(song, {showCounts=false}={}){
+function _playlistSongRow(song, {showCounts=false, countsStamp=null}={}){
   const isStr=typeof song==='string';
   const title=isStr?song:(song?.title||'—');
   const author=isStr?'—':(song?.author||song?.artist_display_name||song?.artist||'—');
   const cover=isStr?null:ensureAbs(song?.coverUrl||song?.cover_url||song?.cover||'');
   const audio=isStr?'':ensureAbs(song?.audioUrl||song?.audio_url||song?.audio||'');
   const genre=!isStr?(song?.genre||song?.genero||''):'';
-  const plays = showCounts ? getPlayCount(song) : 0;
+  let plays = 0;
+  if(showCounts && countsStamp){
+    plays = getPlayCountAtStamp(song, countsStamp);
+  }
   const coverHTML = cover
     ? `<img src="${_esc(cover)}" alt="${_esc(title)}" class="song-cover">`
     : `<div class="song-cover song-cover--placeholder"></div>`;
+  const badge = showCounts && countsStamp ? ` <span class="rep-badge" data-badge="plays">${plays} reproducciones</span>` : "";
   return `
     <div class="song-item" data-id="${_esc(song?.id ?? '')}" data-audio-url="${_esc(audio)}"
          data-title="${_esc(title)}" data-author="${_esc(author)}" data-genre="${_esc(genre)}">
       ${coverHTML}
       <div class="song-info">
-        <div class="song-title">${_esc(title)}${showCounts && plays ? ` <span class="rep-badge" data-badge="plays">${plays}</span>` : ""}</div>
+        <div class="song-title">${_esc(title)}${badge}</div>
         <div class="song-author">${_esc(author)}</div>
       </div>
     </div>`;
 }
 
-export function renderLeftSongs(songs, titleForEmpty='Playlist', {showCounts=false}={}){
+export function renderLeftSongs(songs, titleForEmpty='Playlist', {showCounts=false, countsStamp=null}={}){
   const left=q('.rep-left'); if(!left) return;
   if(!songs||!songs.length){
     left.innerHTML=`<div class="rep-empty"><div><h3 style="margin:0">${_esc(titleForEmpty)}</h3><p>No hay canciones.</p></div></div>`;
   }else{
-    left.innerHTML=`<div class="songs-wrap">${songs.map(s => _playlistSongRow(s,{showCounts})).join('')}</div>`;
+    left.innerHTML=`<div class="songs-wrap">${songs.map(s => _playlistSongRow(s,{showCounts, countsStamp})).join('')}</div>`;
   }
   try{ inicializarReproductor(); }catch{}
 }
@@ -440,12 +541,12 @@ export function renderLeftSongs(songs, titleForEmpty='Playlist', {showCounts=fal
 export function buildRightSidebarHTML({playlists, genres=DEFAULT_GENRES}){
   const P = Array.isArray(playlists) ? playlists.slice() : [];
 
-  // Inserta/actualiza Top10 virtual
-  const top10 = buildTop10FromPlaylists(P);
+  try{ ensureDailyRoll(P); }catch{}
+
+  const top10 = buildTop10FromPlaylistsFrozen(P);
   const i = P.findIndex(p => p.id === 'pl:top10');
   if (i >= 0) P.splice(i,1);
 
-  // coloca Top10 tras 'pl:all' y 'pl:mine' si existen
   let insertAt = 0;
   for (const id of ['pl:all','pl:mine']){
     const idx = P.findIndex(p => p.id===id);
@@ -453,7 +554,6 @@ export function buildRightSidebarHTML({playlists, genres=DEFAULT_GENRES}){
   }
   P.splice(insertAt, 0, top10);
 
-  // HTML
   const liHTML = P.map(pl=>{
     const songs = Array.isArray(pl.songs) ? pl.songs : [];
     return `
@@ -494,12 +594,12 @@ export function attachSidebarHandlers(){
         clearGenres(); clearPlaylists(); li.classList.add('active');
         const id=li.dataset.pl;
         const pl=(window._playlists||[]).find(p=>String(p.id)===String(id))
-              || (id==='pl:top10' ? buildTop10FromPlaylists(window._playlists||[]) : {name:'—',songs:[]});
+              || (id==='pl:top10' ? buildTop10FromPlaylistsFrozen(window._playlists||[]) : {name:'—',songs:[]});
         const showCounts = (id==='pl:top10');
-        renderLeftSongs(Array.isArray(pl.songs)?pl.songs:[], pl.name||'Playlist', {showCounts});
+        const countsStamp = showCounts ? _countsStampForToday() : null;
+        renderLeftSongs(Array.isArray(pl.songs)?pl.songs:[], pl.name||'Playlist', {showCounts, countsStamp});
       });
     });
-    // Selección inicial: prioriza "Todas"; si no hay, la primera disponible
     const first = ul.querySelector('li[data-pl="pl:all"]') || ul.querySelector('li[data-pl]');
     if(first){ first.classList.add('active'); clearGenres(); }
   }
@@ -520,7 +620,7 @@ export function attachSidebarHandlers(){
           if(!g||g==='otro') return true;
           return sg && sg===g;
         });
-        renderLeftSongs(filtered, ch.textContent||'Género', {showCounts:false});
+        renderLeftSongs(filtered, ch.textContent||'Género', {showCounts:false, countsStamp:null});
       });
     });
   }
@@ -530,8 +630,8 @@ export function attachSidebarHandlers(){
 function _refreshTop10View(){
   const ul=document.getElementById('rep-playlists');
   if(!ul || !isTop10Active()) return;
-  const freshTop10 = buildTop10FromPlaylists(window._playlists || []);
-  renderLeftSongs(freshTop10.songs, freshTop10.name, {showCounts:true});
+  const freshTop10 = buildTop10FromPlaylistsFrozen(window._playlists || []);
+  renderLeftSongs(freshTop10.songs, freshTop10.name, {showCounts:true, countsStamp:_countsStampForToday()});
   try { window.MDFCore?.rebindReproductor?.(); } catch {}
 }
 
@@ -540,23 +640,21 @@ export async function renderMenuReproductor({mainContent, contentDiv, URL_MI_MUS
   const u=new URL(location.href); u.searchParams.set('view','reproductor'); history.replaceState(null,'',u.toString());
   mainContent.dataset.view='reproductor';
 
-  // 1) Obtiene playlists reales + mis canciones
   const [allPlaylists, mySongs] = await Promise.all([
     fetchAllPlaylistsWithSongs(),
     fetchMyMusic(URL_MI_MUSICA_JSON)
   ]);
 
-  // 2) Construye el modelo final 
   window._playlists = buildPlaylistsModel({ allPlaylists, mySongs });
 
-  // 3) UI
+  try{ ensureDailyRoll(window._playlists); }catch{}
+
   const P = Array.isArray(window._playlists) ? window._playlists : [];
   const rightHTML = buildRightSidebarHTML({playlists:P, genres:DEFAULT_GENRES||[]}) || '';
   contentDiv.innerHTML = `<div class="rep-grid"><div class="rep-left"></div><div class="rep-right">${rightHTML}</div></div>`;
 
-  // Selección por defecto: "Todas"
   const all = P.find(p => p.id==='pl:all') || P[0] || { id:'pl:tmp', name:'(sin playlists)', songs:[] };
-  renderLeftSongs(Array.isArray(all.songs)?all.songs:[], all.name || 'Playlist', {showCounts:false});
+  renderLeftSongs(Array.isArray(all.songs)?all.songs:[], all.name || 'Playlist', {showCounts:false, countsStamp:null});
 
   inicializarReproductor();
   attachSidebarHandlers();
@@ -612,13 +710,11 @@ function clickBackBtnPlaylist(){
   }
 }
 
-// Stubs seguros (sin dependencia a 'perfil')
 export function crearPlaylist(){ console.log('crearPlaylist (stub)'); }
 export function likePlaylist(id){ console.log('likePlaylist stub:', id); }
 export function editarPlaylist(id){ console.log('editarPlaylist stub:', id); }
 export function eliminarPlaylist(id){ console.log('eliminarPlaylist stub:', id); }
 
-// Función principal que muestra las playlists antiguas (no interfiere)
 export function showPlaylists() {
   currentViewPlaylist  = "allPlayList";
   fetch('/playlist/getAllList', { credentials: 'same-origin' })
