@@ -5,6 +5,8 @@
    - Exporta funciones para la SPA (render, hooks, etc.)
    ========================================================================== */
 
+const COUNT_AT_SECONDS = 5; // segundos de escucha para contar un "play"
+
 // ---------------------------- Estado interno -------------------------------
 let _state = {
   queue: [],
@@ -14,6 +16,7 @@ let _state = {
   guardHooked: false,
   moView: null,
   moList: null,
+  countedForKey: null, // para evitar contar dos veces el mismo track cargado
 };
 
 const q  = (s, r=document)=>r.querySelector(s);
@@ -44,6 +47,38 @@ function fmtTime(t){
 function fire(name, detail) {
   document.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
 }
+function isTop10Active(){
+  return !!q('#rep-playlists li.active[data-pl="pl:top10"]');
+}
+function _currentSong(){ return _state.queue[_state.index] || null; }
+
+// ---------------------------- Plays (Top 10) -------------------------------
+const PLAYS_KEY = "mdf.plays.v1"; // { "<key>": count }, key = song.id || abs(audioUrl)
+
+function _loadPlays(){
+  try{ return JSON.parse(localStorage.getItem(PLAYS_KEY) || "{}") || {}; }catch{ return {}; }
+}
+function _savePlays(obj){
+  try{ localStorage.setItem(PLAYS_KEY, JSON.stringify(obj || {})); }catch{}
+}
+function _songKey(song){
+  const byId = song?.id ? `id:${song.id}` : "";
+  const byUrl = song?.audioUrl ? `u:${absHref(ensureAbs(song.audioUrl))}` : "";
+  return byId || byUrl || "";
+}
+function registerPlay(song){
+  const key = _songKey(song);
+  if(!key) return;
+  const db = _loadPlays();
+  db[key] = (db[key] || 0) + 1;
+  _savePlays(db);
+}
+function getPlayCount(song){
+  const key = _songKey(song);
+  if(!key) return 0;
+  const db = _loadPlays();
+  return db[key] || 0;
+}
 
 // ------------------------- Helpers de normalización ------------------------
 const pickFirst = (...c) => c.find(v => typeof v === 'string' && v.trim().length) || "";
@@ -67,7 +102,7 @@ function normalizeSong(song){
   const author = pickFirst(song.artist_display_name, song.artist, song.author, song.singer) || "—";
   const genre  = pickFirst(song.genre, song.genero, song.gen) || "";
 
-  return { title, author, coverUrl: cover, audioUrl: audio, genre };
+  return { id: song.id ?? null, title, author, coverUrl: cover, audioUrl: audio, genre };
 }
 
 // ------------------ Carga playlists reales (devuelve array) ----------------
@@ -118,7 +153,29 @@ async function fetchMyMusic(URL_MI_MUSICA_JSON){
   }
 }
 
-// ------- Construye modelo final: Todas + Mi música + playlists reales ------
+// ------------------------- Top 10 personal (virtual) -----------------------
+function _flattenUniqueSongs(playlists){
+  const abs = (u)=>{ try{ return u? new URL(u, location.origin).href : ""; }catch{ return u||""; } };
+  const dedup = (arr, keyFn) => {
+    const seen = new Set(), out = [];
+    for (const it of arr) {
+      const k = keyFn(it); if(!k || seen.has(k)) continue; seen.add(k); out.push(it);
+    }
+    return out;
+  };
+  const all = (Array.isArray(playlists)?playlists:[]).flatMap(pl => Array.isArray(pl.songs)?pl.songs:[]);
+  return dedup(all, s => _songKey(s) || abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
+}
+
+function buildTop10FromPlaylists(playlists){
+  const base = _flattenUniqueSongs(playlists);
+  const scored = base.map(s => ({ song: s, plays: getPlayCount(s) }));
+  scored.sort((a,b)=> b.plays - a.plays);
+  const top = scored.slice(0,10).map(x => x.song);
+  return { id:'pl:top10', name:'Top 10 personal', songs: top };
+}
+
+// ------- Construye modelo final: Todas + Mi música + reales ----------------
 function buildPlaylistsModel({allPlaylists, mySongs}){
   const dedup = (arr, keyFn) => {
     const seen = new Set(); const out = [];
@@ -132,13 +189,13 @@ function buildPlaylistsModel({allPlaylists, mySongs}){
   const abs = (u)=>{ try{ return u? new URL(u, location.origin).href : ""; }catch{ return u||""; } };
 
   const flattenAll = allPlaylists.flatMap(pl => Array.isArray(pl.songs) ? pl.songs : []);
-  const allUnique  = dedup(flattenAll, s => abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
+  const allUnique  = dedup(flattenAll, s => _songKey(s) || abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
   const allPlaylist  = { id:'pl:all',  name:'Todas las canciones', songs: allUnique };
 
-  const mineUnique   = dedup(mySongs||[], s => abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
+  const mineUnique   = dedup(mySongs||[], s => _songKey(s) || abs(s.audioUrl) || `${(s.title||'').toLowerCase()}::${(s.author||'').toLowerCase()}`);
   const minePlaylist = { id:'pl:mine', name:'Mi música', songs: mineUnique };
 
-  // Orden: Todas → Mi música → el resto
+  // No metemos 'pl:top10' aquí; lo inyectamos en la sidebar dinámicamente
   return [allPlaylist, minePlaylist, ...allPlaylists];
 }
 
@@ -158,13 +215,14 @@ function collectQueueFromDOM(){
   const nextQueue=[]; let k=0;
 
   items.forEach((el)=>{
+    const id = el.dataset.id || el.getAttribute("data-id") || null;
     const title=el.dataset.title||el.querySelector(".song-title")?.textContent||"—";
     const author=el.dataset.author||el.querySelector(".song-author")?.textContent||"—";
-    const coverUrl=ensureAbs(el.dataset.coverUrl||el.querySelector(".song-cover")?.getAttribute("src")||"");
-    const audioUrl=ensureAbs(el.dataset.audioUrl||"");
-    const genre = el.dataset.genre || "";
+    const coverUrl=ensureAbs(el.dataset.coverUrl||el.getAttribute("data-cover-url")||el.querySelector(".song-cover")?.getAttribute("src")||"");
+    const audioUrl=ensureAbs(el.dataset.audioUrl||el.getAttribute("data-audio-url")||"");
+    const genre = el.dataset.genre || el.getAttribute("data-genre") || "";
     if(audioUrl){
-      nextQueue.push({ title, author, coverUrl, audioUrl, genre });
+      nextQueue.push({ id, title, author, coverUrl, audioUrl, genre });
       el.dataset._idx=String(k++);
       if(!el.classList.contains("song-item")) el.classList.add("song-item");
       const img=el.querySelector(".song-cover"); if(img&&coverUrl) img.src=coverUrl;
@@ -191,7 +249,7 @@ function bindClicks(enable){
       const nextH=absHref(ensureAbs(wants?.audioUrl||""));
       const curH =absHref(_state.audio?.src||"");
       if(idx===_state.index && nextH && curH && nextH===curH){ toggle(); }
-      else { load(idx,true); }
+      else { load(idx,true); } // reproduce sólo por interacción del usuario
     };
     _state.boundItems.add(el);
   });
@@ -212,7 +270,7 @@ function observeListChanges(){
       if(hadSrc) fire("melodify:bar:shouldShow", {});
     }
   });
-  _state.moList.observe(host,{childList:true,subtree:true,attributes:true,attributeFilter:["data-audio-url"]});
+  _state.moList.observe(host,{childList:true,subtree:true,attributes:true,attributeFilter:["data-audio-url","data-id","data-title","data-author","data-genre","data-cover-url"]});
 }
 
 // ------------------------------- Audio -------------------------------------
@@ -225,7 +283,17 @@ function ensureAudio(){
     const dur = Number.isFinite(a.duration) ? a.duration : 0;
     const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
     fire("melodify:time", { currentTime: cur, duration: dur, label: `${fmtTime(cur)} / ${fmtTime(dur)}` });
+
+    // Cuenta el play una sola vez cuando supera COUNT_AT_SECONDS
+    const s = _currentSong();
+    const k = s ? _songKey(s) : null;
+    if (s && k && _state.countedForKey !== k && cur >= COUNT_AT_SECONDS) {
+      registerPlay(s);
+      _state.countedForKey = k;
+      if (isTop10Active()) _refreshTop10View(); // sólo refresca si Top 10 está abierto
+    }
   });
+
   a.addEventListener("loadedmetadata", ()=>{
     const dur = Number.isFinite(a.duration) ? a.duration : 0;
     fire("melodify:loaded", { duration: dur });
@@ -261,6 +329,7 @@ function load(idx, autoplay=true){
   setMetaFor(s);
   _state.audio.src=url;
   _state.audio.currentTime=0;
+  _state.countedForKey = null; // listo para volver a contar si supera el umbral
   highlightCurrent();
 
   fire("melodify:trackchange", { index: idx, song: s });
@@ -285,7 +354,7 @@ function next(){
 }
 
 // ------------------------------- Vistas ------------------------------------
-const PLAYABLE_VIEWS = new Set(["reproductor", "playlist"]);
+const PLAYABLE_VIEWS = new Set(["reproductor", "playlist", "home"]);
 function getCurrentView(){
   const m=document.getElementById("main-content");
   return (m?.dataset.view||m?.dataset.initialView||"").trim();
@@ -335,37 +404,57 @@ export const DEFAULT_GENRES = [
 ];
 
 function _esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function _playlistSongRow(song){
+
+function _playlistSongRow(song, {showCounts=false}={}){
   const isStr=typeof song==='string';
   const title=isStr?song:(song?.title||'—');
   const author=isStr?'—':(song?.author||song?.artist_display_name||song?.artist||'—');
   const cover=isStr?null:ensureAbs(song?.coverUrl||song?.cover_url||song?.cover||'');
   const audio=isStr?'':ensureAbs(song?.audioUrl||song?.audio_url||song?.audio||'');
   const genre=!isStr?(song?.genre||song?.genero||''):'';
-  const coverHTML = cover?`<img src="${_esc(cover)}" alt="${_esc(title)}" class="song-cover">`:`<div class="song-cover song-cover--placeholder"></div>`;
+  const plays = showCounts ? getPlayCount(song) : 0;
+  const coverHTML = cover
+    ? `<img src="${_esc(cover)}" alt="${_esc(title)}" class="song-cover">`
+    : `<div class="song-cover song-cover--placeholder"></div>`;
   return `
-    <div class="song-item" data-audio-url="${_esc(audio)}" data-title="${_esc(title)}" data-author="${_esc(author)}" data-genre="${_esc(genre)}">
+    <div class="song-item" data-id="${_esc(song?.id ?? '')}" data-audio-url="${_esc(audio)}"
+         data-title="${_esc(title)}" data-author="${_esc(author)}" data-genre="${_esc(genre)}">
       ${coverHTML}
       <div class="song-info">
-        <div class="song-title">${_esc(title)}</div>
+        <div class="song-title">${_esc(title)}${showCounts && plays ? ` <span class="rep-badge" data-badge="plays">${plays}</span>` : ""}</div>
         <div class="song-author">${_esc(author)}</div>
       </div>
     </div>`;
 }
 
-export function renderLeftSongs(songs, titleForEmpty='Playlist'){
+export function renderLeftSongs(songs, titleForEmpty='Playlist', {showCounts=false}={}){
   const left=q('.rep-left'); if(!left) return;
   if(!songs||!songs.length){
     left.innerHTML=`<div class="rep-empty"><div><h3 style="margin:0">${_esc(titleForEmpty)}</h3><p>No hay canciones.</p></div></div>`;
   }else{
-    left.innerHTML=`<div class="songs-wrap">${songs.map(_playlistSongRow).join('')}</div>`;
+    left.innerHTML=`<div class="songs-wrap">${songs.map(s => _playlistSongRow(s,{showCounts})).join('')}</div>`;
   }
   try{ inicializarReproductor(); }catch{}
 }
 
 // ---------- Sidebar: Playlists (todas) + Géneros ---------------------------
 export function buildRightSidebarHTML({playlists, genres=DEFAULT_GENRES}){
-  const P = Array.isArray(playlists) ? playlists : [];
+  const P = Array.isArray(playlists) ? playlists.slice() : [];
+
+  // Inserta/actualiza Top10 virtual
+  const top10 = buildTop10FromPlaylists(P);
+  const i = P.findIndex(p => p.id === 'pl:top10');
+  if (i >= 0) P.splice(i,1);
+
+  // coloca Top10 tras 'pl:all' y 'pl:mine' si existen
+  let insertAt = 0;
+  for (const id of ['pl:all','pl:mine']){
+    const idx = P.findIndex(p => p.id===id);
+    if (idx >= 0 && idx >= insertAt) insertAt = idx + 1;
+  }
+  P.splice(insertAt, 0, top10);
+
+  // HTML
   const liHTML = P.map(pl=>{
     const songs = Array.isArray(pl.songs) ? pl.songs : [];
     return `
@@ -405,12 +494,14 @@ export function attachSidebarHandlers(){
       li.addEventListener('click', ()=>{
         clearGenres(); clearPlaylists(); li.classList.add('active');
         const id=li.dataset.pl;
-        const pl=(window._playlists||[]).find(p=>String(p.id)===String(id))||{name:'—',songs:[]};
-        renderLeftSongs(Array.isArray(pl.songs)?pl.songs:[], pl.name||'Playlist');
+        const pl=(window._playlists||[]).find(p=>String(p.id)===String(id))
+              || (id==='pl:top10' ? buildTop10FromPlaylists(window._playlists||[]) : {name:'—',songs:[]});
+        const showCounts = (id==='pl:top10');
+        renderLeftSongs(Array.isArray(pl.songs)?pl.songs:[], pl.name||'Playlist', {showCounts});
       });
     });
-    // Prioriza seleccionar “pl:all” al abrir
-    const first=ul.querySelector('li[data-pl="pl:all"]') || ul.querySelector('li[data-pl]');
+    // Selección inicial: prioriza "Todas"; si no hay, la primera disponible
+    const first = ul.querySelector('li[data-pl="pl:all"]') || ul.querySelector('li[data-pl]');
     if(first){ first.classList.add('active'); clearGenres(); }
   }
 
@@ -430,10 +521,20 @@ export function attachSidebarHandlers(){
           if(!g||g==='otro') return true;
           return sg && sg===g;
         });
-        renderLeftSongs(filtered, ch.textContent||'Género');
+        // En géneros NO mostramos contador
+        renderLeftSongs(filtered, ch.textContent||'Género', {showCounts:false});
       });
     });
   }
+}
+
+// --------- Refresco dinámico de la vista Top10 (si está seleccionada) ------
+function _refreshTop10View(){
+  const ul=document.getElementById('rep-playlists');
+  if(!ul || !isTop10Active()) return;
+  const freshTop10 = buildTop10FromPlaylists(window._playlists || []);
+  renderLeftSongs(freshTop10.songs, freshTop10.name, {showCounts:true});
+  try { window.MDFCore?.rebindReproductor?.(); } catch {}
 }
 
 // -------------------- Integración con la SPA -------------------------------
@@ -447,19 +548,19 @@ export async function renderMenuReproductor({mainContent, contentDiv, URL_MI_MUS
     fetchMyMusic(URL_MI_MUSICA_JSON)
   ]);
 
-  // 2) Construye el modelo final y publica
+  // 2) Construye el modelo final (sin Top10 aquí)
   window._playlists = buildPlaylistsModel({ allPlaylists, mySongs });
 
   // 3) UI
   const P = Array.isArray(window._playlists) ? window._playlists : [];
-  const initial = P.find(p => p.id==='pl:all') || P[0] || { id:'pl:tmp', name:'(sin playlists)', songs:[] };
-  const songs   = Array.isArray(initial.songs) ? initial.songs : [];
-
   const rightHTML = buildRightSidebarHTML({playlists:P, genres:DEFAULT_GENRES||[]}) || '';
   contentDiv.innerHTML = `<div class="rep-grid"><div class="rep-left"></div><div class="rep-right">${rightHTML}</div></div>`;
 
+  // Selección por defecto: "Todas"
+  const all = P.find(p => p.id==='pl:all') || P[0] || { id:'pl:tmp', name:'(sin playlists)', songs:[] };
+  renderLeftSongs(Array.isArray(all.songs)?all.songs:[], all.name || 'Playlist', {showCounts:false});
+
   inicializarReproductor();
-  renderLeftSongs(songs, initial.name || 'Playlist');
   attachSidebarHandlers();
 }
 
@@ -501,3 +602,178 @@ if (document.readyState === "loading") {
 } else {
   try { inicializarReproductor(); } catch {}
 }
+
+/* ==========================
+   Sección playlists (UI antigua)
+   ========================== */
+let currentViewPlaylist  = "allPlayList";
+
+function clickBackBtnPlaylist(){
+  if(currentViewPlaylist  === "allSongsPlayList"){
+    showPlaylists();
+  }
+}
+
+// Stubs seguros (sin dependencia a 'perfil')
+export function crearPlaylist(){ console.log('crearPlaylist (stub)'); }
+export function likePlaylist(id){ console.log('likePlaylist stub:', id); }
+export function editarPlaylist(id){ console.log('editarPlaylist stub:', id); }
+export function eliminarPlaylist(id){ console.log('eliminarPlaylist stub:', id); }
+
+// Función principal que muestra las playlists antiguas (no interfiere)
+export function showPlaylists() {
+  currentViewPlaylist  = "allPlayList";
+  fetch('/playlist/getAllList', { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(data => {
+      const content = document.getElementById('content');
+      if (!content) return;
+      if (!Array.isArray(data) || data.length === 0) {
+        content.innerHTML = '<li>No hay playlists.</li>';
+        return;
+      }
+      content.innerHTML = '';
+      data.forEach(p => {
+        const li = document.createElement('li');
+        li.style.display = 'flex';
+        li.style.alignItems = 'flex-start';
+        li.style.marginBottom = '20px';
+        li.style.position = 'relative';
+
+        const nameDiv = document.createElement('div');
+        nameDiv.innerHTML = `<strong>${_esc(p.name || 'Playlist')}</strong>`;
+        nameDiv.style.marginBottom = '8px';
+        li.appendChild(nameDiv);
+
+        const mediaContainer = document.createElement('div');
+        mediaContainer.style.display = 'flex';
+        mediaContainer.style.alignItems = 'flex-start';
+
+        const img = document.createElement('img');
+        img.src = '/static/inicio_sesion/img_playlist.png';
+        img.width = 307;
+        img.height = 222;
+        img.alt = 'portada';
+        img.style.cursor = 'pointer';
+        img.addEventListener('click', () => verSongs(p.id));
+        mediaContainer.appendChild(img);
+
+        const buttonsDiv = document.createElement('div');
+        buttonsDiv.style.display = 'flex';
+        buttonsDiv.style.flexDirection = 'column';
+        buttonsDiv.style.marginLeft = '10px';
+        buttonsDiv.style.justifyContent = 'flex-start';
+        buttonsDiv.style.gap = '8px';
+
+        const likeBtn = document.createElement('button');
+        likeBtn.textContent = 'Like';
+        likeBtn.className = 'btnRoundPlaylist';
+        likeBtn.addEventListener('click', () => likePlaylist(p.id));
+
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Editar';
+        editBtn.className = 'btnRoundPlaylist';
+        editBtn.addEventListener('click', () => editarPlaylist(p.id));
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Eliminar';
+        deleteBtn.className = 'btnRoundPlaylist';
+        deleteBtn.addEventListener('click', () => eliminarPlaylist(p.id));
+
+        buttonsDiv.appendChild(likeBtn);
+        buttonsDiv.appendChild(editBtn);
+        buttonsDiv.appendChild(deleteBtn);
+
+        mediaContainer.appendChild(buttonsDiv);
+        li.appendChild(mediaContainer);
+        content.appendChild(li);
+      });
+    })
+    .catch(err => console.error('Error al cargar playlists:', err));
+}
+
+export function verSongs(playlistId) {
+  currentViewPlaylist = "allSongsPlayList";
+  fetch(`/playlist/${playlistId}/songs/`, { credentials: 'same-origin' })
+    .then(response => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    })
+    .then(data => {
+      const content = document.getElementById('content');
+      if (!content) return;
+
+      const songs = Array.isArray(data?.songs) ? data.songs : [];
+      if (!songs.length) {
+        content.innerHTML = '<p>No hay canciones en esta playlist.</p>';
+        const main = document.getElementById('main-content');
+        if (main) main.dataset.view = 'playlist';
+        try { window.MDFCore?.rebindReproductor?.(); } catch {}
+        return;
+      }
+
+      const rowsHTML = songs.map((song) => {
+        const audio = pickFirst(
+          song.audioUrl, song.audio_url, song.audio,
+          song.file, song.file_url, song.filePath, song.file_path,
+          song.audioFile, song.audio_file, song.audioPath, song.audio_path,
+          song.src, song.source, song.stream_url, song.streamUrl,
+          song?.audio?.url, song?.file?.url, song?.media?.audio, song?.media?.url
+        );
+        if (!audio) return "";
+
+        const cover  = pickFirst(
+          song.coverUrl, song.cover_url, song.cover, song.thumbnail, song.thumb,
+          song?.cover?.url, song?.image?.url, song?.media?.cover
+        ) || "/static/inicio_sesion/img_song.png";
+
+        const title  = pickFirst(song.title, song.name) || "—";
+        const author = pickFirst(song.artist_display_name, song.artist, song.author, song.singer) || "—";
+        const genre  = pickFirst(song.genre, song.genero, song.gen) || "";
+
+        return `
+          <li class="song-item"
+              data-id="${_esc(song.id ?? '')}"
+              data-audio-url="${_esc(audio)}"
+              data-title="${_esc(title)}"
+              data-author="${_esc(author)}"
+              ${genre ? `data-genre="${_esc(genre)}"` : ""}
+              ${cover ? `data-cover-url="${_esc(cover)}"` : ""}>
+            <img class="song-cover" src="${_esc(cover)}" alt="${_esc(title)}"
+                 style="width:56px;height:56px;border-radius:10px;object-fit:cover;">
+            <div class="song-info">
+              <div class="song-title"><strong>${_esc(title)}</strong></div>
+              <div class="song-author"><small style="color:#b3b3b3">${_esc(author)}</small></div>
+            </div>
+          </li>`;
+      }).filter(Boolean).join("");
+
+      content.innerHTML = rowsHTML
+        ? `<ul style="list-style:none;padding:0;margin:0">${rowsHTML}</ul>`
+        : '<p>No hay canciones reproducibles (faltan URLs de audio).</p>';
+
+      const main = document.getElementById('main-content');
+      if (main) main.dataset.view = 'playlist';
+
+      try {
+        const prev = Array.isArray(window._playlists) ? window._playlists : [];
+        const plId = `pl:${playlistId}`;
+        const plName = (data && (data.name || data.playlist?.name)) || `Playlist ${playlistId}`;
+        const normSongs = songs.map(normalizeSong).filter(Boolean);
+        const others = prev.filter(p => String(p.id) !== String(plId) && String(p.id) !== 'my' && String(p.id) !== '1');
+        window._playlists = [{ id: plId, name: plName, songs: normSongs }, ...others];
+      } catch {}
+
+      try {
+        window.MDFCore?.rebindReproductor?.();
+        document.dispatchEvent(new CustomEvent('melodify:bar:shouldShow', { bubbles:true, detail:{} }));
+      } catch (e) { console.warn('No pude rebindear el reproductor:', e); }
+    })
+    .catch(error => {
+      const content = document.getElementById('content');
+      if (content) content.innerHTML = `<p style="color:red;">Error: ${_esc(error.message)}</p>`;
+    });
+}
+
+export function playSong(id){ console.log('Reproduciendo canción con ID:', id); }
+export function likeSong(){ /* pendiente */ }
