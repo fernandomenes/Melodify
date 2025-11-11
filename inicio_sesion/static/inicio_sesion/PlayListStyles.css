@@ -12,6 +12,31 @@
 .btnRoundPlaylist:hover{ background-color: #fa5b9a; }
 
 
+.btnAddPlaylist {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #ff0066; /* verde Spotify-like */
+    color: white;
+    border: none;
+    font-size: 25px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    transition: all 0.2s ease;
+    margin: 20px 0 30px 0;
+    /* Centrar si es el único elemento o ajustar según tu layout */
+}
+
+.btnAddPlaylist:hover {
+    background:  #fa5b9a;
+    transform: scale(1.05);
+}
+
+
 .songItem{
     width: 400px;
     display: grid;
@@ -40,3 +65,72 @@
             0 0 18px var(--glow-outer);
 }
 
+
+
+
+
+/* style alerta que aparece al dar click en el boton + para agregar un playlist nuevo */
+
+
+/* Contenedor del formulario emergente */
+.playlist-form {
+    position: absolute;
+    background-color: #282828;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 220px;
+    font-size: 14px;
+}
+
+/* Campo de texto */
+.playlist-form input[type="text"] {
+    padding: 8px 12px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    background-color: #1a1a1a;
+    color: white;
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Contenedor de botones */
+.playlist-form .form-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* Botón "Crear" */
+.playlist-form .btn-create {
+    padding: 6px 12px;
+    background-color: #ff0066;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* Botón "Cancelar" */
+.playlist-form .btn-cancel {
+    padding: 6px 12px;
+    background-color: #555;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* Hover opcional */
+.playlist-form .btn-create:hover {
+    background-color: #fa5b9a;
+}
+.playlist-form .btn-cancel:hover {
+    background-color: #666;
+}

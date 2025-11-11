@@ -1,6 +1,14 @@
 
 
 let currentViewPlaylist  = "allPlayList";
+let content = null;
+
+
+function initPlayList(){
+    content = document.getElementById('content');
+    showPlaylists();
+}
+
 
 function clickBackBtnPlaylist(){
 
@@ -36,12 +44,41 @@ function showPlaylists() {
     fetch('/playlist/getAllList')
         .then(r => r.json())
         .then(data => {
-            const content = document.getElementById('content');
             if (data.length === 0) {
                 content.innerHTML = '<li>No hay playlists.</li>';
                 return;
             }
-            content.innerHTML = ''; 
+            content.innerHTML = '';
+
+
+
+            // Crear contenedor flexible
+            const headerContainer = document.createElement('div');
+            headerContainer.style.display = 'flex';
+            headerContainer.style.justifyContent = 'center'; // centrado horizontal
+            headerContainer.style.alignItems = 'center';     // centrado vertical
+            headerContainer.style.gap = '20px';              // espacio entre título y botón
+            headerContainer.style.margin = '20px 0 50px 0';  // margen superior e inferior
+
+            // Crear el título
+            const title = document.createElement('h2');
+            title.textContent = 'Play List';
+            title.style.fontSize = '40px';
+            title.style.margin = '0'; // resetear márgenes por defecto de <h2>
+
+            // Crear el botón
+            const btn = document.createElement('button');
+            btn.className = 'btnAddPlaylist';
+            btn.textContent = '+';
+            btn.addEventListener('click', function () {
+                const rect = btn.getBoundingClientRect();
+                showAlertNewPlaylist(rect);
+            });
+
+            // Añadir título y botón al contenedor
+            headerContainer.appendChild(title);
+            headerContainer.appendChild(btn);
+            content.appendChild(headerContainer);
 
             data.forEach(p => {
                 const li = document.createElement('li');
@@ -68,7 +105,7 @@ function showPlaylists() {
                 img.height = 222;
                 img.alt = 'portada';
                 img.style.cursor = 'pointer';
-                img.addEventListener('click', () => verSongs(p.id));
+                img.addEventListener('click', () => verSongs(p.id,p.name));
 
                 mediaContainer.appendChild(img);
 
@@ -108,8 +145,70 @@ function showPlaylists() {
 }
 
 
+function showAlertNewPlaylist(rectPosition){
+    const formContainer = document.createElement('div');
+    formContainer.className = 'playlist-form';
+    formContainer.style.left = rectPosition.right + window.scrollX + 'px';
+    formContainer.style.top = rectPosition.top + window.scrollY + 'px';
+    formContainer.style.transform = 'translateY(-50%)';
 
-function verSongs(playlistId) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Nombre de la playlist';
+
+    const buttons = document.createElement('div');
+    buttons.className = 'form-buttons';
+
+    const crearBtn = document.createElement('button');
+    crearBtn.className = 'btn-create';
+    crearBtn.textContent = 'Crear';
+
+    const cancelarBtn = document.createElement('button');
+    cancelarBtn.className = 'btn-cancel';
+    cancelarBtn.textContent = 'Cancelar';
+
+    // Evento "Crear"
+    crearBtn.addEventListener('click', () => {
+        const name = input.value.trim();
+        if (name) {
+            crearPlaylist(name);
+            document.body.removeChild(formContainer);
+        } else {
+            input.focus();
+        }
+    });
+
+    // Evento "Cancelar"
+    cancelarBtn.addEventListener('click', () => {
+        document.body.removeChild(formContainer);
+    });
+
+    // Cerrar con Enter
+    input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') crearBtn.click();
+    });
+
+    // Armar el formulario
+    buttons.appendChild(cancelarBtn);
+    buttons.appendChild(crearBtn);
+    formContainer.appendChild(input);
+    formContainer.appendChild(buttons);
+    document.body.appendChild(formContainer);
+    input.focus();
+
+    // Cerrar al hacer clic fuera
+    const closeOnClickOutside = (e) => {
+        if (!formContainer.contains(e.target) && e.target !== btn) {
+            document.body.removeChild(formContainer);
+            document.removeEventListener('click', closeOnClickOutside);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeOnClickOutside), 0);
+
+}
+
+
+function verSongs(playlistId,namePlaylist) {
   currentViewPlaylist = "allSongsPlayList";
 
   console.log("[Playlist] fetch ->", `/playlist/${playlistId}/songs/`);
@@ -122,7 +221,6 @@ function verSongs(playlistId) {
     .then(data => {
       console.log("[Playlist] payload:", data);
 
-      const content = document.getElementById('content');
       if (!content) {
         console.error("No existe #content");
         return;
@@ -139,6 +237,7 @@ function verSongs(playlistId) {
 
       const pickFirst = (...c) => c.find(v => typeof v === 'string' && v.trim().length) || "";
       const normSongs = [];
+
       const rowsHTML = songs.map(song => {
         const audio = pickFirst(
           song.audioUrl, song.audio_url, song.audio,
@@ -154,6 +253,7 @@ function verSongs(playlistId) {
           song?.cover?.url, song?.image?.url, song?.media?.cover
         ) || "/static/inicio_sesion/img_song.png";
 
+        const idSond = song.id
         const title  = pickFirst(song.title, song.name) || "—";
         const author = pickFirst(song.artist_display_name, song.artist, song.author, song.singer) || "—";
         const genre  = pickFirst(song.genre, song.genero, song.gen) || "";
@@ -172,15 +272,57 @@ function verSongs(playlistId) {
             <div class="song-info">
               <div class="song-title"><strong>${title}</strong></div>
               <div class="song-author"><small style="color:#b3b3b3">${author}</small></div>
+              <br>
+              <button class="btnRoundPlaylist" onclick="likeSong(${song.id})">like</button>
+              <button class="btnRoundPlaylist" onclick="deleteFromPlaylistSong(${song.id})">eliminar</button>
             </div>
+            
+            
+            
           </li>`;
       }).filter(Boolean).join("");
 
-      content.innerHTML = rowsHTML
-        ? `<ul style="list-style:none;padding:0;margin:0">${rowsHTML}</ul>`
-        : '<p>No hay canciones reproducibles (faltan URLs de audio).</p>';
 
-      const main = document.getElementById('main-content');
+
+
+
+        content.innerHTML = '';
+        // Crear contenedor flexible
+        const headerContainer = document.createElement('div');
+        headerContainer.style.display = 'flex';
+        headerContainer.style.justifyContent = 'center'; // centrado horizontal
+        headerContainer.style.alignItems = 'center';     // centrado vertical
+        headerContainer.style.gap = '20px';              // espacio entre título y botón
+        headerContainer.style.margin = '20px 0 50px 0';  // margen superior e inferior
+        // Crear el título
+        const title = document.createElement('h2');
+        title.textContent = namePlaylist;
+        title.style.fontSize = '40px';
+        title.style.margin = '0'; // resetear márgenes por defecto de <h2>
+        // Crear el botón
+        const btn = document.createElement('button');
+        btn.className = 'btnAddPlaylist';
+        btn.textContent = '♫+';
+        btn.addEventListener('click', function () {
+            const rect = btn.getBoundingClientRect();
+            addSongToPlaylist(2)
+        });
+
+
+        // Añadir título y botón al contenedor
+        headerContainer.appendChild(title);
+        headerContainer.appendChild(btn);
+        content.appendChild(headerContainer);
+
+
+        let musHTML = `<ul style="list-style:none;padding:0;margin:0">${rowsHTML}</ul>`;
+        const tempContainer = document.createElement('div');
+        tempContainer.innerHTML = musHTML;
+        const ulElement = tempContainer.firstElementChild;
+        content.appendChild(ulElement);
+
+
+        const main = document.getElementById('main-content');
       if (main) main.dataset.view = 'playlist';
 
       try {
@@ -206,14 +348,23 @@ function verSongs(playlistId) {
 
 
 
-function playSong(id){
-    console.log('Reproduciendo canción con ID:', id);
 
+
+function addSongToPlaylist(idSong){
+
+    console.log('idSond to add playlist', idSong);
 
 }
 
 
-function likeSong(){
+function likeSong(idSong){
 
+    console.log('like', idSong);
+}
+
+
+function deleteFromPlaylistSong(idSong){
+
+    console.log('delete', idSong);
 
 }
