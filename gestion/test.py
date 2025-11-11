@@ -88,8 +88,6 @@ class GestionTests(TestCase):
         u = Users.objects.get(user="nuevo_artista")
         self.assertTrue(ArtistProfile.objects.filter(user=u).exists())
 
-    # Reemplaza el test existente por estos dos
-
 def test_registrar_artista_password_corta(self):
     """Alterno A-1: password < 6 ⇒ no debe crearse el artista."""
     resp = self.client.post(
@@ -114,7 +112,7 @@ def test_registrar_artista_password_minima_aceptada(self):
         payload = {
             "user": "artista_desc_larga",
             "password": "segura12345",
-            "description": "A" * 201,  # 201 chars
+            "description": "A" * 201,  
         }
         resp = self.c.post(self.url_reg_artista, payload, follow=False)
         self.assertIn(resp.status_code, (302, 303))
@@ -123,7 +121,6 @@ def test_registrar_artista_password_minima_aceptada(self):
 
 def test_registrar_admin_forbidden_para_no_admin(self):
     """Un usuario no-admin no puede acceder a registrar_admin (403)."""
-    # Cambia la sesión a 'viewer' (rol Usuario).
     s = self.c.session
     s['user'] = 'viewer'
     s.save()
@@ -133,9 +130,9 @@ def test_registrar_admin_forbidden_para_no_admin(self):
     self.assertFalse(Users.objects.filter(user="intruso").exists())
 
 
-from django.test import TestCase, Client  # noqa: E402 (mantener orden para consistencia con el original)
-from django.urls import reverse, NoReverseMatch  # noqa: E402
-from inicio_sesion.models import Users, Song  # noqa: E402
+from django.test import TestCase, Client  
+from django.urls import reverse, NoReverseMatch  
+from inicio_sesion.models import Users, Song 
 
 
 class GestionCambioUsernameTests(TestCase):

@@ -55,11 +55,9 @@ function _currentSong(){ return _state.queue[_state.index] || null; }
 function isArtistUser(){
   const main = document.getElementById('main-content');
 
-  // 1) Si el rol dice Artista, ya está
   const role = (main?.dataset.role || '').trim().toLowerCase();
   if (role.includes('artista')) return true;
 
-  // 2) Las señales “antiguas” que ya tenías
   const v =
     (main?.dataset.isArtist ??                       // data-is-artist="1|0"
      window.__IS_ARTIST__ ??                         // bandera global
@@ -287,7 +285,6 @@ function ensureDailyRoll(playlists){
     if (prev && prev.length){
       order = prev.slice(0, 10);
     } else {
-      // último recurso: arma con el universo (sin puntajes)
       order = _buildFrozenOrderFromPlays(playlists, yday);
     }
   }
@@ -295,7 +292,6 @@ function ensureDailyRoll(playlists){
 }
 
 
-// ------- Construye modelo final: Todas + Mi música + reales ----------------
 // ------- Construye modelo final: Todas + Mi música + reales ----------------
 function buildPlaylistsModel({ allPlaylists, mySongs, isArtist = false }) {
   const abs = (u) => { try { return u ? new URL(u, location.origin).href : ""; } catch { return u || ""; } };
@@ -369,18 +365,15 @@ function collectQueueFromDOM({ retainIfEmpty = true } = {}) {
     }
   });
 
-  // 👉 Si no hay nada en el DOM y queremos retener, no toques la cola actual
   if (nextQueue.length === 0 && retainIfEmpty) {
     return;
   }
 
-  // A partir de aquí, SÍ reemplazamos la cola
   const prevQueue = _state.queue;
   const prevIndex = _state.index;
 
   _state.queue = nextQueue;
 
-  // Intenta ubicar el índice por URL actual; si no, conserva el índice anterior si tiene sentido
   if (nextQueue.length > 0) {
     const want = curHref ? _state.queue.findIndex(s => absHref(ensureAbs(s.audioUrl)) === curHref) : -1;
     if (want !== -1) {
@@ -388,11 +381,10 @@ function collectQueueFromDOM({ retainIfEmpty = true } = {}) {
     } else if (prevQueue === nextQueue && prevIndex >= 0 && prevIndex < nextQueue.length) {
       _state.index = prevIndex;
     } else if (_state.index < 0) {
-      _state.index = 0; // fallback suave si nunca hubo índice
+      _state.index = 0; 
     }
   }
 
-  // Refresca highlight sólo si hay algo que resaltar
   highlightCurrent();
 }
 

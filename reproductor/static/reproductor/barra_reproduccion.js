@@ -427,7 +427,7 @@ function onShowBar(){
     init, show, hide,
     setLockGenre(flag){ lockGenreHue = !!flag; },
     setHue(h){ hue = Number(h)||0; setVars(intensity, hue); },
-    setSpeed(rate){ applySpeed(Number(rate)); }, // delega en applySpeed (persiste + UI)
+    setSpeed(rate){ applySpeed(Number(rate)); }, 
     getPersistedSpeed(){ return getSavedSpeed(); },
     setPersistedSpeed(rate){ applySpeed(Number(rate)); }
   };
