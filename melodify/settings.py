@@ -1,14 +1,23 @@
 """
-Configuración de Django para Melodify (desarrollo local).
+Configuración de Django para Melodify (compartida: local / PythonAnywhere).
 """
 from pathlib import Path
+import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # --------------------------- Seguridad / Debug ---------------------------
-SECRET_KEY = "django-insecure-dev-only"
-DEBUG = True
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", "testserver"]
+# En local: export DJANGO_DEBUG=1  (o en Windows: set DJANGO_DEBUG=1)
+DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-dev-only")
+
+ALLOWED_HOSTS = [
+    "127.0.0.1", "localhost", "testserver",
+    "faenand.pythonanywhere.com",
+]
+
+# Para formularios/POST sobre HTTPS en PythonAnywhere
+CSRF_TRUSTED_ORIGINS = ["https://faenand.pythonanywhere.com"]
 
 # ------------------------------- Apps -----------------------------------
 INSTALLED_APPS = [
@@ -80,10 +89,16 @@ USE_TZ = True
 
 # ----------------------------- Estáticos/Media ---------------------------
 STATIC_URL = "/static/"
-STATICFILES_DIRS = [
-    BASE_DIR / "static",
-    BASE_DIR / "feed" / "static",
-]
+# Necesario en producción para collectstatic
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Incluye solo si existen para evitar W004
+STATICFILES_DIRS = []
+if (BASE_DIR / "static").exists():
+    STATICFILES_DIRS.append(BASE_DIR / "static")
+if (BASE_DIR / "feed" / "static").exists():
+    STATICFILES_DIRS.append(BASE_DIR / "feed" / "static")
+
 MEDIA_URL = "/uploaded_media/"
 MEDIA_ROOT = BASE_DIR / "uploaded_media"
 
@@ -96,21 +111,3 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 0
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/home/"
 LOGOUT_REDIRECT_URL = "/login/"
-
-# --------------------------- Seguridad / Debug ---------------------------
-SECRET_KEY = "django-insecure-dev-only"
-DEBUG = True
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", "testserver", "faenand.pythonanywhere.com"]
-
-# ----------------------------- Estáticos/Media ---------------------------
-STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"   # <-- necesario en producción
-
-STATICFILES_DIRS = []
-if (BASE_DIR / "static").exists():
-    STATICFILES_DIRS.append(BASE_DIR / "static")
-if (BASE_DIR / "feed" / "static").exists():
-    STATICFILES_DIRS.append(BASE_DIR / "feed" / "static")
-
-MEDIA_URL = "/uploaded_media/"
-MEDIA_ROOT = BASE_DIR / "uploaded_media"
