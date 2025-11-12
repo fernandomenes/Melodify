@@ -1,7 +1,5 @@
 // static/inicio_sesion/homeScript.js
 
-// Si una vista de servidor pone window.__DISABLE_HOME_SCRIPT__, NO inicializamos la SPA.
-// Solo quitamos la clase en main-content para evitar layouts raros.
 const __SPA_DISABLED__ = !!window.__DISABLE_HOME_SCRIPT__;
 
 if (__SPA_DISABLED__) {
@@ -44,7 +42,6 @@ if (__SPA_DISABLED__) {
 
     // ========= Datos inyectados por plantilla =========
     let ROLE_RAW     = (mainContent.dataset.role || '');
-    // Normaliza rol: sin acentos, trim, minúsculas
     let ROLE = ROLE_RAW.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 
     let USERNAME    = (mainContent.dataset.username || '').trim();
