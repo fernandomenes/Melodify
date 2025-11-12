@@ -1,9 +1,11 @@
 {% load static %}
 <!doctype html>
 <html lang="es">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
 <head>
   <meta charset="utf-8">
-  <title>Mi Música — Melodify</title>
+  <title>Mi Mï¿½sica ï¿½ Melodify</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- Globales de inicio_sesion -->
@@ -72,7 +74,7 @@
           <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
       </a>
-      <h2 class="mm-title">Mi Música</h2>
+      <h2 class="mm-title">Mi Mï¿½sica</h2>
     </header>
 
     {% if messages %}
@@ -85,7 +87,7 @@
       <form method="post" action="{% url 'revertir' %}" style="margin:0;">
         {% csrf_token %}
         <div class="mm-undo">
-          <div class="mm-undo-text">{{ undo_muro_label|default:"Se eliminó una canción." }}</div>
+          <div class="mm-undo-text">{{ undo_muro_label|default:"Se eliminï¿½ una canciï¿½n." }}</div>
           <button class="mm-undo-btn" type="submit">Deshacer</button>
         </div>
       </form>
@@ -100,7 +102,7 @@
             </colgroup>
             <thead>
               <tr>
-                <th>Portada</th><th>Título</th><th>Intérprete</th><th>Fecha</th><th>Acción</th>
+                <th>Portada</th><th>Tï¿½tulo</th><th>Intï¿½rprete</th><th>Fecha</th><th>Acciï¿½n</th>
               </tr>
             </thead>
             <tbody>
@@ -110,15 +112,15 @@
                   {% if s.cover_image %}
                     <img class="mm-cover" src="{{ s.cover_image.url|default:s.cover_image }}" alt="Portada de {{ s.title }}">
                   {% else %}
-                    <div class="mm-cover mm-cover--ph">—</div>
+                    <div class="mm-cover mm-cover--ph">ï¿½</div>
                   {% endif %}
                 </td>
-                <td class="ellipsis" data-label="Título" title="{{ s.title }}">{{ s.title }}</td>
-                <td class="ellipsis" data-label="Intérprete" title="{{ s.artist_display_name }}">{{ s.artist_display_name }}</td>
+                <td class="ellipsis" data-label="Tï¿½tulo" title="{{ s.title }}">{{ s.title }}</td>
+                <td class="ellipsis" data-label="Intï¿½rprete" title="{{ s.artist_display_name }}">{{ s.artist_display_name }}</td>
                 <td class="mm-muted ellipsis" data-label="Fecha" title="{{ s.created_at|date:'Y-m-d H:i' }}">{{ s.created_at|date:"Y-m-d H:i" }}</td>
-                <td data-label="Acción" style="display:flex; gap:8px;">
+                <td data-label="Acciï¿½n" style="display:flex; gap:8px;">
                   <a class="mm-btn" href="{% url 'editar_mi_cancion_en_muro' s.id %}">Editar</a>
-                  <form method="post" action="{% url 'eliminar_mi_cancion' s.id %}" onsubmit="return confirm('¿Eliminar esta canción?');" style="display:inline;">
+                  <form method="post" action="{% url 'eliminar_mi_cancion' s.id %}" onsubmit="return confirm('ï¿½Eliminar esta canciï¿½n?');" style="display:inline;">
                     {% csrf_token %}
                     <button class="mm-btn mm-btn-danger" type="submit">Eliminar</button>
                   </form>
@@ -129,7 +131,7 @@
           </table>
         </div>
       {% else %}
-        <p class="mm-muted" style="margin:0;">No tienes canciones todavía.</p>
+        <p class="mm-muted" style="margin:0;">No tienes canciones todavï¿½a.</p>
       {% endif %}
     </section>
   </div>

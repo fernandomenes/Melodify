@@ -2,6 +2,9 @@
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Tasks = @('dev'))
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+# Fuerza DEBUG en local para servir /static/ sin collectstatic
+$env:DJANGO_DEBUG = '1'
+$env:PYTHONUTF8   = '1'
 
 # ---------------- Helpers ----------------
 function Get-HostPython {
@@ -72,6 +75,17 @@ function MakeMigrations {
 function Migrate {
   Ensure-Venv
   Invoke-Py @("manage.py", "migrate")
+}
+
+function Merge-Migrations {
+  Ensure-Venv
+  Write-Host "Unificando migraciones si hay ramas en conflicto (makemigrations --merge)..."
+  "y" | & $VenvPython "manage.py" "makemigrations" "--merge" "inicio_sesion"
+}
+
+function ShowMigrations {
+  Ensure-Venv
+  Invoke-Py @("manage.py", "showmigrations", "inicio_sesion")
 }
 
 function Seed {
@@ -175,23 +189,26 @@ function Coverage {
 
 # ---------------- Mapa de tareas ----------------
 $TaskMap = @{
-  'help'           = { Write-Host "Tareas: dev, setup, init-dirs, makemigrations, migrate, seed, run, runnet, clean, clean-media, clean-db, reset-db, superclean, test, coverage" }
-  'dev'            = { Setup; Ensure-Dirs; MakeMigrations; Migrate; Seed; Run }
-  'setup'          = { Setup }
-  'init-dirs'      = { Ensure-Dirs }
-  'makemigrations' = { MakeMigrations }
-  'migrate'        = { Migrate }
-  'seed'           = { Seed }
-  'run'            = { Run }
-  'runnet'         = { RunNet }
-  'clean'          = { Clean }
-  'clean-media'    = { Clean-Media }
-  'clean-db'       = { Clean-Db }
-  'reset-db'       = { Reset-Db }
-  'superclean'     = { SuperClean }
-  'test'           = { Test-Unit }
-  'coverage'       = { Coverage }
+  'help'             = { Write-Host "Tareas: dev, setup, init-dirs, makemigrations, merge-migrations, migrate, seed, run, runnet, clean, clean-media, clean-db, reset-db, superclean, test, coverage, showmigrations" }
+  'dev'              = { Setup; Ensure-Dirs; Merge-Migrations; MakeMigrations; Migrate; Seed; Run }
+  'setup'            = { Setup }
+  'init-dirs'        = { Ensure-Dirs }
+  'makemigrations'   = { MakeMigrations }
+  'merge-migrations' = { Merge-Migrations }
+  'migrate'          = { Migrate }
+  'showmigrations'   = { ShowMigrations }
+  'seed'             = { Seed }
+  'run'              = { Run }
+  'runnet'           = { RunNet }
+  'clean'            = { Clean }
+  'clean-media'      = { Clean-Media }
+  'clean-db'         = { Clean-Db }
+  'reset-db'         = { Reset-Db }
+  'superclean'       = { SuperClean }
+  'test'             = { Test-Unit }
+  'coverage'         = { Coverage }
 }
+
 
 foreach ($t in $Tasks) {
   if ($TaskMap.ContainsKey($t)) {
