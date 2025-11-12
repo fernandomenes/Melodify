@@ -1,7 +1,5 @@
 // static/inicio_sesion/homeScript.js
 
-// Si la vista de servidor establece window.__DISABLE_HOME_SCRIPT__, se evita inicializar la SPA.
-// Se retira la clase del contenedor principal para mantener el layout estable.
 const __SPA_DISABLED__ = !!window.__DISABLE_HOME_SCRIPT__;
 
 if (__SPA_DISABLED__) {
@@ -11,7 +9,7 @@ if (__SPA_DISABLED__) {
   });
 } else {
   document.addEventListener('DOMContentLoaded', async () => {
-    // Carga dinámica del módulo del reproductor con mecanismo de reserva (fallback).
+    // ========= Carga dinámica del módulo del reproductor con fallback =========
     let RP;
     try {
       const src = (window.REPRODUCTOR_SRC || '/static/reproductor/reproductor.js?v=1');
@@ -24,7 +22,7 @@ if (__SPA_DISABLED__) {
       };
     }
 
-    // Referencias a nodos base del layout.
+    // ========= Referencias a nodos base =========
     const $ = (s, r=document) => r.querySelector(s);
     const menuLateral   = $('#menuLateral');
     const mainContent   = $('#main-content');
@@ -36,16 +34,16 @@ if (__SPA_DISABLED__) {
 
     if (!mainContent || !contentDiv) return;
 
-    // Elementos del buscador (solo UI; la lógica de búsqueda se define en otro módulo).
+    // ========= Buscador (UI) =========
     const searchForm  = $('#search-form');
     const searchInput = $('#search-input');
     const searchPanel = $('#search-panel');
-
-    // Evita la recarga por submit.
     searchForm?.addEventListener('submit', (e) => e.preventDefault());
 
-    // Datos inyectados por la plantilla.
-    let ROLE        = (mainContent.dataset.role || '').toLowerCase();
+    // ========= Datos inyectados por plantilla =========
+    let ROLE_RAW     = (mainContent.dataset.role || '');
+    let ROLE = ROLE_RAW.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+
     let USERNAME    = (mainContent.dataset.username || '').trim();
     const AVATAR      = (mainContent.dataset.avatar || '').trim();
     const DESCRIPTION = (mainContent.dataset.description || '').trim();
@@ -61,17 +59,17 @@ if (__SPA_DISABLED__) {
     const hashView     = (location.hash || '').replace(/^#/, '');
     const INITIAL_VIEW = (urlParams.get('view') || hashView || mainContent.dataset.initialView || 'home').trim();
 
-    // Inferencia de rol en ausencia de dato explícito.
+    // ========= Inferencia de rol si viene vacío =========
     if (!ROLE) {
       const h1 = document.querySelector('.page h1')?.textContent?.toLowerCase() || '';
-      if (h1.includes('gestión')) ROLE = 'administrador';
+      if (h1.includes('gestion') || h1.includes('gestión')) ROLE = 'administrador';
     }
 
-    // Estado de navegación SPA.
+    // ========= Estado SPA =========
     let currentView  = null;
     let historyStack = [];
 
-    // Playlists iniciales provenientes del JSON embebido por plantilla.
+    // ========= Playlists iniciales desde JSON inyectado =========
     let playlists = [];
     try {
       const jsonEl = $('#playlists-data-json');
@@ -82,7 +80,7 @@ if (__SPA_DISABLED__) {
     }
     window._playlists = playlists;
 
-    // Utilidades de presentación.
+    // ========= Utils de presentación =========
     function escapeHtml(s) {
       return String(s ?? '').replace(/&/g,'&amp;')
                             .replace(/</g,'&lt;')
@@ -95,136 +93,59 @@ if (__SPA_DISABLED__) {
     }
     function pushHistory(html){ historyStack.push({ view: currentView, content: html }); }
 
-    // Pinta datos de usuario en el encabezado.
-    function aplicarAvatarHeader() {
-      const iconEl = $('#user-trigger .user-icon');
-      const nameEl = $('#username');
-      if (nameEl) nameEl.textContent = USERNAME || 'Usuario';
-      if (!iconEl) return;
-      if (AVATAR) {
-        iconEl.innerHTML = `<img src="${escapeHtml(AVATAR)}" alt="${escapeHtml(USERNAME || 'Usuario')}"
-                             style="width:32px;height:32px;border-radius:50%;object-fit:cover;">`;
-      } else {
-        iconEl.textContent = (USERNAME || 'U').trim().charAt(0).toUpperCase();
-      }
+    // ========= Buscador incremental (UI) =========
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => { clearTimeout(timeout); func(...args); };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
     }
-
-    // Visibilidad de entradas del menú lateral según rol.
-    function aplicarPermisosMenu() {
-      const showSel  = (selector, v) => { const el = $(selector); if (el) el.style.display = v ? '' : 'none'; };
-      const showView = (view, v) => showSel(`#menuLateral .menu-item[data-view="${view}"]`, v);
-
-      if (ROLE === 'administrador') {
-        showView('home', true);
-        showView('playlist', false);
-        showView('reproductor', false);
-        showView('perfil', true);
-        showView('mi-muro', false);
-        showView('gestion', true);
-      } else if (ROLE === 'artista') {
-        showView('home', true);
-        showView('playlist', true);
-        showView('reproductor', true);
-        showView('perfil', true);
-        showView('mi-muro', true);
-        showView('gestion', false);
-      } else {
-        showView('home', true);
-        showView('playlist', true);
-        showView('reproductor', true);
-        showView('perfil', true);
-        showView('mi-muro', false);
-        showView('gestion', false);
-      }
-    }
-
     function initSearch() {
-    const searchForm = $('#search-form');
-    const searchInput = $('#search-input');
-    const searchPanel = $('#search-panel');
-
-    if (searchForm && searchInput) {
-        // Manejar envío del formulario
-        searchForm.addEventListener('submit', (e) => {
-            const query = searchInput.value.trim();
-            if (!query) {
-                e.preventDefault();
-                searchInput.focus();
-                return;
-            }
-            // Permitir que el formulario se envíe normalmente
-            // La acción ya está configurada en el HTML para ir a /buscar/
+      const sf  = $('#search-form');
+      const si  = $('#search-input');
+      const pnl = $('#search-panel');
+      if (sf && si) {
+        sf.addEventListener('submit', (e) => {
+          const query = si.value.trim();
+          if (!query) {
+            e.preventDefault();
+            si.focus();
+            return;
+          }
         });
-
-        // Búsqueda en tiempo real (opcional)
-        if (searchPanel) {
-            const performSearch = debounce(async (query) => {
-                if (query.length < 2) {
-                    searchPanel.hidden = true;
-                    return;
-                }
-
-                try {
-                    // Aquí puedes implementar búsqueda en tiempo real si lo deseas
-                    // Por ahora, solo mostramos el panel de búsqueda
-                    searchPanel.hidden = false;
-                    searchPanel.innerHTML = `<div style="padding: 10px; color: #888;">
-                        Presiona Enter para buscar "${query}"
-                    </div>`;
-                } catch (error) {
-                    console.error('Error en búsqueda:', error);
-                    searchPanel.hidden = true;
-                }
-            }, 300);
-
-            searchInput.addEventListener('input', (e) => {
-                performSearch(e.target.value.trim());
-            });
-
-            // Ocultar panel al hacer clic fuera
-            document.addEventListener('click', (e) => {
-                if (!searchForm.contains(e.target)) {
-                    searchPanel.hidden = true;
-                }
-            });
-
-            // Manejar tecla Escape
-            searchInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
-                    searchPanel.hidden = true;
-                    searchInput.blur();
-                }
-            });
+        if (pnl) {
+          const performSearch = debounce(async (query) => {
+            if (query.length < 2) {
+              pnl.hidden = true;
+              return;
+            }
+            try {
+              pnl.hidden = false;
+              pnl.innerHTML = `<div style="padding:10px;color:#888;">Presiona Enter para buscar "${escapeHtml(query)}"</div>`;
+            } catch (err) {
+              console.error('Error en búsqueda:', err);
+              pnl.hidden = true;
+            }
+          }, 300);
+          si.addEventListener('input', (e) => performSearch(e.target.value.trim()));
+          document.addEventListener('click', (e) => { if (!sf.contains(e.target)) pnl.hidden = true; });
+          si.addEventListener('keydown', (e) => { if (e.key === 'Escape') { pnl.hidden = true; si.blur(); } });
         }
+      }
     }
-}
 
-function debounce(func, wait) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
-}
-
-    // Vistas SPA (render mínimo para estados base).
+    // ========= Render básicos =========
     function renderMenuHome() {
       mainContent.dataset.view = 'home';
 
       const ctaMuro = (ROLE === 'artista')
-        ? `<a id="muro-fab" class="fab-muro" href="${URL_MI_MURO}?no_spa=1" data-external="true">
-             Muro del artista <span class="sub">creador</span>
-           </a>`
+        ? `<a id="muro-fab" class="fab-muro" href="${URL_MI_MURO}?no_spa=1" data-external="true">Muro del artista <span class="sub">creador</span></a>`
         : '';
 
       const ctaGestion = (ROLE === 'administrador')
-        ? `<a id="gestion-fab" class="fab-gestion" href="${URL_GESTION}?no_spa=1" data-external="true">
-             Gestión <span class="sub">moderador</span>
-           </a>`
+        ? `<a id="gestion-fab" class="fab-gestion" href="${URL_GESTION}?no_spa=1" data-external="true">Gestión <span class="sub">moderador</span></a>`
         : '';
 
       const html = `
@@ -237,13 +158,11 @@ function debounce(func, wait) {
       showContent(html);
     }
 
-    // Fallback de listas de reproducción (si no existe implementación específica en otro módulo).
     function renderMenuPlaylists() {
       mainContent.dataset.view = 'playlist';
       const isArtist = ROLE === 'artista';
       const P = Array.isArray(window._playlists) ? window._playlists : [];
       let html = '';
-
       if (isArtist) {
         html += '<ul class="item-list"><li data-playlist-id="1">Mi música</li></ul>';
       } else if (P.length) {
@@ -253,7 +172,6 @@ function debounce(func, wait) {
       } else {
         html += '<p style="color:#b3b3b3;">No hay playlists.</p>';
       }
-
       pushHistory(html);
       showContent(html);
     }
@@ -261,15 +179,11 @@ function debounce(func, wait) {
     function renderMenuPerfil() {
       mainContent.dataset.view = 'perfil';
       const avatarHTML = AVATAR
-        ? `<img src="${escapeHtml(AVATAR)}" alt="${escapeHtml(USERNAME)}"
-                 style="width:96px;height:96px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px #2b2b2b;">`
-        : `<div style="width:96px;height:96px;border-radius:50%;background:#2a2a2a;display:flex;align-items:center;justify-content:center;font-size:36px;">
-             ${escapeHtml((USERNAME || 'U').charAt(0).toUpperCase())}
-           </div>`;
-      const roleLabel = (ROLE ? ROLE.charAt(0).toUpperCase() + ROLE.slice(1) : '—');
+        ? `<img src="${escapeHtml(AVATAR)}" alt="${escapeHtml(USERNAME)}" style="width:96px;height:96px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px #2b2b2b;">`
+        : `<div style="width:96px;height:96px;border-radius:50%;background:#2a2a2a;display:flex;align-items:center;justify-content:center;font-size:36px;">${escapeHtml((USERNAME || 'U').charAt(0).toUpperCase())}</div>`;
+      const roleLabel = ROLE ? ROLE.charAt(0).toUpperCase() + ROLE.slice(1) : '—';
       const descHTML  = (ROLE === 'artista') ? `<p style="margin:6px 0 0;color:#bbb;">Descripción: ${escapeHtml(DESCRIPTION || '—')}</p>` : '';
       const fechaHTML = `<p style="margin:0 0 4px;">Registrado: ${escapeHtml(CREATED_AT || '—')}</p>`;
-
       const html = `
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;"><h2 style="margin:0;">Perfil</h2></div>
         <div style="display:flex;gap:16px;align-items:center;background:#1e1e1e;border:1px solid #2b2b2b;border-radius:12px;padding:16px;max-width:720px;">
@@ -285,7 +199,42 @@ function debounce(func, wait) {
       showContent(html);
     }
 
-    // Router / navegación principal.
+    // ========= Permisos del menú lateral según rol (ROBUSTO) =========
+    function aplicarPermisosMenu() {
+      const hideAll = (view) => {
+        document.querySelectorAll(`#menuLateral .menu-item[data-view="${view}"]`).forEach(el => {
+          el.style.setProperty('display', 'none', 'important');
+          el.setAttribute('hidden', '');
+          el.classList.add('vis-hidden');
+        });
+      };
+      const showAll = (view) => {
+        document.querySelectorAll(`#menuLateral .menu-item[data-view="${view}"]`).forEach(el => {
+          el.style.removeProperty('display');
+          el.removeAttribute('hidden');
+          el.classList.remove('vis-hidden');
+        });
+      };
+
+      // Re-sanea ROLE por si fue reasignado dinámicamente
+      ROLE = (ROLE || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+
+      // Base visible
+      ['home','playlist','reproductor','perfil'].forEach(showAll);
+
+      if (ROLE === 'administrador') {
+        hideAll('mi-muro');   // admin no ve muro
+        showAll('gestion');   // admin sí ve gestión
+      } else if (ROLE === 'artista') {
+        showAll('mi-muro');   // artista sí ve muro
+        hideAll('gestion');   // artista no ve gestión
+      } else {
+        hideAll('mi-muro');   // usuario normal
+        hideAll('gestion');
+      }
+    }
+
+    // ========= Router / navegación =========
     function clickMenuToggleBtn() {
       menuLateral?.classList.toggle('collapsed');
       mainContent.classList.toggle('menuLateral-collapsed');
@@ -295,13 +244,13 @@ function debounce(func, wait) {
     menuToggleBtn?.addEventListener('click', clickMenuToggleBtn);
     toggleLogo?.addEventListener('click', clickMenuToggleBtn);
 
-    // Evita capturar enlaces marcados como externos; delega al navegador.
+    // Los <a data-external="true"> dejan la navegación al navegador (vistas servidor)
     document.addEventListener('click', (e) => {
       const a = e.target.closest?.('a[data-external="true"]');
       if (a) return;
     }, true);
 
-    // Menú de usuario en encabezado.
+    // Menú de usuario en encabezado
     const userTrigger = $('#user-trigger');
     const userMenu    = $('#user-menu');
     if (userTrigger && userMenu) {
@@ -316,7 +265,7 @@ function debounce(func, wait) {
       });
     }
 
-    // Ítems del sidebar que forman parte de la SPA.
+    // Ítems SPA del sidebar
     document.querySelectorAll('#menuLateral .menu-item[data-view]').forEach(item => {
       item.addEventListener('click', (e) => {
         if (item.tagName === 'A') { e.preventDefault(); e.stopPropagation(); }
@@ -333,7 +282,7 @@ function debounce(func, wait) {
       });
     }
 
-    // Botón de retorno. Permite delegar comportamiento específico cuando la vista lo provea.
+    // Botón Back con delegación
     function clickBackBtn() {
       switch (currentView) {
         case 'playlist':
@@ -350,60 +299,75 @@ function debounce(func, wait) {
           break;
       }
     }
-    botonBack?.addEventListener('click', (e) => {
-      e.preventDefault();
-      clickBackBtn();
-    });
+    botonBack?.addEventListener('click', (e) => { e.preventDefault(); clickBackBtn(); });
 
-    // Controlador central de navegación SPA.
+    // ========= Controlador central de navegación =========
     async function navegarSPA(view) {
       currentView = view;
       mainContent.dataset.view = view || '';
       historyStack = [];
 
       switch (view) {
-        case 'home':
-          await RP.stopReproductorIfLoaded();
+        case 'home': {
+          window.__MDF_FORMS_HIDE_BAR__ = false;
+          document.dispatchEvent(new CustomEvent('melodify:bar:shouldShow'));
           renderMenuHome();
           break;
-        case 'playlist':
-          await RP.stopReproductorIfLoaded();
+        }
+        case 'playlist': {
+          window.__MDF_FORMS_HIDE_BAR__ = false;
+          document.dispatchEvent(new CustomEvent('melodify:bar:shouldShow'));
           if (typeof window.showPlaylists === 'function') {
-            window.initPlayList(USERNAME);
+            window.initPlayList?.(USERNAME);
+            window.showPlaylists();
           } else {
             renderMenuPlaylists();
           }
           break;
-        case 'reproductor':
-          window.__SKIP_MY_MUSIC_REFRESH__ = true; // bandera interna para evitar refrescos redundantes
+        }
+        case 'reproductor': {
+          window.__MDF_FORMS_HIDE_BAR__ = false;
+          document.dispatchEvent(new CustomEvent('melodify:bar:shouldShow'));
+          window.__SKIP_MY_MUSIC_REFRESH__ = true;
           await RP.renderMenuReproductor({ mainContent, contentDiv, ROLE, URL_MI_MUSICA_JSON });
           break;
-
-        case 'perfil':
-          await RP.stopReproductorIfLoaded();
+        }
+        case 'perfil': {
+          window.__MDF_FORMS_HIDE_BAR__ = false;
+          document.dispatchEvent(new CustomEvent('melodify:bar:shouldShow'));
           renderMenuPerfil();
           break;
-        case 'gestion':     // vista servida por el servidor
-          await RP.stopReproductorIfLoaded();
+        }
+
+        // Vistas de servidor → pausa audio, oculta barra y redirige
+        case 'gestion': {
+          try { window.MDFCore?.getAudio()?.pause(); } catch {}
+          window.__MDF_FORMS_HIDE_BAR__ = true;
           window.location.href = URL_GESTION + '?no_spa=1';
-          break;
-        case 'mi-muro':     // vista servida por el servidor
-        case 'mi-musica':
-          await RP.stopReproductorIfLoaded();
+          return;
+        }
+        case 'mi-muro':
+        case 'mi-musica': {
+          try { window.MDFCore?.getAudio()?.pause(); } catch {}
+          window.__MDF_FORMS_HIDE_BAR__ = true;
           window.location.href = URL_MI_MURO + '?no_spa=1';
           return;
-        case 'musica':      // vista servida por el servidor
-          await RP.stopReproductorIfLoaded();
+        }
+        case 'musica': {
+          try { window.MDFCore?.getAudio()?.pause(); } catch {}
+          window.__MDF_FORMS_HIDE_BAR__ = true;
           window.location.href = URL_MUSICA + '?no_spa=1';
-          break;
-        default:
-          await RP.stopReproductorIfLoaded();
+          return;
+        }
+
+        default: {
           renderMenuHome();
           break;
+        }
       }
     }
 
-    // Marcado visual de acciones peligrosas (eliminar, borrar, etc.).
+    // ========= Marcado de acciones peligrosas =========
     function decorateDangerButtons(root = document) {
       const attrMatches = root.querySelectorAll(
         'button[name*="delete" i], button[id*="delete" i], button[data-action="delete"], button[data-danger],' +
@@ -420,14 +384,40 @@ function debounce(func, wait) {
       });
     }
 
-    // Inicialización de la aplicación.
+    // ========= Header (avatar/usuario) =========
+    function aplicarAvatarHeader() {
+      const iconEl = $('#user-trigger .user-icon');
+      const nameEl = $('#username');
+      if (nameEl) nameEl.textContent = USERNAME || 'Usuario';
+      if (!iconEl) return;
+      if (AVATAR) {
+        iconEl.innerHTML = `<img src="${escapeHtml(AVATAR)}" alt="${escapeHtml(USERNAME || 'Usuario')}"
+                             style="width:32px;height:32px;border-radius:50%;object-fit:cover;">`;
+      } else {
+        iconEl.textContent = (USERNAME || 'U').trim().charAt(0).toUpperCase();
+      }
+    }
+
+    // ========= Inicialización =========
     function inicializarApp() {
       if (!USERNAME) USERNAME = 'Usuario';
       aplicarAvatarHeader();
-      aplicarPermisosMenu();
-      initSearch(); 
 
-      // Conexión de eventos del reproductor.
+      // Aplica permisos de menú (dos veces: por si el DOM se altera inmediatamente después)
+      aplicarPermisosMenu();
+      setTimeout(aplicarPermisosMenu, 0);
+
+      initSearch();
+
+      // Si ya había audio, pide mostrar la barra
+      try {
+        if (window.MDFCore?.getAudio?.()?.src) {
+          window.__MDF_FORMS_HIDE_BAR__ = false;
+          document.dispatchEvent(new CustomEvent('melodify:bar:shouldShow'));
+        }
+      } catch {}
+
+      // Conexión de eventos del reproductor
       RP.wireReproductorPlaylistEvents({ mainContent, ROLE, URL_MI_MUSICA_JSON });
 
       const first = INITIAL_VIEW || 'home';
@@ -447,7 +437,7 @@ function debounce(func, wait) {
         renderMenuHome();
       }
 
-      // Mantiene sincronizado data-view al interactuar con el menú lateral.
+      // Mantiene sincronizado data-view al interactuar con el menú lateral (solo vistas SPA)
       const main = $('#main-content');
       if (main) {
         const SPA_VIEWS = new Set(['home', 'playlist', 'reproductor', 'perfil']);
@@ -458,6 +448,12 @@ function debounce(func, wait) {
           item.addEventListener('click', () => { main.dataset.view = view || 'home'; });
         });
       }
+    }
+
+    // Si #menuLateral cambia dinámicamente (por merges/plantilla), re-aplica permisos
+    if (menuLateral) {
+      const mo = new MutationObserver(() => aplicarPermisosMenu());
+      mo.observe(menuLateral, { childList: true, subtree: true });
     }
 
     inicializarApp();

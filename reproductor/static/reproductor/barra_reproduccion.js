@@ -107,6 +107,42 @@
     bar.style.setProperty('--viz-int', String(clamp(inten,0,1)));
     bar.style.setProperty('--viz-hue', String((((h%360)+360)%360)));
   }
+  // --- Toggle mostrar/ocultar barra ---
+const BAR_HIDDEN_KEY = 'mdf.bar.hidden';
+function _loadHidden(){ try { return localStorage.getItem(BAR_HIDDEN_KEY) === '1'; } catch { return false; } }
+function _saveHidden(v){ try { localStorage.setItem(BAR_HIDDEN_KEY, v ? '1' : '0'); } catch {} }
+
+function ensureBarToggle(){
+  if (document.getElementById('mdf-bar-toggle')) return;
+  const btn = document.createElement('button');
+  btn.id = 'mdf-bar-toggle';
+  btn.type = 'button';
+  btn.title = 'Mostrar/Ocultar reproductor';
+  btn.setAttribute('aria-pressed', 'false');
+  btn.innerHTML = '▾';
+  btn.addEventListener('click', () => {
+    const bar = els.bar || document.querySelector('._mdf-player-bar');
+    if (!bar) return;
+    const hide = !bar.classList.contains('mdf-bar--hidden');
+    bar.classList.toggle('mdf-bar--hidden', hide);
+    btn.setAttribute('aria-pressed', hide ? 'true' : 'false');
+    btn.innerHTML = hide ? '▴' : '▾';
+    _saveHidden(hide);
+  });
+  document.body.appendChild(btn);
+}
+function applySavedHidden(){
+  const bar = els.bar || document.querySelector('._mdf-player-bar');
+  if (!bar) return;
+  const hide = _loadHidden();
+  bar.classList.toggle('mdf-bar--hidden', hide);
+  const btn = document.getElementById('mdf-bar-toggle');
+  if (btn){
+    btn.setAttribute('aria-pressed', hide ? 'true' : 'false');
+    btn.innerHTML = hide ? '▴' : '▾';
+  }
+}
+
   function setRangeFill(input, p0to100){
     if(!input) return;
     const p=clamp(Number(p0to100??input.value),0,100);
@@ -154,7 +190,8 @@
     els.vol   = q("._mdf-vol", bar);
     els.ctrls = q("._mdf-ctrls", bar);
     els.speed = q("._mdf-speed", bar);
-
+    ensureBarToggle();
+    applySavedHidden();
     // Controles
     els.prev.onclick = ()=>window.MDFCore?.prev();
     els.next.onclick = ()=>window.MDFCore?.next();
@@ -195,14 +232,13 @@ function getCurrentView(){
   const m=document.getElementById("main-content");
   return (m?.dataset.view||m?.dataset.initialView||"").trim();
 }
+// Si una vista de servidor quiere esconder barra, setea window.__MDF_FORMS_HIDE_BAR__ = true
 function enforceVisibility(){
   const hasAudio = !!(audio && audio.src);
-  const spaEnabled = !window.__DISABLE_HOME_SCRIPT__;         // false en /mi-muro, /gestion, etc.
-  const view = getCurrentView();
-  const spaViews = new Set(["home","playlist","reproductor","perfil"]);
-  const inSpaView = spaViews.has(view);
-  if (spaEnabled && inSpaView && hasAudio) { show(); } else { hide(); }
+  const forceHide = !!window.__MDF_FORMS_HIDE_BAR__;
+  if (!forceHide && hasAudio) { show(); } else { hide(); }
 }
+
 
   function hookViewObserver(){
     const main=document.getElementById("main-content");
@@ -361,7 +397,12 @@ function enforceVisibility(){
     els.play.textContent = playing ? "⏸" : "▶";
   }
 
-  function onShowBar(){ enforceVisibility(); }
+function onShowBar(){
+  ensureBarToggle();
+  applySavedHidden();
+  enforceVisibility();
+}
+
 
   // ---------- Init ----------
   function init(){
@@ -386,7 +427,7 @@ function enforceVisibility(){
     init, show, hide,
     setLockGenre(flag){ lockGenreHue = !!flag; },
     setHue(h){ hue = Number(h)||0; setVars(intensity, hue); },
-    setSpeed(rate){ applySpeed(Number(rate)); }, // delega en applySpeed (persiste + UI)
+    setSpeed(rate){ applySpeed(Number(rate)); }, 
     getPersistedSpeed(){ return getSavedSpeed(); },
     setPersistedSpeed(rate){ applySpeed(Number(rate)); }
   };

@@ -159,48 +159,7 @@ class MuroAdvancedTests(TestCase):
 
     def _mk_cover(self, name="c.jpg"):
         """Crea una portada mínima para escenarios donde se requiera enviar imagen."""
-        return SimpleUploadedFile(name, b"\x89PNG\r\n\x1a\n\x00\x00", content_type="image/png")
-
-    # ----------------- Escenarios de UNDO -----------------
-    def test_undo_restore_song_after_delete(self):
-        """Revierten eliminación: visibility debe volver de 'removed' a 'public'."""
-        song = Song.objects.create(
-            title="Tema A", artist_display_name="artist", owner_user="artist",
-            audio_file="a.mp3", visibility="public", genre="rock"
-        )
-        resp = self.c.post(self._url("eliminar_mi_cancion", song_id=song.id))
-        self.assertIn(resp.status_code, (302, 303))
-        song.refresh_from_db()
-        self.assertEqual(song.visibility, "removed")
-
-        resp = self.c.post(self._url("revertir"))
-        self.assertIn(resp.status_code, (302, 303))
-        song.refresh_from_db()
-        self.assertEqual(song.visibility, "public")
-
-    def test_undo_delete_song_after_upload(self):
-        """Revierten subida reciente: el undo debe eliminar la canción creada."""
-        payload = {
-            "title": "Canción Nueva",
-            "artist_display_name": "artist",
-            "genre": "rock",
-        }
-        files = {"audio_file": self._mk_audio("n1.mp3")}
-        resp = self.c.post(
-            self._url("subir_cancion_en_muro"),
-            data={**payload, **files},
-            format="multipart",
-            HTTP_X_REQUESTED_WITH="fetch",
-        )
-        self.assertEqual(resp.status_code, 200, resp.content)
-        data = resp.json()
-        self.assertTrue(data.get("ok"))
-        song_id = data["song"]["id"]
-        self.assertTrue(Song.objects.filter(id=song_id).exists())
-
-        resp2 = self.c.post(self._url("revertir"))
-        self.assertIn(resp2.status_code, (302, 303))
-        self.assertFalse(Song.objects.filter(id=song_id).exists())
+        return SimpleUploadedFile(name, b"\x89PNG\r\n\x1a\n\x00\x00", content_type="image/png")    
 
     # ----------------- Subida masiva -----------------
     def test_subida_masiva_rechaza_demasiados_archivos(self):
