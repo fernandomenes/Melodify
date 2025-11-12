@@ -96,3 +96,21 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 0
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/home/"
 LOGOUT_REDIRECT_URL = "/login/"
+
+# --------------------------- Seguridad / Debug ---------------------------
+SECRET_KEY = "django-insecure-dev-only"
+DEBUG = True
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", "testserver", "faenand.pythonanywhere.com"]
+
+# ----------------------------- Estáticos/Media ---------------------------
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"   # <-- necesario en producción
+
+STATICFILES_DIRS = []
+if (BASE_DIR / "static").exists():
+    STATICFILES_DIRS.append(BASE_DIR / "static")
+if (BASE_DIR / "feed" / "static").exists():
+    STATICFILES_DIRS.append(BASE_DIR / "feed" / "static")
+
+MEDIA_URL = "/uploaded_media/"
+MEDIA_ROOT = BASE_DIR / "uploaded_media"
