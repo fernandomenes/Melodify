@@ -331,3 +331,44 @@ a.back:focus { background: #262626; }
     text-align: center;
     color: #888;
 }
+/* ===== Sidebar responsivo (usa #menuLateral existente) ===== */
+:root{
+  --sidebar-w: 248px;
+}
+
+#menuLateral{
+  width: var(--sidebar-w);
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  overflow: auto;
+}
+
+/* En <=1024px se vuelve off-canvas */
+@media (max-width:1024px){
+  #menuLateral{
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    width: min(86vw, 340px);
+    max-width: 86vw;
+    height: 100dvh;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    z-index: 60;
+  }
+  #menuLateral.open{ transform: translateX(0); }
+
+  /* El contenido ocupa toda la anchura cuando el menú está oculto */
+  #main-content{ margin-left: 0 !important; }
+  .overlay{
+    position: fixed; inset: 0; z-index: 59;
+    background: rgb(0 0 0 / .4);
+    backdrop-filter: blur(1px);
+  }
+  .overlay[hidden]{ display: none; }
+}
+
+/* En >1024px, empuja el contenido a la derecha del sidebar */
+@media (min-width:1025px){
+  #main-content{ margin-left: var(--sidebar-w); }
+}

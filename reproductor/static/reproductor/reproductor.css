@@ -213,7 +213,7 @@
 #mdf-bar-toggle {
   position: fixed;
   right: 16px;
-  bottom: 88px;   /* justo encima de la barra */
+  bottom: 88px;   
   z-index: 10001;
   display: inline-flex;
   align-items: center;
@@ -228,3 +228,50 @@
   box-shadow: 0 6px 24px rgba(0,0,0,.35);
 }
 #mdf-bar-toggle[aria-pressed="true"] { background: #101010; }
+
+/* ===== Reflow del player en móvil/tablet ===== */
+
+/* Nombra áreas de la grilla (sin romper desktop) */
+._mdf-player-bar{ grid-template-areas: "now ctr right"; }
+._mdf-now{   grid-area: now; }
+._mdf-ctrls{ grid-area: ctr; }
+._mdf-right{ grid-area: right; }
+
+/* Desktop sigue igual, pero hacemos min-width elástico */
+._mdf-right{ min-width: clamp(260px, 44vw, 420px); }
+
+/* Tablet chico / móvil: 2 filas (meta+controles arriba, progreso abajo) */
+@media (max-width: 960px){
+  ._mdf-player-bar{
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "now ctr"
+      "right right";
+    gap: 8px 10px;
+    height: auto;               /* permite crecer a 2 filas */
+    padding: 10px 12px;
+  }
+  ._mdf-right{
+    min-width: 0;               /* deja que se comprima */
+    gap: 8px;
+  }
+  ._mdf-time{
+    min-width: 72px;
+    font-size: 11px;
+    text-align: right;
+  }
+  ._mdf-player-seek{
+    flex: 1 1 auto;
+    min-width: 120px;
+  }
+  ._mdf-vol{
+    width: clamp(96px, 22vw, 140px);
+  }
+  ._mdf-cover{ width: 42px; height: 42px; }
+  ._mdf-player-title{ max-width: 56vw; }
+}
+
+/* Muy estrecho (p. ej. iPhone SE en vertical): oculta slider de volumen */
+@media (max-width: 400px){
+  ._mdf-vol{ display: none !important; }
+}

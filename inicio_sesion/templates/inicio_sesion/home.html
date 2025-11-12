@@ -1,33 +1,28 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="es">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Melodify</title>
 
   <!-- Fuentes -->
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
 
-  <!-- Estilos generales -->
+  <!-- Estilos -->
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
-
-  <!-- Reproductor (CSS): reproductor primero, barra UI al final para sobrescribir -->
   <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
 
   <script>
-    /* Ruta del módulo JS del reproductor — el homeScript usa import dinámico */
     window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
   </script>
 
-  <!-- (Opcional) playlists UI propia -->
   <script src="{% static 'inicio_sesion/playListScript.js' %}"></script>
   <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
 </head>
+
 
 <script>
   const btn = document.querySelector('[data-action="toggle-sidebar"]');
@@ -160,5 +155,31 @@
 
   <!-- Script para manejo de búsqueda -->
   <script src="{% static 'inicio_sesion/searchHandler.js' %}?v={% now 'U' %}"></script>
+<div class="overlay" id="overlay" hidden></div>
+
+<script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
+<script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const menu     = document.getElementById('menuLateral');
+    const overlay  = document.getElementById('overlay');
+    const btns     = [document.getElementById('menu-toggle-btn'), document.getElementById('toggle-menu')].filter(Boolean);
+
+    btns.forEach(b => b.addEventListener('click', () => {
+      menu.classList.toggle('open');
+      if (overlay) {
+        overlay.hidden = !overlay.hidden;
+        overlay.classList.toggle('show');
+      }
+    }));
+    overlay?.addEventListener('click', () => {
+      menu.classList.remove('open');
+      overlay.hidden = true;
+      overlay.classList.remove('show');
+    });
+  });
+</script>
+
 </body>
 </html>
