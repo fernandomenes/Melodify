@@ -3,15 +3,17 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Melodify</title>
 
   <!-- Fuentes -->
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
 
-  <!-- Estilos -->
+  <!-- Estilos generales -->
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
+
+  <!-- Reproductor (CSS): reproductor primero, barra UI al final para sobrescribir -->
   <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
 
@@ -28,20 +30,17 @@
 <body class="page-home">
   <!-- Header -->
   <div id="header">
-    <!-- Botón hamburguesa (visible en móvil) -->
-    <button id="menu-toggle-btn" aria-label="Abrir menú">☰</button>
-
     <!-- Buscador centrado -->
     <div id="search" class="search">
       <form id="search-form" role="search" aria-label="Buscar" method="get" action="{% url 'buscar' %}">
         <input
-          id="search-input"
-          name="q"
-          type="search"
-          placeholder="Buscar canciones, artistas o playlists…"
-          autocomplete="off"
-          aria-controls="search-panel"
-          required />
+            id="search-input"
+            name="q"
+            type="search"
+            placeholder="Buscar canciones, artistas o playlists…"
+            autocomplete="off"
+            aria-controls="search-panel"
+            required />
       </form>
       <div id="search-panel" class="search-panel" hidden></div>
     </div>
@@ -58,8 +57,8 @@
   </div>
 
   <!-- Menú lateral -->
-  <aside id="menuLateral" aria-label="Menú lateral">
-    <div class="logo" id="toggle-menu" role="button" tabindex="0" aria-label="Abrir menú">
+  <div id="menuLateral">
+    <div class="logo" id="toggle-menu">
       <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
       <span class="logo-text">Melodify</span>
     </div>
@@ -75,31 +74,30 @@
     <!-- Vistas de servidor (navegación) -->
     <div class="menu-item" data-view="mi-muro">Muro del artista</div>
     <div class="menu-item" data-view="gestion">Gestión</div>
-  </aside>
-
-  <!-- Overlay para off-canvas -->
-  <div class="overlay" id="overlay" hidden></div>
+  </div>
 
   <!-- Contenido -->
-  <main id="main-content"
-        data-initial-view="home"
-        data-username="{{ session_user }}"
-        data-role="{{ session_role }}"
-        data-avatar="{{ session_avatar_url }}"
-        data-description="{{ session_description }}"
-        data-created-at="{{ session_created_at }}"
-        data-url-home="{% url 'home' %}"
-        data-url-musica="/musica/"
-        data-url-mi-muro="{% url 'mi_muro' %}"
-        data-url-gestion="{% url 'gestion' %}"
-        data-url-revertir="{% url 'revertir' %}"
-        data-url-mi-musica-json="{% url 'mi_musica_json' %}">
+  <div id="main-content"
+       data-initial-view="home"
+       data-username="{{ session_user }}"
+       data-role="{{ session_role }}"
+       data-avatar="{{ session_avatar_url }}"
+       data-description="{{ session_description }}"
+       data-created-at="{{ session_created_at }}"
+       data-url-home="{% url 'home' %}"
+       data-url-musica="/musica/"
+       data-url-mi-muro="{% url 'mi_muro' %}"
+       data-url-gestion="{% url 'gestion' %}"
+       data-url-revertir="{% url 'revertir' %}"
+       data-url-mi-musica-json="{% url 'mi_musica_json' %}">
+
+    <button id="menu-toggle-btn">☰</button>
 
     <!-- Botón Back universal (lo maneja la SPA; oculto en Home por CSS) -->
     <a id="back-btn" class="back" href="{% url 'home' %}" title="Volver a inicio" aria-label="Regresar">←</a>
 
     <div id="content"></div>
-  </main>
+  </div>
 
   <!-- Playlists para el reproductor (inyectadas desde views.py cuando aplique) -->
   <script id="playlists-data-json" type="application/json">
@@ -147,30 +145,6 @@
       if (window.history.replaceState) {
         window.history.replaceState(null, null, window.location.href);
       }
-    });
-  </script>
-
-  <!-- Toggle del sidebar (sin dependencias) -->
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const menu     = document.getElementById('menuLateral');
-      const overlay  = document.getElementById('overlay');
-      const btn      = document.getElementById('menu-toggle-btn');
-      const brand    = document.getElementById('toggle-menu');
-
-      function setOpen(open){
-        menu.classList.toggle('open', open);
-        if (overlay){
-          overlay.hidden = !open;
-          overlay.classList.toggle('show', open);
-        }
-      }
-      function toggle(){ setOpen(!menu.classList.contains('open')); }
-
-      btn?.addEventListener('click', toggle);
-      brand?.addEventListener('click', toggle);
-      brand?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); toggle(); }});
-      overlay?.addEventListener('click', ()=> setOpen(false));
     });
   </script>
 
