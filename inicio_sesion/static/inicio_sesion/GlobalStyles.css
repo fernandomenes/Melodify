@@ -109,3 +109,56 @@ body{
   /* opcional para algunos controles en Firefox:
      -moz-appearance: none; */
 }
+
+/* ===== Layout + Sidebar responsivos ===== */
+:root{
+  /* ancho de sidebar en desktop */
+  --sidebar-w: clamp(220px, 24vw, 300px);
+}
+
+/* Layout de dos columnas solo en pantallas amplias */
+.layout{
+  display:grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  min-height: 100dvh;
+}
+
+/* Sidebar normal (desktop) */
+.sidebar{
+  width: var(--sidebar-w);
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100dvh;
+  overflow:auto;
+}
+
+/* Off-canvas en <=1024px: no ocupa columna, se muestra sobrepuesto */
+@media (max-width:1024px){
+  .layout{ grid-template-columns: 1fr; } /* oculta columna de sidebar */
+  .sidebar{
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    width: min(86vw, 360px);
+    max-width: 86vw;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    z-index: 60;
+    height: 100dvh;
+  }
+  .sidebar.open{ transform: translateX(0); }
+  .overlay{
+    position: fixed; inset: 0;
+    background: rgb(0 0 0 / .4);
+    backdrop-filter: blur(1px);
+    display: none; z-index: 59;
+  }
+  .overlay.show{ display: block; }
+}
+
+/* Utilidades */
+.hide-xs{ display:none !important; }
+@media (min-width:641px){ .hide-xs{ display:initial !important; } }
+
+.only-lg{ display:none !important; }
+@media (min-width:1024px){ .only-lg{ display:initial !important; } }

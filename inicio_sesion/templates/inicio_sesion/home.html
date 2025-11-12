@@ -29,6 +29,14 @@
   <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
 </head>
 
+<script>
+  const btn = document.querySelector('[data-action="toggle-sidebar"]');
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.querySelector('.overlay');
+  btn?.addEventListener('click', ()=>{ sidebar?.classList.toggle('open'); overlay?.classList.toggle('show'); });
+  overlay?.addEventListener('click', ()=>{ sidebar?.classList.remove('open'); overlay?.classList.remove('show'); });
+</script>
+
 <body class="page-home">
   <!-- Header -->
   <div id="header">
