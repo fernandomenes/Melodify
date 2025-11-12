@@ -8,20 +8,25 @@
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
+:root{
+  --sidebar-w: 248px;  /* ancho sidebar en desktop */
+}
+
+html { -webkit-text-size-adjust: 100%; }
 body {
-  display: flex;
-  height: 100vh;
+  display: block;
+  min-height: 100dvh;
   background-color: #1a1a1a;
   color: #efeeee;
 }
 
 /* ==========================================================================
-   Encabezado superior
+   Header (pegajoso) — se desplaza en desktop para no tapar el sidebar
    ========================================================================== */
 #header {
   position: fixed;
   top: 0;
-  left: 220px;
+  left: 0;                 /* móvil/tablet: sin desplazamiento */
   right: 0;
   height: 64px;
   background-color: #1a1a1a;
@@ -29,12 +34,32 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding: 0 20px;
-  z-index: 90;
-  transition: left .3s ease;
+  gap: 12px;
+  padding: 0 16px;
+  z-index: 50;
 }
-#header.menuLateral-collapsed { left: 0; }
+@media (min-width: 1025px){
+  #header { left: var(--sidebar-w); } /* en desktop respetar sidebar fijo */
+}
 
+/* Botón hamburguesa (visible en <=1024px) */
+#menu-toggle-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px; height: 40px;
+  border: 1px solid #2b2b2b;
+  background: #151515;
+  color: #efeeee;
+  border-radius: 6px;
+  font-size: 20px;
+  cursor: pointer;
+}
+@media (min-width:1025px){
+  #menu-toggle-btn{ display:none; }
+}
+
+/* Usuario en header */
 .user-info {
   display: flex;
   align-items: center;
@@ -42,75 +67,57 @@ body {
   position: relative;
   cursor: pointer;
 }
-
 .user-icon {
-  width: 36px;
-  height: 36px;
+  width: 36px; height: 36px;
   background-color: #ff0066;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: bold;
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-weight: bold;
 }
 
-/* ==========================================================================
-   Menú desplegable de usuario
-   ========================================================================== */
+/* Menú de usuario */
 #user-menu {
   position: absolute;
-  top: 45px;
-  right: 0;
+  top: 45px; right: 0;
   background: #000;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0,0,0,.15);
-  width: 200px;
-  overflow: hidden;
-  display: none;
-  z-index: 1000;
+  width: 200px; overflow: hidden;
+  display: none; z-index: 1000;
 }
 #user-menu.show { display: block; }
 #user-menu a {
-  display: block;
-  padding: 12px 20px;
-  text-decoration: none;
-  color: #fcfcfc;
+  display: block; padding: 12px 20px;
+  text-decoration: none; color: #fcfcfc;
   transition: background .2s;
 }
 #user-menu a:hover { background-color: #393b3b; }
 
 /* ==========================================================================
-   Identidad (logo)
-   ========================================================================== */
-.logo {
-  padding-left: 10px;
-  font-size: 24px;
-  font-weight: bold;
-  cursor: pointer;
-  background-color: #000;
-  text-align: justify-all;
-  border-bottom: 1px solid #363636;
-}
-.logo-image { width: 40px; align-items: center; margin-top: 15px; }
-.logo-text { background-color: #000; color: #fff; font-family: 'Pacifico', cursive; }
-
-/* ==========================================================================
-   Menú lateral
+   Sidebar — fijo en desktop, off-canvas en móviles/tablets
    ========================================================================== */
 #menuLateral {
-  width: 220px;
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  width: var(--sidebar-w);
+  height: 100dvh;
   background-color: #0f0f0f;
   color: white;
-  transition: transform 0.3s ease;
-  z-index: 100;
-  position: fixed;
-  height: 100%;
   overflow-y: auto;
+  z-index: 60;
+  /* desktop por defecto visible */
 }
-#menuLateral.collapsed { transform: translateX(-100%); }
+.logo {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 10px;
+  font-size: 24px; font-weight: bold;
+  cursor: pointer; background-color: #000;
+  border-bottom: 1px solid #363636;
+}
+.logo-image { width: 40px; margin-top: 4px; }
+.logo-text  { color: #fff; font-family: 'Pacifico', cursive; }
 
-/* Ítem del menú */
+/* Menú: ítems */
 .menu-item {
   display: block;
   width: calc(100% - 24px);
@@ -130,87 +137,55 @@ body {
   background-color: #ff0066;
   border-color: #ff2a7f;
   color: #ffffff;
-  border-radius: 10px;
-  border-left: none;
 }
-.menu-item.active:hover { background-color: #ff2a7f; }
 .menu-item:active { transform: translateY(1px); }
 
+/* Off-canvas en <=1024px */
+@media (max-width:1024px){
+  #menuLateral{
+    width: min(86vw, 340px);
+    max-width: 86vw;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    box-shadow: 12px 0 28px rgba(0,0,0,.35);
+  }
+  #menuLateral.open{ transform: translateX(0); }
+}
+
+/* Overlay cuando el menú está abierto (solo móvil) */
+.overlay{
+  position: fixed; inset: 0;
+  background: rgb(0 0 0 / .4);
+  backdrop-filter: blur(1px);
+  z-index: 59;
+}
+.overlay[hidden]{ display: none; }
+
 /* ==========================================================================
-   Contenido principal
+   Contenido principal: deja espacio en desktop; a ancho completo en móvil
    ========================================================================== */
 #main-content {
-  flex: 1;
-  margin-left: 240px;
-  padding: 80px 20px 20px;
-  overflow-y: auto;
-  transition: margin-left .3s ease;
   position: relative;
+  padding: 80px 20px 20px; /* 80px para despegar del header fijo */
+  min-height: 100dvh;
 }
-#main-content.menuLateral-collapsed { margin-left: 0; }
-
-/* Botón para abrir menú cuando está oculto */
-#menu-toggle-btn {
-  position: fixed;
-  top: 15px;
-  left: 15px;
-  background: #000;
-  color: white;
-  border: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 4px;
-  font-size: 20px;
-  cursor: pointer;
-  z-index: 200;
-  display: none;
+@media (min-width:1025px){
+  #main-content { margin-left: var(--sidebar-w); }
 }
-#main-content.menuLateral-collapsed #menu-toggle-btn { display: block; }
 
-/* ==========================================================================
-   Botón “Back”
-   ========================================================================== */
+/* Botón Back */
 a.back,
 a.back:link,
 a.back:visited {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  border: 1px solid #2b2b2b;
-  background: #151515;
-  color: #efeeee;
-  text-decoration: none;
-  font-weight: 700;
-  font-size: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px;
+  border-radius: 999px; border: 1px solid #2b2b2b;
+  background: #151515; color: #efeeee;
+  text-decoration: none; font-weight: 700; font-size: 18px;
 }
-a.back:hover,
-a.back:focus { background: #262626; }
+a.back:hover, a.back:focus { background: #262626; }
 
-/* ==========================================================================
-   Lista de canciones simple (Home)
-   ========================================================================== */
-.song-item {
-  padding: 10px 16px;
-  background: #212121;
-  border-radius: 2px;
-  margin: 8px 0;
-  cursor: pointer;
-}
-.song-item:hover { background: #393b3b; }
-
-/* ==========================================================================
-   Botones reutilizables
-   ========================================================================== */
-.btnPeligro { background-color: #b00020; }
-.btnPeligro:hover { background-color: #c62828; }
-.btnChico { width: auto; padding: 6px 10px; font-size: 1em; }
-
-/* ==========================================================================
-   Visibilidad del botón Back según la vista
-   ========================================================================== */
+/* Visibilidad del botón Back según la vista */
 #back-btn { display: inline-flex; }
 #main-content[data-view="home"] #back-btn,
 #main-content[data-initial-view="home"]:not([data-view]) #back-btn,
@@ -219,156 +194,51 @@ a.back:focus { background: #262626; }
 }
 
 /* ==========================================================================
-   FAB “Muro del artista” 
+   Lista de canciones simple (Home)
    ========================================================================== */
-.fab-muro{
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  font-weight: 700;
-  border-radius: 999px;
-  background: #21c8ff;        
-  color: #042029;             
-  text-decoration: none;
-  box-shadow: 0 10px 24px rgba(33,200,255,.35), inset 0 1px 0 rgba(255,255,255,.2);
-  border: 1px solid rgba(255,255,255,.25);
-  z-index: 250;               
+.song-item {
+  padding: 10px 16px;
+  background: #212121;
+  border-radius: 8px;
+  margin: 8px 0;
+  cursor: pointer;
+  transition: background .2s ease;
 }
-.fab-muro:hover { background: #53d8ff; }
-.fab-muro:active { transform: translateY(1px); }
-.fab-muro .sub{
-  font-size: 12px;
-  font-weight: 500;
-  opacity: .9;
-  margin-left: 6px;
+.song-item:hover { background: #393b3b; }
+
+/* ==========================================================================
+   FABs
+   ========================================================================== */
+.fab-muro, .fab-gestion{
+  position: fixed; right: 24px; bottom: 24px;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 16px; font-weight: 700; border-radius: 999px;
+  background: #21c8ff; color: #042029; text-decoration: none;
+  box-shadow: 0 10px 24px rgba(33,200,255,.35), inset 0 1px 0 rgba(255,255,255,.2);
+  border: 1px solid rgba(255,255,255,.25); z-index: 250;
+}
+.fab-muro:hover, .fab-gestion:hover { background: #53d8ff; }
+.fab-muro:active, .fab-gestion:active { transform: translateY(1px); }
+.fab-muro .sub, .fab-gestion .sub{ font-size: 12px; font-weight: 500; opacity: .9; margin-left: 6px; }
+
+@media (max-width: 720px){
+  .fab-muro, .fab-gestion{ right: 16px; bottom: 16px; padding: 10px 14px; }
 }
 
 /* ==========================================================================
-   FAB “Gestión” 
+   Panel de búsqueda (visual)
    ========================================================================== */
-.fab-gestion{
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  font-weight: 700;
-  border-radius: 999px;
-  background: #21c8ff;       
-  color: #042029;
-  text-decoration: none;
-  box-shadow: 0 10px 24px rgba(33,200,255,.35), inset 0 1px 0 rgba(255,255,255,.2);
-  border: 1px solid rgba(255,255,255,.25);
-  z-index: 250;
-}
-.fab-gestion:hover { background: #53d8ff; }
-.fab-gestion:active { transform: translateY(1px); }
-.fab-gestion .sub{
-  font-size: 12px;
-  font-weight: 500;
-  opacity: .9;
-  margin-left: 6px;
-}
-
-/* Responsive: margen en pantallas pequeñas */
-@media (max-width: 720px){
-  .fab-muro{ right: 16px; bottom: 16px; padding: 10px 14px; }
-  .fab-gestion{ right: 16px; bottom: 16px; padding: 10px 14px; }
-}
-
-/* Estilos para el panel de búsqueda */
 .search-panel {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 8px;
-    margin-top: 5px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-    z-index: 1000;
-    max-height: 400px;
-    overflow-y: auto;
+  position: absolute; top: 100%; left: 0; right: 0;
+  background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
+  margin-top: 5px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  z-index: 1000; max-height: 400px; overflow-y: auto;
 }
-
-.search-section {
-    padding: 10px;
-    border-bottom: 1px solid #333;
-}
-
-.search-section:last-child {
-    border-bottom: none;
-}
-
+.search-section { padding: 10px; border-bottom: 1px solid #333; }
+.search-section:last-child { border-bottom: none; }
 .search-section h4 {
-    color: #ff0066;
-    margin: 0 0 8px 0;
-    font-size: 14px;
-    text-transform: uppercase;
+  color: #ff0066; margin: 0 0 8px 0; font-size: 14px; text-transform: uppercase;
 }
-
-.search-item {
-    padding: 8px 12px;
-    cursor: pointer;
-    border-radius: 4px;
-    color: #fff;
-    transition: background-color 0.2s;
-}
-
-.search-item:hover {
-    background-color: #2a2a2a;
-}
-
-.search-no-results {
-    padding: 20px;
-    text-align: center;
-    color: #888;
-}
-/* ===== Sidebar responsivo (usa #menuLateral existente) ===== */
-:root{
-  --sidebar-w: 248px;
-}
-
-#menuLateral{
-  width: var(--sidebar-w);
-  position: sticky;
-  top: 0;
-  height: 100dvh;
-  overflow: auto;
-}
-
-/* En <=1024px se vuelve off-canvas */
-@media (max-width:1024px){
-  #menuLateral{
-    position: fixed;
-    left: 0; top: 0; bottom: 0;
-    width: min(86vw, 340px);
-    max-width: 86vw;
-    height: 100dvh;
-    transform: translateX(-100%);
-    transition: transform .25s ease;
-    z-index: 60;
-  }
-  #menuLateral.open{ transform: translateX(0); }
-
-  /* El contenido ocupa toda la anchura cuando el menú está oculto */
-  #main-content{ margin-left: 0 !important; }
-  .overlay{
-    position: fixed; inset: 0; z-index: 59;
-    background: rgb(0 0 0 / .4);
-    backdrop-filter: blur(1px);
-  }
-  .overlay[hidden]{ display: none; }
-}
-
-/* En >1024px, empuja el contenido a la derecha del sidebar */
-@media (min-width:1025px){
-  #main-content{ margin-left: var(--sidebar-w); }
-}
+.search-item { padding: 8px 12px; cursor: pointer; border-radius: 4px; color: #fff; transition: background-color 0.2s; }
+.search-item:hover { background-color: #2a2a2a; }
+.search-no-results { padding: 20px; text-align: center; color: #888; }

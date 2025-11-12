@@ -16,36 +16,32 @@
   <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
 
   <script>
+    /* Ruta del módulo JS del reproductor — el homeScript usa import dinámico */
     window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
   </script>
 
+  <!-- (Opcional) playlists UI propia -->
   <script src="{% static 'inicio_sesion/playListScript.js' %}"></script>
   <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
 </head>
 
-
-<script>
-  const btn = document.querySelector('[data-action="toggle-sidebar"]');
-  const sidebar = document.querySelector('.sidebar');
-  const overlay = document.querySelector('.overlay');
-  btn?.addEventListener('click', ()=>{ sidebar?.classList.toggle('open'); overlay?.classList.toggle('show'); });
-  overlay?.addEventListener('click', ()=>{ sidebar?.classList.remove('open'); overlay?.classList.remove('show'); });
-</script>
-
 <body class="page-home">
   <!-- Header -->
   <div id="header">
+    <!-- Botón hamburguesa (visible en móvil) -->
+    <button id="menu-toggle-btn" aria-label="Abrir menú">☰</button>
+
     <!-- Buscador centrado -->
     <div id="search" class="search">
       <form id="search-form" role="search" aria-label="Buscar" method="get" action="{% url 'buscar' %}">
         <input
-            id="search-input"
-            name="q"
-            type="search"
-            placeholder="Buscar canciones, artistas o playlists…"
-            autocomplete="off"
-            aria-controls="search-panel"
-            required />
+          id="search-input"
+          name="q"
+          type="search"
+          placeholder="Buscar canciones, artistas o playlists…"
+          autocomplete="off"
+          aria-controls="search-panel"
+          required />
       </form>
       <div id="search-panel" class="search-panel" hidden></div>
     </div>
@@ -62,8 +58,8 @@
   </div>
 
   <!-- Menú lateral -->
-  <div id="menuLateral">
-    <div class="logo" id="toggle-menu">
+  <aside id="menuLateral" aria-label="Menú lateral">
+    <div class="logo" id="toggle-menu" role="button" tabindex="0" aria-label="Abrir menú">
       <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
       <span class="logo-text">Melodify</span>
     </div>
@@ -79,30 +75,31 @@
     <!-- Vistas de servidor (navegación) -->
     <div class="menu-item" data-view="mi-muro">Muro del artista</div>
     <div class="menu-item" data-view="gestion">Gestión</div>
-  </div>
+  </aside>
+
+  <!-- Overlay para off-canvas -->
+  <div class="overlay" id="overlay" hidden></div>
 
   <!-- Contenido -->
-  <div id="main-content"
-       data-initial-view="home"
-       data-username="{{ session_user }}"
-       data-role="{{ session_role }}"
-       data-avatar="{{ session_avatar_url }}"
-       data-description="{{ session_description }}"
-       data-created-at="{{ session_created_at }}"
-       data-url-home="{% url 'home' %}"
-       data-url-musica="/musica/"
-       data-url-mi-muro="{% url 'mi_muro' %}"
-       data-url-gestion="{% url 'gestion' %}"
-       data-url-revertir="{% url 'revertir' %}"
-       data-url-mi-musica-json="{% url 'mi_musica_json' %}">
-
-    <button id="menu-toggle-btn">☰</button>
+  <main id="main-content"
+        data-initial-view="home"
+        data-username="{{ session_user }}"
+        data-role="{{ session_role }}"
+        data-avatar="{{ session_avatar_url }}"
+        data-description="{{ session_description }}"
+        data-created-at="{{ session_created_at }}"
+        data-url-home="{% url 'home' %}"
+        data-url-musica="/musica/"
+        data-url-mi-muro="{% url 'mi_muro' %}"
+        data-url-gestion="{% url 'gestion' %}"
+        data-url-revertir="{% url 'revertir' %}"
+        data-url-mi-musica-json="{% url 'mi_musica_json' %}">
 
     <!-- Botón Back universal (lo maneja la SPA; oculto en Home por CSS) -->
     <a id="back-btn" class="back" href="{% url 'home' %}" title="Volver a inicio" aria-label="Regresar">←</a>
 
     <div id="content"></div>
-  </div>
+  </main>
 
   <!-- Playlists para el reproductor (inyectadas desde views.py cuando aplique) -->
   <script id="playlists-data-json" type="application/json">
@@ -153,33 +150,31 @@
     });
   </script>
 
+  <!-- Toggle del sidebar (sin dependencias) -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const menu     = document.getElementById('menuLateral');
+      const overlay  = document.getElementById('overlay');
+      const btn      = document.getElementById('menu-toggle-btn');
+      const brand    = document.getElementById('toggle-menu');
+
+      function setOpen(open){
+        menu.classList.toggle('open', open);
+        if (overlay){
+          overlay.hidden = !open;
+          overlay.classList.toggle('show', open);
+        }
+      }
+      function toggle(){ setOpen(!menu.classList.contains('open')); }
+
+      btn?.addEventListener('click', toggle);
+      brand?.addEventListener('click', toggle);
+      brand?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); toggle(); }});
+      overlay?.addEventListener('click', ()=> setOpen(false));
+    });
+  </script>
+
   <!-- Script para manejo de búsqueda -->
   <script src="{% static 'inicio_sesion/searchHandler.js' %}?v={% now 'U' %}"></script>
-<div class="overlay" id="overlay" hidden></div>
-
-<script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
-<script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
-
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const menu     = document.getElementById('menuLateral');
-    const overlay  = document.getElementById('overlay');
-    const btns     = [document.getElementById('menu-toggle-btn'), document.getElementById('toggle-menu')].filter(Boolean);
-
-    btns.forEach(b => b.addEventListener('click', () => {
-      menu.classList.toggle('open');
-      if (overlay) {
-        overlay.hidden = !overlay.hidden;
-        overlay.classList.toggle('show');
-      }
-    }));
-    overlay?.addEventListener('click', () => {
-      menu.classList.remove('open');
-      overlay.hidden = true;
-      overlay.classList.remove('show');
-    });
-  });
-</script>
-
 </body>
 </html>
