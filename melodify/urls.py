@@ -42,6 +42,5 @@ urlpatterns = [
     path("favicon.ico", favicon_root, name="favicon"),
 ]
 
-# Solo en desarrollo: fallback para archivos estáticos
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

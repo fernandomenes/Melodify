@@ -1,6 +1,8 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="es">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
 <head>
   <meta charset="UTF-8">
   <title>Editar mi canción • Melodify</title>
@@ -17,15 +19,18 @@
     .page{max-width:960px;margin:0 auto;padding:24px}
 
     header.hdr{display:flex;align-items:center;gap:12px;margin-bottom:16px}
-    .icon-btn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:999px;border:1px solid #333;background:#1a1a1a;color:#fff;text-decoration:none}
+    .icon-btn{
+      display:inline-flex;align-items:center;justify-content:center;
+      width:36px;height:36px;border-radius:999px;
+      border:1px solid #333;background:#1a1a1a;color:#fff;text-decoration:none
+    }
     .icon-btn:hover{background:#222}
 
     .card{background:#1e1e1e;border:1px solid #2b2b2b;border-radius:12px;padding:16px}
 
-    /* ===== layout uniforme ===== */
     .form-grid{
       display:grid;
-      grid-template-columns: minmax(280px, 1fr) 220px;
+      grid-template-columns:minmax(280px, 1fr) 220px;
       gap:20px;
       align-items:start;
     }
@@ -45,7 +50,6 @@
     .btn:hover{background:#333}
     .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
 
-    /* portada */
     .cover-side{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
     .cover{width:200px;height:200px;border-radius:12px;background:#2a2a2a;object-fit:cover;box-shadow:0 0 0 1px rgba(0,0,0,.2)}
     .cover.ph{display:flex;align-items:center;justify-content:center;color:#bbb}
@@ -61,7 +65,6 @@
     </header>
 
     <div class="card">
-      <!-- OJO: sin mensajes flash aquí -->
       <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
 
@@ -74,26 +77,21 @@
             </div>
 
             <div class="field">
-              <label for="artist_display_name">Autor / Intérprete</label>
-              <input id="artist_display_name" name="artist_display_name" type="text" class="textlike" required value="{{ song.artist_display_name }}">
-            </div>
-
-            <div class="field">
               <label for="genre">Género</label>
               <select id="genre" name="genre" required>
                 <option value="" disabled {% if not song.genre %}selected{% endif %}>Selecciona un género…</option>
-                <option value="pop" {% if song.genre == 'pop' %}selected{% endif %}>Pop</option>
-                <option value="rock" {% if song.genre == 'rock' %}selected{% endif %}>Rock</option>
-                <option value="electronica" {% if song.genre == 'electronica' %}selected{% endif %}>Electrónica</option>
-                <option value="salsa" {% if song.genre == 'salsa' %}selected{% endif %}>Salsa</option>
-                <option value="indie" {% if song.genre == 'indie' %}selected{% endif %}>Indie</option>
-                <option value="hiphop" {% if song.genre == 'hiphop' %}selected{% endif %}>Hip-Hop</option>
-                <option value="reggaeton" {% if song.genre == 'reggaeton' %}selected{% endif %}>Reggaetón</option>
-                <option value="regional" {% if song.genre == 'regional' %}selected{% endif %}>Regional Mexicano</option>
-                <option value="balada" {% if song.genre == 'balada' %}selected{% endif %}>Balada</option>
-                <option value="jazz" {% if song.genre == 'jazz' %}selected{% endif %}>Jazz</option>
-                <option value="clasica" {% if song.genre == 'clasica' %}selected{% endif %}>Clásica</option>
-                <option value="otro" {% if song.genre == 'otro' %}selected{% endif %}>Otro</option>
+                <option value="pop"        {% if song.genre == 'pop' %}selected{% endif %}>Pop</option>
+                <option value="rock"       {% if song.genre == 'rock' %}selected{% endif %}>Rock</option>
+                <option value="electronica"{% if song.genre == 'electronica' %}selected{% endif %}>Electrónica</option>
+                <option value="salsa"      {% if song.genre == 'salsa' %}selected{% endif %}>Salsa</option>
+                <option value="indie"      {% if song.genre == 'indie' %}selected{% endif %}>Indie</option>
+                <option value="hiphop"     {% if song.genre == 'hiphop' %}selected{% endif %}>Hip-Hop</option>
+                <option value="reggaeton"  {% if song.genre == 'reggaeton' %}selected{% endif %}>Reggaetón</option>
+                <option value="regional"   {% if song.genre == 'regional' %}selected{% endif %}>Regional Mexicano</option>
+                <option value="balada"     {% if song.genre == 'balada' %}selected{% endif %}>Balada</option>
+                <option value="jazz"       {% if song.genre == 'jazz' %}selected{% endif %}>Jazz</option>
+                <option value="clasica"    {% if song.genre == 'clasica' %}selected{% endif %}>Clásica</option>
+                <option value="otro"       {% if song.genre == 'otro' %}selected{% endif %}>Otro</option>
               </select>
             </div>
 
@@ -101,11 +99,15 @@
               <button class="btn" type="submit">Guardar cambios</button>
               <a class="btn" href="{% url 'mi_muro' %}">Cancelar</a>
             </div>
+
+            <p class="help" style="margin-top:8px">
+              ID: {{ song.id }} • Dueño: {{ song.owner_user }}
+            </p>
           </div>
 
           <!-- Columna derecha: portada -->
           <div class="cover-side">
-            <label>Portada actual</label>
+            <label>Portada</label>
             {% if song.cover_image %}
               <img class="cover" src="{{ song.cover_image.url }}" alt="Portada">
             {% else %}

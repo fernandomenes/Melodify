@@ -101,3 +101,39 @@ a[role="button"][data-danger]:hover{
   background: linear-gradient(180deg, #3a1317, #261012);
   box-shadow: 0 0 0 1px var(--danger-2) inset, 0 0 22px var(--danger-glow-outer);
 }
+
+/* ===== Responsivo (botones reutilizables) ===== */
+
+/* Rectangular: ancho fluido, tipografía y padding escalables */
+.btnRect{
+  width: var(--card-w);
+  max-width: 100%;
+  padding: clamp(12px, 2.2vh, 16px);
+  font-size: clamp(1rem, 2.5vw, 1.25rem);
+  border-radius: 12px;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.btnRect:focus-visible{ outline: 2px solid #fff; outline-offset: 2px; }
+
+/* Redondo: evita width fijo */
+.btnRound{
+  width: auto;
+  min-width: 120px;
+  padding: .625rem 1rem;
+  border-radius: 9999px;
+}
+
+/* Danger: asegura blanco táctil y escalado */
+.btnDanger,
+button.btnDanger,
+input[type="submit"].btnDanger,
+a.btnDanger{
+  min-height: 44px;
+  padding: 12px 18px;
+  border-radius: 12px;
+}
+
+@media (max-width: 480px){
+  .btnRect{ display:block; }
+}

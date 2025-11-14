@@ -5,23 +5,23 @@
 <head>
   <meta charset="utf-8">
   <title>Muro del artista — {{ artist.user }} | Melodify</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
-  <!-- Bloquea la SPA del Home en esta carga -->
+  <!-- Desactiva la SPA del Home en esta vista -->
   <script>window.__DISABLE_HOME_SCRIPT__ = true;</script>
   <meta name="csrf-token" content="{{ csrf_token }}"/>
 
   <!-- Fuentes -->
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
 
-  <!-- Estilos base de la app -->
+  <!-- Estilos base de la aplicación -->
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
 
-  <!-- Estilos específicos del Muro -->
+  <!-- Estilos específicos del muro -->
   <link rel="stylesheet" href="{% static 'muro/muro.css' %}?v={% now 'U' %}">
 
-  <!-- Reproductor (CSS): reproductor primero, barra al final -->
+  <!-- Reproductor (CSS) -->
   <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
 </head>
@@ -79,7 +79,9 @@
       {% endif %}
       <div style="flex:1;">
         <h1 style="margin:0">{{ artist.user }}</h1>
-        {% if description %}<p class="muted" style="margin:6px 0 0">{{ description }}</p>{% endif %}
+        {% if description %}
+          <p class="muted" style="margin:6px 0 0">{{ description }}</p>
+        {% endif %}
       </div>
     </header>
 
@@ -104,46 +106,63 @@
     <div id="inline-msg" class="msg" role="alert"></div>
 
     {% if is_owner %}
-      <div class="card">
-        <h3 style="margin:0 0 12px">Subir canción</h3>
-        <div style="display:flex; gap:8px; margin:0 0 12px">
-          <a class="btn" href="{% url 'muro_subida_masiva' %}">Subida masiva</a>
-        </div>
-        <form id="form-upload" method="post" enctype="multipart/form-data" action="{% url 'subir_cancion_en_muro' %}" data-ajax="1">
-          {% csrf_token %}
-          <label>Título</label>
-          <input name="title" type="text" required>
-          <label style="margin-top:10px">Autor / Intérprete</label>
-          <input name="artist_display_name" type="text" required value="{{ artist.user }}">
-          <label style="margin-top:10px">Género</label>
-          <select name="genre" id="genre" required>
-            <option value="" disabled selected>Selecciona un género</option>
-            <option value="pop">Pop</option><option value="rock">Rock</option>
-            <option value="electronica">Electrónica</option><option value="hiphop">Hip-Hop</option>
-            <option value="reggaeton">Reguetón</option><option value="regional">Regional Mexicano</option>
-            <option value="balada">Balada</option><option value="indie">Indie</option>
-            <option value="jazz">Jazz</option><option value="clasica">Clásica</option>
-            <option value="salsa">Salsa</option>
-            <option value="_other">Otro…</option>
-          </select>
-          <input id="genre-other" type="text" placeholder="Escribe el género" style="display:none;margin-top:8px" data-for="genre">
-          <label style="margin-top:10px">Archivo de audio (.mp3, .wav, .ogg, .m4a, .flac)</label>
-          <input name="audio_file" type="file" accept=".mp3,.wav,.ogg,.m4a,.flac" required>
-          <label style="margin-top:10px">Portada (opcional)</label>
-          <input name="cover_image" type="file" accept=".png,.jpg,.jpeg,.webp">
-          <button class="btn" type="submit">Subir</button>
-        </form>
-      </div>
+  <div class="card">
+    <h3 style="margin:0 0 12px">Subir canción</h3>
+    <div style="display:flex; gap:8px; margin:0 0 12px">
+      {# antes intentamos {% url 'muro_subida_masiva' %} #}
+      <a class="btn" href="/mi-muro/subida-masiva/">Subida masiva</a>
+    </div>
+    <form id="form-upload"
+          method="post"
+          enctype="multipart/form-data"
+          {# antes intentamos {% url 'subir_cancion_muro' %} #}
+          action="/mi-muro/subir/"
+          data-ajax="1">
+      {% csrf_token %}
+      <label for="title">Título</label>
+      <input id="title" name="title" type="text" required>
+
+      <!-- Autor principal siempre es el usuario logueado -->
+      <p class="muted" style="margin:6px 0 0">
+        Esta canción se publicará como <strong>{{ session_user }}</strong>.
+      </p>
+
+    <label for="genre" style="margin-top:10px">Género</label>
+    <select name="genre" id="genre" required>
+      <option value="" disabled selected>Selecciona un género</option>
+      <option value="pop">Pop</option>
+      <option value="rock">Rock</option>
+      <option value="electronica">Electrónica</option>
+      <option value="hiphop">Hip-Hop</option>
+      <option value="reggaeton">Reguetón</option>
+      <option value="regional">Regional Mexicano</option>
+      <option value="balada">Balada</option>
+      <option value="indie">Indie</option>
+      <option value="jazz">Jazz</option>
+      <option value="clasica">Clásica</option>
+      <option value="salsa">Salsa</option>
+      <option value="_other">Otro…</option>
+    </select>
+
+    <input id="genre-other"
+           type="text"
+           placeholder="Escribe el género"
+           style="display:none;margin-top:8px"
+           data-for="genre">
+
+    <label style="margin-top:10px">Archivo de audio (.mp3, .wav, .ogg, .m4a, .flac)</label>
+    <input name="audio_file" type="file" accept=".mp3,.wav,.ogg,.m4a,.flac" required>
+
+    <label style="margin-top:10px">Portada (opcional)</label>
+    <input name="cover_image" type="file" accept=".png,.jpg,.jpeg,.webp">
+
+    <button class="btn" type="submit">Subir</button>
+  </form>
+</div>
+
     {% endif %}
 
-    <div class="tabs" role="tablist" aria-label="Secciones del muro">
-      <button class="tab-btn active" type="button" data-tab="songs" role="tab" aria-selected="true">Canciones</button>
-      <button class="tab-btn"        type="button" data-tab="playlists" role="tab" aria-selected="false">Playlists</button>
-      <button class="tab-btn"        type="button" data-tab="events" role="tab" aria-selected="false">Eventos</button>
-      <button class="tab-btn"        type="button" data-tab="posts" role="tab" aria-selected="false">Publicaciones</button>
-    </div>
-
-    <section id="tab-songs" class="tab active" role="region" aria-label="Canciones" aria-hidden="false">
+    <section aria-label="Canciones">
       <h3 style="margin:0 0 12px">Canciones</h3>
 
       <div class="toolbar" id="muro-bulk-toolbar">
@@ -156,7 +175,10 @@
       </div>
 
       {% if songs %}
-        <div id="songs-grid" class="grid" data-feed-list="songs" data-latest="{{ songs.0.created_at|date:'c'|default:'' }}">
+        <div id="songs-grid"
+             class="grid"
+             data-feed-list="songs"
+             data-latest="{{ songs.0.created_at|date:'c'|default:'' }}">
           {% for s in songs %}
             <article class="song js-song-card"
                      data-song-id="{{ s.id }}"
@@ -172,15 +194,23 @@
 
               <div class="row">
                 {% if s.cover_image %}
-                  <img class="preview" src="{{ s.cover_image.url }}" alt="Portada de {{ s.title }}" loading="lazy">
+                  <img class="preview"
+                       src="{{ s.cover_image.url }}"
+                       alt="Portada de {{ s.title }}"
+                       loading="lazy">
                 {% else %}
                   <div class="preview" aria-hidden="true"></div>
                 {% endif %}
                 <div>
                   <div style="font-weight:600">{{ s.title }}</div>
                   <div class="muted">{{ s.artist_display_name }}</div>
-                  <div class="muted">Género: {% firstof s.genre s.genero s.genre_name "—" %}</div>
-                  <div class="muted">Subida: {{ s.created_at|date:"Y-m-d H:i" }}</div>
+                  <div class="muted">
+                    Género:
+                    {% firstof s.genre s.genero s.genre_name "—" %}
+                  </div>
+                  <div class="muted">
+                    Subida: {{ s.created_at|date:"Y-m-d H:i" }}
+                  </div>
                 </div>
               </div>
 
@@ -213,19 +243,9 @@
         <p id="no-songs-msg" class="muted">Aún no hay canciones públicas.</p>
       {% endif %}
     </section>
-
-    <section id="tab-playlists" class="tab" role="region" aria-label="Playlists" aria-hidden="true" hidden>
-      <div class="card" style="margin:0"><p class="muted">Se mostrarán aquí cuando estén disponibles.</p></div>
-    </section>
-    <section id="tab-events" class="tab" role="region" aria-label="Eventos" aria-hidden="true" hidden>
-      <div class="card" style="margin:0"><p class="muted">Eventos del artista.</p></div>
-    </section>
-    <section id="tab-posts" class="tab" role="region" aria-label="Publicaciones" aria-hidden="true" hidden>
-      <div class="card" style="margin:0"><p class="muted">Publicaciones.</p></div>
-    </section>
   </div>
 
-  <!-- Modal -->
+  <!-- Modal de confirmación para acciones de eliminación -->
   <div id="confirm-modal" class="modal" aria-hidden="true">
     <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title" tabindex="-1">
       <h4 class="title" id="confirm-title">Confirmar</h4>
@@ -238,12 +258,20 @@
   </div>
 </main>
 
-<script id="playlists-data-json" type="application/json">{{ playlists_json|default:"[]"|safe }}</script>
+<!-- Barra de progreso para subida desde el muro -->
+<div id="upload-bar" class="upload-bar" role="status" aria-live="polite" aria-label="Progreso de subida">
+  <div class="row">
+    <div class="progress"><i></i></div>
+    <div class="label"><span id="upload-pct">0%</span></div>
+  </div>
+</div>
+
 <script>window.MELODIFY_LOGOUT_URL = "{{ logout_url|default:'/logout/' }}";</script>
 
-<!-- Scripts (en orden): núcleo reproductor → barra UI → JS del muro -->
+<!-- Scripts en orden: reproductor, barra de reproducción y lógica del muro -->
 <script defer src="{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}"></script>
 <script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
 <script defer src="{% static 'muro/muro.js' %}?v={% now 'U' %}"></script>
+
 </body>
 </html>

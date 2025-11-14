@@ -52,3 +52,113 @@ body{
   color:white;
   border-radius:5px;
 }
+
+/* ===== Responsivo (login) ===== */
+:root{
+  /* ancho estándar de tarjeta/botón en login */
+  --card-w: min(92vw, 360px);
+}
+
+@media (min-width: 768px){
+  :root{ --card-w: min(92vw, 420px); }
+}
+
+*{ box-sizing: border-box; }
+html{ -webkit-text-size-adjust: 100%; }
+body{
+  min-height: 100dvh;            
+  padding: clamp(12px, 3vh, 24px) max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom));
+  gap: 0;
+}
+
+/* Logo apila bien en móvil */
+.logo-container{
+  flex-wrap: wrap;
+  gap: .75rem 1rem;
+  margin-bottom: clamp(1.25rem, 6vh, 4rem);
+}
+.logo-image{
+  width: clamp(80px, 14vw + 40px, 150px);
+  height: auto;
+}
+.logo-text{
+  margin: 0;
+  font-size: clamp(1.8rem, 1.2rem + 3.2vw, 4rem);
+}
+
+/* Tarjeta de login fluida */
+.loginContainer{
+  width: var(--card-w);
+  padding: clamp(16px, 3.5vw, 24px);
+  border-radius: 16px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / .45);
+}
+.loginContainer input{
+  display:block;
+  width:100%;
+  margin:10px auto;
+  padding:10px;
+  background-color:#3a3a3a;
+  border:none;
+  color:white;
+  border-radius:12px;
+
+  /* quita estilos nativos en móviles/browsers */
+  -webkit-appearance: none; /* Safari/iOS antiguos */
+  appearance: none;         /* estándar */
+  /* opcional para algunos controles en Firefox:
+     -moz-appearance: none; */
+}
+
+/* ===== Layout + Sidebar responsivos ===== */
+:root{
+  /* ancho de sidebar en desktop */
+  --sidebar-w: clamp(220px, 24vw, 300px);
+}
+
+/* Layout de dos columnas solo en pantallas amplias */
+.layout{
+  display:grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  min-height: 100dvh;
+}
+
+/* Sidebar normal (desktop) */
+.sidebar{
+  width: var(--sidebar-w);
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100dvh;
+  overflow:auto;
+}
+
+/* Off-canvas en <=1024px: no ocupa columna, se muestra sobrepuesto */
+@media (max-width:1024px){
+  .layout{ grid-template-columns: 1fr; } /* oculta columna de sidebar */
+  .sidebar{
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    width: min(86vw, 360px);
+    max-width: 86vw;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    z-index: 60;
+    height: 100dvh;
+  }
+  .sidebar.open{ transform: translateX(0); }
+  .overlay{
+    position: fixed; inset: 0;
+    background: rgb(0 0 0 / .4);
+    backdrop-filter: blur(1px);
+    display: none; z-index: 59;
+  }
+  .overlay.show{ display: block; }
+}
+
+/* Utilidades */
+.hide-xs{ display:none !important; }
+@media (min-width:641px){ .hide-xs{ display:initial !important; } }
+
+.only-lg{ display:none !important; }
+@media (min-width:1024px){ .only-lg{ display:initial !important; } }

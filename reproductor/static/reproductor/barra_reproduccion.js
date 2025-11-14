@@ -1,13 +1,15 @@
 /* ==========================================================================
-   Barra de reproducción (UI) — versión “beat-meter” fluida y sin disco
-   - Reacciona al ritmo ajustando --viz-int (glow) con WebAudio + suavizado EMA
-   - Color por género (GENRE_HUES).
+   Barra de reproducción (UI) — versión “beat-meter”
+   - Reacciona al audio ajustando --viz-int mediante WebAudio + EMA suavizada
+   - Tinte por género (GENRE_HUES)
    - API consola: window.MDFBarUI y alias window.MDFBar
    ========================================================================== */
 (function () {
+
+  // Tabla de velocidades permitidas (se guarda en localStorage)
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-  // Hue por género (clave normalizada, sin acentos)
+  // Hue por género (clave normalizada sin acentos ni espacios)
   const GENRE_HUES = {
     pop:210, rock:355,
     electronica:140, electro:140, edm:140,
@@ -21,24 +23,34 @@
     otro:270
   };
 
-  // ---------- Estado ----------
-  let els = {}, audio = null;
-  let hue = 270, intensity = 0.22;
+  // ---------------------------------------------------------------------------
+  // Estado global de la barra
+  // ---------------------------------------------------------------------------
+  let els = {};          // referencias a elementos del DOM
+  let audio = null;      // <audio> controlado por MDFCore
+  let hue = 270;         // tinte actual del glow
+  let intensity = 0.22;  // intensidad visual actual
   let lockGenreHue = true;
 
-  // WebAudio / Beat meter
+  // WebAudio / beat-meter
   let ac = null, analyser = null, buf = null, raf = 0;
 
-  // Listener para re-aplicar velocidad al cargar metadata
+  // Último <audio> al que se enganchó el listener de velocidad
   let lastAudioForSpeedListener = null;
-  const _mdfSyncSpeed = ()=> applySpeed(getSavedSpeed());
+  const _mdfSyncSpeed = () => applySpeed(getSavedSpeed());
 
-  // ---------- Velocidad (persistente) ----------
+  // ---------------------------------------------------------------------------
+  // Velocidad (persistente en localStorage)
+  // ---------------------------------------------------------------------------
   function getSavedSpeed(){
     const s = Number(localStorage.getItem("mdf.speed") || "1");
     return SPEEDS.includes(s) ? s : 1;
   }
-  function labelOf(rate){ return String(rate).replace(/\.0$/,'') + "×"; }
+
+  function labelOf(rate){
+    return String(rate).replace(/\.0$/,'') + "×";
+  }
+
   function applySpeed(rate){
     const r = SPEEDS.includes(Number(rate)) ? Number(rate) : getSavedSpeed();
     localStorage.setItem("mdf.speed", String(r));
@@ -46,49 +58,56 @@
     if (els.speed) els.speed.textContent = labelOf(r);
   }
 
-  // Preset agresivo (pero sin saturar)
+  // ---------------------------------------------------------------------------
+  // Parámetros del medidor de ritmo (beat-meter)
+  // ---------------------------------------------------------------------------
+  // Preset agresivo pero controlado (sin ruido visual)
   const METER = {
     bands: { low: [50, 180], mid: [180, 1800] },
 
-    // respuesta temporal
+    // Respuesta temporal (EMA)
     emaRise: 0.60,   // ataque rápido
     emaFall: 0.12,   // caída moderada
 
-    // bases más bajas = más contraste
+    // Bases (idle vs reproducción)
     baseIdle: 0.08,
     basePlay: 0.16,
 
-    // pesos y ganancias por banda
+    // Pesos y ganancias por banda
     wLow: 0.45,
     wMid: 0.28,
     gainLow: 1.30,
     gainMid: 0.90,
 
-    // límites
+    // Límites de la señal
     clampMin: 0.05,
     clampMax: 0.98
   };
 
-  // Pulso por transitorio en graves (punch)
+  // Pulso adicional por transitorios en graves (punch)
   let prevLow = 0, pulseEnv = 0;
   const PULSE = {
-    threshold: 0.040, // sensibilidad a disparo (subida súbita en low)
+    threshold: 0.040, // sensibilidad a subidas súbitas en graves
     strength:  0.26,  // cuánto suma al brillo final
-    decay:     0.88   // se apaga rápido
+    decay:     0.88   // release corto
   };
 
-  // curva para enfatizar picos sin añadir ruido
+  // Curva para enfatizar picos sin ruido
   const shape = v => Math.pow(v, 1.45);
 
-  // ---------- Utils ----------
+  // ---------------------------------------------------------------------------
+  // Utilidades generales
+  // ---------------------------------------------------------------------------
   const q = (s, r=document)=>r.querySelector(s);
   const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
+
   function slug(s){
     return String(s||'')
       .toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
       .replace(/[^a-z0-9]+/g,'');
   }
+
   function normGenre(g){
     const k = slug(g);
     if (!k) return null;
@@ -96,61 +115,81 @@
     if (k === 'regionalmexicano' || k === 'regional mexicano') return 'regionalmexicano';
     return k;
   }
+
   function fmt(t){
     if(!Number.isFinite(t)) return "0:00";
-    t=Math.max(0,Math.floor(t));
-    const m=Math.floor(t/60), s=String(t%60).padStart(2,"0");
+    t = Math.max(0,Math.floor(t));
+    const m = Math.floor(t/60), s = String(t%60).padStart(2,"0");
     return `${m}:${s}`;
   }
+
+  // Actualiza variables CSS del glow (intensidad + hue)
   function setVars(inten=intensity, h=hue){
     const bar = els.bar; if(!bar) return;
     bar.style.setProperty('--viz-int', String(clamp(inten,0,1)));
     bar.style.setProperty('--viz-hue', String((((h%360)+360)%360)));
   }
-  // --- Toggle mostrar/ocultar barra ---
-const BAR_HIDDEN_KEY = 'mdf.bar.hidden';
-function _loadHidden(){ try { return localStorage.getItem(BAR_HIDDEN_KEY) === '1'; } catch { return false; } }
-function _saveHidden(v){ try { localStorage.setItem(BAR_HIDDEN_KEY, v ? '1' : '0'); } catch {} }
 
-function ensureBarToggle(){
-  if (document.getElementById('mdf-bar-toggle')) return;
-  const btn = document.createElement('button');
-  btn.id = 'mdf-bar-toggle';
-  btn.type = 'button';
-  btn.title = 'Mostrar/Ocultar reproductor';
-  btn.setAttribute('aria-pressed', 'false');
-  btn.innerHTML = '▾';
-  btn.addEventListener('click', () => {
+  // ---------------------------------------------------------------------------
+  // Toggle mostrar/ocultar barra (estado guardado en localStorage)
+  // ---------------------------------------------------------------------------
+  const BAR_HIDDEN_KEY = 'mdf.bar.hidden';
+
+  function _loadHidden(){
+    try { return localStorage.getItem(BAR_HIDDEN_KEY) === '1'; }
+    catch { return false; }
+  }
+
+  function _saveHidden(v){
+    try { localStorage.setItem(BAR_HIDDEN_KEY, v ? '1' : '0'); }
+    catch {}
+  }
+
+  // Crea el botón flotante de mostrar/ocultar si no existe
+  function ensureBarToggle(){
+    if (document.getElementById('mdf-bar-toggle')) return;
+    const btn = document.createElement('button');
+    btn.id = 'mdf-bar-toggle';
+    btn.type = 'button';
+    btn.title = 'Mostrar/Ocultar reproductor';
+    btn.setAttribute('aria-pressed', 'false');
+    btn.innerHTML = '▾';
+    btn.addEventListener('click', () => {
+      const bar = els.bar || document.querySelector('._mdf-player-bar');
+      if (!bar) return;
+      const hide = !bar.classList.contains('mdf-bar--hidden');
+      bar.classList.toggle('mdf-bar--hidden', hide);
+      btn.setAttribute('aria-pressed', hide ? 'true' : 'false');
+      btn.innerHTML = hide ? '▴' : '▾';
+      _saveHidden(hide);
+    });
+    document.body.appendChild(btn);
+  }
+
+  // Aplica el estado guardado a la barra y al botón
+  function applySavedHidden(){
     const bar = els.bar || document.querySelector('._mdf-player-bar');
     if (!bar) return;
-    const hide = !bar.classList.contains('mdf-bar--hidden');
+    const hide = _loadHidden();
     bar.classList.toggle('mdf-bar--hidden', hide);
-    btn.setAttribute('aria-pressed', hide ? 'true' : 'false');
-    btn.innerHTML = hide ? '▴' : '▾';
-    _saveHidden(hide);
-  });
-  document.body.appendChild(btn);
-}
-function applySavedHidden(){
-  const bar = els.bar || document.querySelector('._mdf-player-bar');
-  if (!bar) return;
-  const hide = _loadHidden();
-  bar.classList.toggle('mdf-bar--hidden', hide);
-  const btn = document.getElementById('mdf-bar-toggle');
-  if (btn){
-    btn.setAttribute('aria-pressed', hide ? 'true' : 'false');
-    btn.innerHTML = hide ? '▴' : '▾';
+    const btn = document.getElementById('mdf-bar-toggle');
+    if (btn){
+      btn.setAttribute('aria-pressed', hide ? 'true' : 'false');
+      btn.innerHTML = hide ? '▴' : '▾';
+    }
   }
-}
 
+  // Relleno visual de los <input type="range">
   function setRangeFill(input, p0to100){
     if(!input) return;
-    const p=clamp(Number(p0to100??input.value),0,100);
+    const p = clamp(Number(p0to100??input.value),0,100);
     input.style.background =
       `linear-gradient(90deg, var(--accent) 0%, var(--accent-2) ${p}%, #2b2b2b ${p}%)`;
   }
 
-  // ---------- UI ----------
+  // ---------------------------------------------------------------------------
+  // Construcción de UI (DOM)
+  // ---------------------------------------------------------------------------
   function build(){
     let bar = q("._mdf-player-bar");
     if(!bar){
@@ -190,9 +229,11 @@ function applySavedHidden(){
     els.vol   = q("._mdf-vol", bar);
     els.ctrls = q("._mdf-ctrls", bar);
     els.speed = q("._mdf-speed", bar);
+
     ensureBarToggle();
     applySavedHidden();
-    // Controles
+
+    // Controles principales → delegan en MDFCore
     els.prev.onclick = ()=>window.MDFCore?.prev();
     els.next.onclick = ()=>window.MDFCore?.next();
     els.play.onclick = ()=>window.MDFCore?.toggle();
@@ -208,7 +249,7 @@ function applySavedHidden(){
       window.MDFCore?.setVolume(v);
     });
 
-    // Velocidad persistente (UI + click)
+    // Velocidad persistente (texto + ciclo al hacer click)
     els.speed.textContent = labelOf(getSavedSpeed());
     els.speed.addEventListener("click", ()=>{
       const cur = getSavedSpeed();
@@ -217,7 +258,7 @@ function applySavedHidden(){
       applySpeed(next);
     });
 
-    // Rellenos iniciales + brillo inicial
+    // Rellenos iniciales + intensidad inicial
     setRangeFill(els.seek, Number(els.seek.value));
     setRangeFill(els.vol, 100*Number(els.vol.value));
     setVars(intensity, hue);
@@ -226,20 +267,25 @@ function applySavedHidden(){
   function show(){ els.bar?.classList.add("is-visible"); }
   function hide(){ els.bar?.classList.remove("is-visible"); }
 
-// ---------- Visibilidad de la barra ----------
-// Mostramos la barra si hay audio y NO estamos en vistas de servidor
-function getCurrentView(){
-  const m=document.getElementById("main-content");
-  return (m?.dataset.view||m?.dataset.initialView||"").trim();
-}
-// Si una vista de servidor quiere esconder barra, setea window.__MDF_FORMS_HIDE_BAR__ = true
-function enforceVisibility(){
-  const hasAudio = !!(audio && audio.src);
-  const forceHide = !!window.__MDF_FORMS_HIDE_BAR__;
-  if (!forceHide && hasAudio) { show(); } else { hide(); }
-}
+  // ---------------------------------------------------------------------------
+  // Visibilidad de la barra según contexto
+  // ---------------------------------------------------------------------------
+  // Vista actual de main-content (SPA vs formularios de servidor)
+  function getCurrentView(){
+    const m=document.getElementById("main-content");
+    return (m?.dataset.view||m?.dataset.initialView||"").trim();
+  }
 
+  // Si una vista de servidor quiere ocultar la barra:
+  //   window.__MDF_FORMS_HIDE_BAR__ = true
+  function enforceVisibility(){
+    const hasAudio = !!(audio && audio.src);
+    const forceHide = !!window.__MDF_FORMS_HIDE_BAR__;
+    if (!forceHide && hasAudio) { show(); }
+    else { hide(); }
+  }
 
+  // Observa cambios de data-view para refrescar visibilidad
   function hookViewObserver(){
     const main=document.getElementById("main-content");
     if(!main) return;
@@ -248,7 +294,9 @@ function enforceVisibility(){
     enforceVisibility();
   }
 
-  // ---------- Beat meter (WebAudio) ----------
+  // ---------------------------------------------------------------------------
+  // Beat meter (WebAudio)
+  // ---------------------------------------------------------------------------
   function hzToIndex(hz, sampleRate, fftSize){
     return Math.round(hz * fftSize / sampleRate);
   }
@@ -260,8 +308,8 @@ function enforceVisibility(){
       if(!analyser){
         const src = ac.createMediaElementSource(audio);
         analyser = ac.createAnalyser();
-        analyser.fftSize = 512;               // más nervio temporal
-        analyser.smoothingTimeConstant = 0.0; // suavizamos 
+        analyser.fftSize = 512;               // resolución temporal alta
+        analyser.smoothingTimeConstant = 0.0; // sin smoothing interno (lo hacemos a mano)
         src.connect(analyser);
         analyser.connect(ac.destination);
         buf = new Uint8Array(analyser.frequencyBinCount);
@@ -279,14 +327,14 @@ function enforceVisibility(){
       const tick = ()=>{
         analyser.getByteFrequencyData(buf);
 
-        // energía promedio por banda
+        // Energía promedio por banda
         let sumL=0, cL=0, sumM=0, cM=0;
         for(let i=Math.max(0,lowA); i<=Math.min(buf.length-1,lowB); i++){ sumL+=buf[i]; cL++; }
         for(let i=Math.max(0,midA); i<=Math.min(buf.length-1,midB); i++){ sumM+=buf[i]; cM++; }
         const eLow = cL? (sumL/cL)/255 : 0;
         const eMid = cM? (sumM/cM)/255 : 0;
 
-        // pulso por subida súbita en graves
+        // Pulso por subida súbita en graves
         const deltaLow = eLow - prevLow; prevLow = eLow;
         if(deltaLow > PULSE.threshold){
           pulseEnv = Math.min(1, pulseEnv + deltaLow * 2.6); // ataque rápido
@@ -294,7 +342,7 @@ function enforceVisibility(){
           pulseEnv *= PULSE.decay; // release corto
         }
 
-        // mezcla lineal con base por estado
+        // Mezcla lineal con base según estado (idle vs play)
         const playing = !!(audio && !audio.paused);
         const base = playing ? METER.basePlay : METER.baseIdle;
 
@@ -303,11 +351,11 @@ function enforceVisibility(){
           + (eMid * METER.gainMid * METER.wMid);
         lin = clamp(lin, METER.clampMin, METER.clampMax);
 
-        // suavizado EMA asimétrico
+        // Suavizado EMA asimétrico
         const alpha = (lin > smoothed) ? METER.emaRise : METER.emaFall;
         smoothed = (1 - alpha) * smoothed + alpha * lin;
 
-        // salida = suavizado + pulso, con curva de énfasis
+        // Salida final: suavizado + pulso, con curva de énfasis
         let out = smoothed + pulseEnv * PULSE.strength;
         out = shape(clamp(out, METER.clampMin, METER.clampMax));
 
@@ -320,16 +368,19 @@ function enforceVisibility(){
       ac.resume().catch(()=>{});
     }catch{/* noop */}
   }
+
   function stopBeatMeter(){
     if(raf){ cancelAnimationFrame(raf); raf=0; }
   }
 
-  // ---------- Listeners MDFCore ----------
+  // ---------------------------------------------------------------------------
+  // Listeners de eventos provenientes de MDFCore
+  // ---------------------------------------------------------------------------
   function onAudioReady(ev){
     audio = ev?.detail?.audio || window.MDFCore?.getAudio?.();
     if(!audio) return;
 
-    // (Re)aplicar velocidad persistida y enganchar loadedmetadata del <audio>
+    // Reaplicar velocidad persistida y enganchar loadedmetadata
     if (lastAudioForSpeedListener) {
       lastAudioForSpeedListener.removeEventListener("loadedmetadata", _mdfSyncSpeed, false);
     }
@@ -337,7 +388,7 @@ function enforceVisibility(){
     audio.addEventListener("loadedmetadata", _mdfSyncSpeed, false);
     applySpeed(getSavedSpeed());
 
-    // volumen UI ↔ audio
+    // Sincroniza volumen UI ↔ audio
     els.vol.value = String(audio.volume || 1);
     setRangeFill(els.vol, 100*Number(els.vol.value));
 
@@ -348,6 +399,7 @@ function enforceVisibility(){
     const d = ev?.detail||{};
     els.title.textContent  = d.title || '—';
     els.artist.textContent = d.artist || '—';
+
     if(d.cover){
       els.cover.style.visibility = "visible";
       els.cover.src = d.cover;
@@ -360,6 +412,7 @@ function enforceVisibility(){
     const k = normGenre(d.genre);
     const h = k!=null ? GENRE_HUES[k] : null;
 
+    // Tema blanco para género “otro”
     els.bar?.classList.toggle("mdf-whiteglow", k === "otro");
 
     if(h != null){
@@ -373,6 +426,7 @@ function enforceVisibility(){
 
   function onTrackChange(){
     enforceVisibility();
+    // Reafirma velocidad por si cambia el <audio> interno
     setTimeout(()=>applySpeed(getSavedSpeed()), 0);
   }
 
@@ -397,14 +451,15 @@ function enforceVisibility(){
     els.play.textContent = playing ? "⏸" : "▶";
   }
 
-function onShowBar(){
-  ensureBarToggle();
-  applySavedHidden();
-  enforceVisibility();
-}
+  function onShowBar(){
+    ensureBarToggle();
+    applySavedHidden();
+    enforceVisibility();
+  }
 
-
-  // ---------- Init ----------
+  // ---------------------------------------------------------------------------
+  // Init
+  // ---------------------------------------------------------------------------
   function init(){
     build();
     hookViewObserver();
@@ -417,22 +472,29 @@ function onShowBar(){
     document.addEventListener("melodify:state",       onState);
     document.addEventListener("melodify:bar:shouldShow", onShowBar);
 
+    // Si MDFCore ya está listo cuando se carga esta UI
     if(window.MDFCore){
       onAudioReady({detail:{audio:window.MDFCore.getAudio?.()}});
     }
   }
 
-  // ---------- API consola ----------
+  // ---------------------------------------------------------------------------
+  // API de consola / uso externo
+  // ---------------------------------------------------------------------------
   window.MDFBarUI = {
     init, show, hide,
     setLockGenre(flag){ lockGenreHue = !!flag; },
     setHue(h){ hue = Number(h)||0; setVars(intensity, hue); },
-    setSpeed(rate){ applySpeed(Number(rate)); }, 
+    setSpeed(rate){ applySpeed(Number(rate)); },
     getPersistedSpeed(){ return getSavedSpeed(); },
     setPersistedSpeed(rate){ applySpeed(Number(rate)); }
   };
-  window.MDFBar = window.MDFBarUI; // alias compat
+  window.MDFBar = window.MDFBarUI; // alias
 
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
-  else init();
+  // Auto-init al cargar el documento
+  if(document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", init);
+  else
+    init();
+
 })();

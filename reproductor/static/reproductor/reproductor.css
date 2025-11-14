@@ -1,6 +1,10 @@
 /* ==========================================================================
-   Melodify Player — Variables de tema
+   Melodify Player — Tema + barra del reproductor + vista Reproductor
    ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Variables de tema
+   -------------------------------------------------------------------------- */
 :root{
   --bg:#121212; --card:#1b1b1b; --line:#2a2a2a; --muted:#9aa0a6;
   --accent:#7a3cff; --accent-2:#8b5dff; --text:#efeeee;
@@ -8,142 +12,320 @@
   --glow-border:#6f58ff; --glow-outer:rgba(122,60,255,.25);
 }
 
-/* ==========================================================================
-   Barra del reproductor (FLOTANTE)
-   ========================================================================== */
+/* --------------------------------------------------------------------------
+   Barra del reproductor (flotante)
+   -------------------------------------------------------------------------- */
 ._mdf-player-bar{
-  position:fixed; left:50%; transform:translateX(-50%); bottom:16px;
-  width:min(1180px,calc(100vw - 24px));      /* <-- más ancha */
+  position:fixed;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:16px;
+  width:min(1180px,calc(100vw - 24px));
   height:76px;
   background:rgba(18,18,18,.92);
   backdrop-filter:saturate(120%) blur(6px);
-  border:1px solid var(--line); border-radius:16px;
+  border:1px solid var(--line);
+  border-radius:16px;
   display:none;
-  /* 3 columnas con pesos: meta (1.2fr) / controles (auto) / derecha (1fr) */
+  /* Meta (1.2fr) / controles (auto) / bloque derecho (1fr) */
   grid-template-columns:minmax(260px,1.2fr) auto minmax(420px,1fr);
-  align-items:center; gap:16px; padding:0 18px; z-index:1000; color:var(--text);
-  box-shadow:0 10px 28px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.03) inset;
+  align-items:center;
+  gap:16px;
+  padding:0 18px;
+  z-index:1000;
+  color:var(--text);
+  box-shadow:
+    0 10px 28px rgba(0,0,0,.45),
+    0 0 0 1px rgba(255,255,255,.03) inset;
 }
 ._mdf-player-bar.is-visible{ display:grid; }
 
 /* Columna izquierda (portada + meta) */
-._mdf-now{ display:flex; align-items:center; gap:12px; min-width:0; }
+._mdf-now{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:0;
+}
 ._mdf-cover{
-  width:48px; height:48px; border-radius:10px; background:#222; object-fit:cover;
+  width:48px;
+  height:48px;
+  border-radius:10px;
+  background:#222;
+  object-fit:cover;
   box-shadow:0 0 0 1px rgba(0,0,0,.35);
 }
-._mdf-meta{ display:flex; flex-direction:column; min-width:0; flex:1; }
+._mdf-meta{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  flex:1;
+}
 
-/* Título recortado, con ancho máximo para no invadir controles */
+/* Título/autor recortados para no invadir los controles */
 ._mdf-player-title{
-  font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font-weight:700;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
   max-width:min(56vw, 560px);
 }
 ._mdf-player-artist{
-  font-size:.9rem; color:#b3b3b3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font-size:.9rem;
+  color:#b3b3b3;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 
-/* Columna central (controles) */
+/* Columna central (controles principales) */
 ._mdf-ctrls{
-  display:flex; align-items:center; gap:10px;
+  display:flex;
+  align-items:center;
+  gap:10px;
 }
-._mdf-btn, ._mdf-speed{
-  height:40px; min-width:40px; border-radius:999px; display:inline-flex;
-  align-items:center; justify-content:center; cursor:pointer; color:#fff;
-  border:1px solid var(--line); background:#1a1a1a;
-  transition:background .04s, transform .04s, border-color .04s, box-shadow .03s;
-  -webkit-appearance:none; appearance:none;
+._mdf-btn,
+._mdf-speed{
+  height:40px;
+  min-width:40px;
+  border-radius:999px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  color:#fff;
+  border:1px solid var(--line);
+  background:#1a1a1a;
+  transition:
+    background .04s,
+    transform .04s,
+    border-color .04s,
+    box-shadow .03s;
+  -webkit-appearance:none;
+  appearance:none;
 }
-._mdf-btn:hover, ._mdf-speed:hover{ background:#242424; }
-._mdf-btn:active, ._mdf-speed:active{ transform:translateY(1px); }
-._mdf-btn:focus-visible, ._mdf-speed:focus-visible{ outline:2px solid var(--accent-2); outline-offset:2px; }
+._mdf-btn:hover,
+._mdf-speed:hover{
+  background:#242424;
+}
+._mdf-btn:active,
+._mdf-speed:active{
+  transform:translateY(1px);
+}
+._mdf-btn:focus-visible,
+._mdf-speed:focus-visible{
+  outline:2px solid var(--accent-2);
+  outline-offset:2px;
+}
 
+/* Botón “play/pause” destacado */
 ._mdf-btn--primary{
-  background:var(--accent)!important; border-color:var(--accent-2)!important;
-  box-shadow:0 0 0 1px rgba(0,0,0,.2) inset, 0 0 12px rgba(122,60,255,.25);
+  background:var(--accent)!important;
+  border-color:var(--accent-2)!important;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,.2) inset,
+    0 0 12px rgba(122,60,255,.25);
 }
-._mdf-btn--primary:hover{ background:var(--accent-2)!important; }
+._mdf-btn--primary:hover{
+  background:var(--accent-2)!important;
+}
 
-/* Botón velocidad como “pill” compacto */
-._mdf-speed{ padding:0 10px; font-weight:600; }
+/* Botón de velocidad como pill compacto */
+._mdf-speed{
+  padding:0 10px;
+  font-weight:600;
+}
 
-/* Columna derecha (tiempo, seek, volumen) */
+/* Columna derecha (tiempo, seek y volumen) */
 ._mdf-right{
-  display:flex; align-items:center; gap:12px; justify-content:flex-end; min-width:420px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  justify-content:flex-end;
+  min-width:420px;
 }
-._mdf-time{ font-size:12px; color:#bbb; min-width:98px; text-align:right; }
-._mdf-player-seek{ flex:1 1 380px; width:auto; min-width:180px; }
-._mdf-vol{ width:140px; display:inline-block; }
+._mdf-time{
+  font-size:12px;
+  color:#bbb;
+  min-width:98px;
+  text-align:right;
+}
+._mdf-player-seek{
+  flex:1 1 380px;
+  width:auto;
+  min-width:180px;
+}
+._mdf-vol{
+  width:140px;
+  display:inline-block;
+}
 
-/* ==========================================================================
-   Sliders (seek/volume) — con “relleno”
-   ========================================================================== */
-._mdf-player-seek, ._mdf-vol{
-  -webkit-appearance:none; appearance:none; height:4px; background:#2b2b2b;
-  border-radius:999px; border:none; outline:none;
+/* --------------------------------------------------------------------------
+   Sliders (seek/volume) con relleno
+   -------------------------------------------------------------------------- */
+._mdf-player-seek,
+._mdf-vol{
+  -webkit-appearance:none;
+  appearance:none;
+  height:4px;
+  background:#2b2b2b;
+  border-radius:999px;
+  border:none;
+  outline:none;
 }
 ._mdf-player-seek::-webkit-slider-thumb,
 ._mdf-vol::-webkit-slider-thumb{
-  -webkit-appearance:none; appearance:none; width:14px; height:14px;
-  border-radius:50%; background:#fff; border:1px solid #0003;
-  box-shadow:0 0 0 2px var(--accent); cursor:pointer; transition:transform .12s;
+  -webkit-appearance:none;
+  appearance:none;
+  width:14px;
+  height:14px;
+  border-radius:50%;
+  background:#fff;
+  border:1px solid #0003;
+  box-shadow:0 0 0 2px var(--accent);
+  cursor:pointer;
+  transition:transform .12s;
 }
 ._mdf-player-seek::-webkit-slider-thumb:hover,
-._mdf-vol::-webkit-slider-thumb:hover{ transform:scale(1.05); }
+._mdf-vol::-webkit-slider-thumb:hover{
+  transform:scale(1.05);
+}
 ._mdf-player-seek::-moz-range-thumb,
 ._mdf-vol::-moz-range-thumb{
-  width:14px; height:14px; border-radius:50%; background:#fff; border:1px solid #0003;
-  box-shadow:0 0 0 2px var(--accent); cursor:pointer;
+  width:14px;
+  height:14px;
+  border-radius:50%;
+  background:#fff;
+  border:1px solid #0003;
+  box-shadow:0 0 0 2px var(--accent);
+  cursor:pointer;
 }
 
-/* Progreso circular opcional alrededor de los controles */
+/* --------------------------------------------------------------------------
+   Progreso circular opcional alrededor de controles
+   -------------------------------------------------------------------------- */
 .mdf-round-progress{ position:relative; }
-._mdf-circle{ position:absolute; inset:-8px -16px; pointer-events:none; }
-._mdf-circle svg{ width:120px; height:120px; filter:drop-shadow(0 0 10px rgba(122,60,255,.25)); }
+._mdf-circle{
+  position:absolute;
+  inset:-8px -16px;
+  pointer-events:none;
+}
+._mdf-circle svg{
+  width:120px;
+  height:120px;
+  filter:drop-shadow(0 0 10px rgba(122,60,255,.25));
+}
 ._mdf-circle .trk{
-  fill:none; stroke:rgba(255,255,255,.06); stroke-width:8; stroke-linecap:round;
+  fill:none;
+  stroke:rgba(255,255,255,.06);
+  stroke-width:8;
+  stroke-linecap:round;
 }
 ._mdf-circle .prg{
-  fill:none; stroke:url(#mdfGrad); stroke-width:8; stroke-linecap:round;
-  stroke-dasharray:314; stroke-dashoffset:314; transition:stroke-dashoffset .12s linear;
+  fill:none;
+  stroke:url(#mdfGrad);
+  stroke-width:8;
+  stroke-linecap:round;
+  stroke-dasharray:314;
+  stroke-dashoffset:314;
+  transition:stroke-dashoffset .12s linear;
 }
 
 /* ==========================================================================
-   Listado de canciones + vista 
+   Listado de canciones + vista Reproductor
    ========================================================================== */
-.songs-wrap{ width:min(1180px, 92vw); margin:8px 0 120px; }
-.song-item{
-  display:grid; grid-template-columns:72px 1fr auto; align-items:center; gap:14px;
-  padding:12px 14px; background:var(--card); border:1px solid var(--line);
-  border-radius:12px; margin:10px 0; cursor:pointer;
-  transition:background .2s, border-color .2s, transform .12s, box-shadow .2s;
+
+/* Listado de canciones (cola/vistas) */
+.songs-wrap{
+  width:min(1180px, 92vw);
+  margin:8px 0 120px;
 }
-.song-item:hover{ background:#232323; border-color:#333; box-shadow:0 2px 14px rgba(0,0,0,.25); }
+.song-item{
+  display:grid;
+  grid-template-columns:72px 1fr auto;
+  align-items:center;
+  gap:14px;
+  padding:12px 14px;
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:12px;
+  margin:10px 0;
+  cursor:pointer;
+  transition:
+    background .2s,
+    border-color .2s,
+    transform .12s,
+    box-shadow .2s;
+}
+.song-item:hover{
+  background:#232323;
+  border-color:#333;
+  box-shadow:0 2px 14px rgba(0,0,0,.25);
+}
 .song-cover{
-  width:56px; height:56px; border-radius:10px; background:#2a2a2a; object-fit:cover;
+  width:56px;
+  height:56px;
+  border-radius:10px;
+  background:#2a2a2a;
+  object-fit:cover;
   box-shadow:0 0 0 1px rgba(0,0,0,.25);
 }
 .song-cover--placeholder{ display:block; }
 .song-info{ min-width:0; }
-.song-title{ font-weight:700; font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.song-author{ color:var(--muted); font-size:.9rem; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.song-actions{ display:flex; align-items:center; gap:10px; justify-self:end; }
-
-.song-actions .play-pill{
-  display:inline-flex; align-items:center; gap:8px; padding:8px 12px;
-  border-radius:999px; background:#232323; border:1px solid var(--line);
-  color:#ddd; font-size:.9rem;
+.song-title{
+  font-weight:700;
+  font-size:1rem;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
-.song-actions .play-pill::before{ content:"▶"; font-size:.85rem; }
+.song-author{
+  color:var(--muted);
+  font-size:.9rem;
+  margin-top:2px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.song-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  justify-self:end;
+}
 
+/* Botón “Reproducir” estilo pill */
+.song-actions .play-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 12px;
+  border-radius:999px;
+  background:#232323;
+  border:1px solid var(--line);
+  color:#ddd;
+  font-size:.9rem;
+}
+.song-actions .play-pill::before{
+  content:"▶";
+  font-size:.85rem;
+}
+
+/* Canción activa (mismo gradiente que la barra) */
 .song-item.is-playing{
   background:linear-gradient(180deg, var(--glow-bg-1), var(--glow-bg-2));
   border-color:var(--glow-border);
-  box-shadow:0 0 0 1px rgba(122,60,255,.35) inset, 0 0 18px var(--glow-outer);
+  box-shadow:
+    0 0 0 1px rgba(122,60,255,.35) inset,
+    0 0 18px var(--glow-outer);
 }
 
-/* Vista Reproductor */
-.rep-grid{ display:grid; grid-template-columns:1fr 360px; gap:16px; }
+/* Layout principal de la vista Reproductor */
+.rep-grid{
+  display:grid;
+  grid-template-columns:1fr 360px;
+  gap:16px;
+}
 @media (max-width:960px){
   .rep-grid{ grid-template-columns:1fr; }
   .rep-right{ order:-1; }
@@ -151,80 +333,221 @@
 .rep-left{ min-width:0; }
 .rep-right{ min-width:0; }
 
+/* Tarjetas de paneles (Top10, géneros, playlists, etc.) */
 .rep-panel{
-  background:var(--card); border:1px solid var(--line); border-radius:12px;
-  padding:12px; margin-bottom:12px; overflow:hidden;
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:12px;
+  margin-bottom:12px;
+  overflow:hidden;
 }
-.rep-head{ display:flex; align-items:center; justify-content:space-between; margin:8px 0; }
+.rep-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin:8px 0;
+}
 .rep-badge{
-  display:inline-block; min-width:22px; padding:0 6px; border-radius:999px;
-  border:1px solid var(--line); font-size:12px; text-align:center;
+  display:inline-block;
+  min-width:22px;
+  padding:0 6px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  font-size:12px;
+  text-align:center;
 }
-#rep-genres{ display:flex; flex-wrap:wrap; gap:8px; align-items:flex-start; }
+
+/* Chips de filtro (género, playlists, etc.) */
+#rep-genres{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:flex-start;
+}
 .rep-chip{
-  display:inline-flex!important; align-items:center; gap:8px; line-height:1;
-  padding:6px 10px; margin:0; border:1px solid var(--line);
-  border-radius:999px!important; background:#181818; color:#ddd; cursor:pointer;
-  white-space:nowrap; font:inherit; transition:background .2s, border-color .2s, box-shadow .2s, transform .08s;
+  display:inline-flex!important;
+  align-items:center;
+  gap:8px;
+  line-height:1;
+  padding:6px 10px;
+  margin:0;
+  border:1px solid var(--line);
+  border-radius:999px!important;
+  background:#181818;
+  color:#ddd;
+  cursor:pointer;
+  white-space:nowrap;
+  font:inherit;
+  transition:
+    background .2s,
+    border-color .2s,
+    box-shadow .2s,
+    transform .08s;
 }
 .rep-chip:hover{
   background:linear-gradient(180deg, #1e1e29, #191922);
-  border-color:#3a345c; box-shadow:0 0 10px rgba(122,60,255,.15);
+  border-color:#3a345c;
+  box-shadow:0 0 10px rgba(122,60,255,.15);
   border-radius:999px!important;
 }
-.rep-chip:active{ transform:translateY(1px); }
-.rep-chip.active, .rep-chip[aria-selected="true"], .rep-chip[aria-pressed="true"]{
-  background:radial-gradient(120% 120% at 10% 10%, var(--glow-bg-1) 0%, var(--glow-bg-2) 60%), #1a1726;
+.rep-chip:active{
+  transform:translateY(1px);
+}
+.rep-chip.active,
+.rep-chip[aria-selected="true"],
+.rep-chip[aria-pressed="true"]{
+  background:
+    radial-gradient(120% 120% at 10% 10%, var(--glow-bg-1) 0%, var(--glow-bg-2) 60%),
+    #1a1726;
   border-color:var(--glow-border);
-  box-shadow:0 0 0 1px rgba(122,60,255,.35) inset, inset 0 0 18px rgba(122,60,255,.35), 0 0 18px var(--glow-outer);
-  color:#fff; border-radius:999px!important;
+  box-shadow:
+    0 0 0 1px rgba(122,60,255,.35) inset,
+    inset 0 0 18px rgba(122,60,255,.35),
+    0 0 18px var(--glow-outer);
+  color:#fff;
+  border-radius:999px!important;
 }
-.rep-list{ list-style:none; margin:0; padding:0; }
+
+/* Listas internas del reproductor (Top10, Discover, etc.) */
+.rep-list{
+  list-style:none;
+  margin:0;
+  padding:0;
+}
 .rep-list li{
-  display:flex; align-items:center; justify-content:space-between; gap:10px;
-  background:#181818; border:1px solid var(--line); border-radius:8px;
-  padding:8px 10px; margin:6px 0; cursor:pointer;
-  transition:background .2s, border-color .2s, box-shadow .2s;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  background:#181818;
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:8px 10px;
+  margin:6px 0;
+  cursor:pointer;
+  transition:
+    background .2s,
+    border-color .2s,
+    box-shadow .2s;
 }
-.rep-list li:hover{ background:#232323; }
+.rep-list li:hover{
+  background:#232323;
+}
 .rep-list li.active{
   background:linear-gradient(180deg, var(--glow-bg-1), var(--glow-bg-2));
   border-color:var(--glow-border);
-  box-shadow:0 0 0 1px rgba(122,60,255,.35) inset, inset 0 0 18px rgba(122,60,255,.35), 0 0 18px var(--glow-outer);
+  box-shadow:
+    0 0 0 1px rgba(122,60,255,.35) inset,
+    inset 0 0 18px rgba(122,60,255,.35),
+    0 0 18px var(--glow-outer);
   color:#fff;
 }
 
-/* Panel vacío y margen para no tapar la barra */
+/* Panel de “sin datos” y margen inferior para no tapar la barra */
 .rep-empty{
-  background:var(--card); border:1px solid var(--line); border-radius:12px;
-  padding:32px 24px; color:#b3b3b3; min-height:240px;
-  display:flex; align-items:center; justify-content:center; text-align:center;
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:32px 24px;
+  color:#b3b3b3;
+  min-height:240px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
 }
-.rep-left .songs-wrap{ width:100%; max-width:none; margin:8px 0 120px; }
+.rep-left .songs-wrap{
+  width:100%;
+  max-width:none;
+  margin:8px 0 120px;
+}
 
-/* Ocultar barra con animación */
-.mdf-bar--hidden {
-  transform: translateY(110%);
-  opacity: 0;
-  pointer-events: none;
+/* ==========================================================================
+   Mostrar/ocultar barra y botón flotante
+   ========================================================================== */
+
+/* Estado “oculta” de la barra (se usa con JS) */
+.mdf-bar--hidden{
+  transform:translateY(110%);
+  opacity:0;
+  pointer-events:none;
 }
 
-/* Botón flotante para mostrar/ocultar barra */
-#mdf-bar-toggle {
-  position: fixed;
-  right: 16px;
-  bottom: 88px;   /* justo encima de la barra */
-  z-index: 10001;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  border: 1px solid var(--line, #2a2a2a);
-  background: #181818;
-  color: #fff;
-  cursor: pointer;
-  box-shadow: 0 6px 24px rgba(0,0,0,.35);
+/* Botón flotante para mostrar/ocultar la barra */
+#mdf-bar-toggle{
+  position:fixed;
+  right:16px;
+  bottom:88px;
+  z-index:10001;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:40px;
+  height:40px;
+  border-radius:999px;
+  border:1px solid var(--line, #2a2a2a);
+  background:#181818;
+  color:#fff;
+  cursor:pointer;
+  box-shadow:0 6px 24px rgba(0,0,0,.35);
 }
-#mdf-bar-toggle[aria-pressed="true"] { background: #101010; }
+#mdf-bar-toggle[aria-pressed="true"]{
+  background:#101010;
+}
+
+/* ==========================================================================
+   Reflow de la barra en tablet/móvil
+   ========================================================================== */
+
+/* Áreas de la grilla (desktop) */
+._mdf-player-bar{ grid-template-areas:"now ctr right"; }
+._mdf-now{   grid-area:now; }
+._mdf-ctrls{ grid-area:ctr; }
+._mdf-right{ grid-area:right; }
+
+/* Bloque derecho con anchura elástica */
+._mdf-right{
+  min-width:clamp(260px, 44vw, 420px);
+}
+
+/* ≤ 960px: 2 filas (meta+controles arriba, progreso abajo) */
+@media (max-width:960px){
+  ._mdf-player-bar{
+    grid-template-columns:1fr auto;
+    grid-template-areas:
+      "now ctr"
+      "right right";
+    gap:8px 10px;
+    height:auto;
+    padding:10px 12px;
+  }
+  ._mdf-right{
+    min-width:0;
+    gap:8px;
+  }
+  ._mdf-time{
+    min-width:72px;
+    font-size:11px;
+    text-align:right;
+  }
+  ._mdf-player-seek{
+    flex:1 1 auto;
+    min-width:120px;
+  }
+  ._mdf-vol{
+    width:clamp(96px, 22vw, 140px);
+  }
+  ._mdf-cover{
+    width:42px;
+    height:42px;
+  }
+  ._mdf-player-title{
+    max-width:56vw;
+  }
+}
+
+/* ≤ 400px: se oculta el slider de volumen para ganar espacio */
+@media (max-width:400px){
+  ._mdf-vol{ display:none !important; }
+}
