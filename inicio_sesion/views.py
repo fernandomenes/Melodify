@@ -200,14 +200,48 @@ def pantallaLogin(request):
 
 
 def playlist_getAll(request):
-    """Devuelve un listado plano de playlists en formato JSON."""
-    data = list(
+    """
+    Devuelve todas las playlists junto con info de likes:
+
+    - likes_count: número total de likes
+    - liked: si el usuario actual le ha dado like o no
+    """
+    user = _get_session_user_obj(request)
+
+    base = list(
         PlayList.objects.values(
             "id", "idUser", "name", "portada", "isprivate", "created_at"
         )
     )
-    return JsonResponse(data, safe=False)
 
+    if not base:
+        return JsonResponse([], safe=False)
+
+    playlist_ids = [p["id"] for p in base]
+
+    ct = ContentType.objects.get_for_model(PlayList)
+
+    likes_qs = LikeMedia.objects.filter(
+        content_type=ct,
+        object_id__in=playlist_ids,
+    )
+
+    counts = {}
+    for l in likes_qs:
+        counts[l.object_id] = counts.get(l.object_id, 0) + 1
+
+    user_liked_ids = set()
+    if user:
+        user_liked_ids = set(
+            likes_qs.filter(user=user).values_list("object_id", flat=True)
+        )
+
+    for p in base:
+        pid = p["id"]
+        p["likes_count"] = counts.get(pid, 0)
+        p["liked"] = pid in user_liked_ids
+
+    return JsonResponse(base, safe=False)
 
 @csrf_exempt
 @require_http_methods(["POST"])
