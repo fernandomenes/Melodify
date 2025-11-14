@@ -738,6 +738,46 @@ function hookViewGuard(){
   _state.moView=new MutationObserver(apply);
   _state.moView.observe(main,{attributes:true, attributeFilter:["data-view"]});
 }
+function playExternalSong(audioUrl, title, artist, coverUrl) {
+  if (!audioUrl) return;
+
+  try {
+    const absTarget = new URL(audioUrl, window.location.origin).href;
+    let idx = -1;
+
+    for (let i = 0; i < _state.queue.length; i++) {
+      const qUrl = _state.queue[i]?.audioUrl
+        ? new URL(_state.queue[i].audioUrl, window.location.origin).href
+        : '';
+      if (qUrl === absTarget) {
+        idx = i;
+        break;
+      }
+    }
+
+    if (idx === -1) {
+      const track = {
+        id: null,
+        title: title || 'Sin título',
+        artist: artist || '',
+        audioUrl: audioUrl,
+        coverUrl: coverUrl || '',
+        fromSearch: true,   
+      };
+      _state.queue.push(track);
+      idx = _state.queue.length - 1;
+
+      try { renderQueue && renderQueue(); } catch (_) {}
+    }
+
+    // 3) Reproducirla
+    if (typeof load === 'function') {
+      load(idx, true); // autoplay
+    }
+  } catch (err) {
+    console.warn('playExternalSong falló:', err);
+  }
+}
 
 // ---------------------------- API global -----------------------------------
 window.MDFCore = {
@@ -748,6 +788,7 @@ window.MDFCore = {
   toggle: ()=> toggle(),
   prev: ()=> prev(),
   next: ()=> next(),
+    playExternalSong, 
   seekPercent: (p01)=>{
     ensureAudio();
     const a=_state.audio; if(!a||!Number.isFinite(a.duration)||a.duration<=0) return;

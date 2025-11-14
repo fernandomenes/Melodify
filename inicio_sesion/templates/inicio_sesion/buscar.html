@@ -340,21 +340,19 @@
   </div>
 
   <!-- Scripts -->
-  <script>
-    function playSongFromSearch(element) {
-      const audioUrl = element.dataset.audioUrl;
-      const title = element.dataset.title;
-      const author = element.dataset.author;
-      const coverUrl = element.dataset.coverUrl;
-      
-      // Usar el reproductor global si está disponible
-      if (window.MDFCore && window.MDFCore.playSong) {
-        window.MDFCore.playSong(audioUrl, title, author, coverUrl);
-      } else {
-        // Fallback: redirigir al reproductor con parámetros
-        window.location.href = `{% url 'home' %}?view=reproductor&song=${encodeURIComponent(audioUrl)}&title=${encodeURIComponent(title)}&artist=${encodeURIComponent(author)}`;
-      }
+<script>
+  function playSongFromSearch(element) {
+    const audioUrl = element.dataset.audioUrl;
+    const title    = element.dataset.title;
+    const author   = element.dataset.author;
+    const coverUrl = element.dataset.coverUrl || '';
+
+    if (typeof playSearchResult === 'function') {
+      playSearchResult(audioUrl, title, author, coverUrl);
     }
+  }
+</script>
+
     
     function viewPlaylist(playlistId) {
       // Redirigir a la vista de playlist
