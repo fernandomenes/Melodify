@@ -1,10 +1,9 @@
-// static/inicio_sesion/searchHandler.js
+// Módulo de búsqueda: barra superior y panel de resultados dinámicos
 
 document.addEventListener('DOMContentLoaded', function () {
     const searchInput = document.getElementById('search-input');
     const searchForm  = document.getElementById('search-form');
 
-    // Leer estado inicial y parámetros de la URL
     const main        = document.getElementById('main-content');
     const initialView = main?.dataset?.initialView || '';
     const params      = new URLSearchParams(window.location.search);
@@ -12,13 +11,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const playlistIdFromURL = params.get('playlist');
     const songFromURL       = params.get('song');
 
-    // Si venimos con ?view=playlist&playlist=ID → abrir la vista de playlists y esa lista
+    // Restaurar vista de playlist desde parámetros de URL
     if (initialView === 'home' && viewParam === 'playlist') {
         setTimeout(() => {
             const mainEl = document.getElementById('main-content');
             if (!mainEl) return;
 
-            // Marcar menú Playlist
             const items = document.querySelectorAll('#menuLateral .menu-item');
             items.forEach(it => it.classList.remove('active'));
             const playlistItem = document.querySelector('#menuLateral .menu-item[data-view="playlist"]');
@@ -33,7 +31,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     initPlayList(username);
                 }
                 if (playlistIdFromURL && typeof verSongs === 'function') {
-                    // Pequeña espera para que se pinte la UI
                     setTimeout(() => verSongs(playlistIdFromURL), 150);
                 }
             } catch (err) {
@@ -42,7 +39,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 0);
     }
 
-    // Si venimos con ?view=reproductor&song=... → abrir reproductor y reproducir
+    // Restaurar vista de reproductor desde parámetros de URL
     if (initialView === 'home' && viewParam === 'reproductor') {
         setTimeout(() => {
             const repItem = document.querySelector('#menuLateral .menu-item[data-view="reproductor"]');
@@ -54,7 +51,6 @@ document.addEventListener('DOMContentLoaded', function () {
             const artistFromURL = params.get('artist') || '';
             const coverFromURL  = params.get('cover')  || '';
 
-            // Espera para que el reproductor cargue
             setTimeout(() => {
                 if (window.MDFCore && typeof window.MDFCore.playExternalSong === 'function') {
                     window.MDFCore.playExternalSong(
@@ -68,7 +64,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 0);
     }
 
-    // Enter y submit en el buscador → navegar a /buscar/?q=...
+    // Envío de búsqueda (enter o submit)
     if (searchInput && searchForm) {
         searchInput.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') {
@@ -94,7 +90,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Búsqueda en tiempo real (panel debajo del input)
+    // Búsqueda incremental en el panel flotante
     let searchTimeout;
 
     if (searchInput) {
@@ -124,31 +120,61 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
-    // Pintar panel con resultados rápidos
     function displaySearchPanel(results) {
         const panel = document.getElementById('search-panel');
         if (!panel) return;
 
         let html = '';
 
-        // Canciones
+        const likesArr = Array.isArray(window._likes) ? window._likes : [];
+        const likeIds = new Set(likesArr.map(s => String(s.id || '')));
+
         if (results.canciones && results.canciones.length > 0) {
             html += '<div class="search-section"><h4>Canciones</h4>';
             results.canciones.forEach(cancion => {
                 const t = String(cancion.title).replace(/'/g, "\\'");
                 const a = String(cancion.artist).replace(/'/g, "\\'");
                 const u = String(cancion.audioUrl || '').replace(/'/g, "\\'");
+                const cover = String(
+                    cancion.coverUrl ||
+                    cancion.cover ||
+                    '/static/inicio_sesion/img_song.png'
+                ).replace(/'/g, "\\'");
+                const liked = !!cancion.is_liked || likeIds.has(String(cancion.id));
+
                 html += `
-                    <div class="search-item"
-                         onclick="playSearchResult('${u}', '${t}', '${a}')">
+                    <div class="search-item search-item-song"
+                         data-song-id="${cancion.id}"
+                         data-title="${t}"
+                         data-artist="${a}"
+                         data-audio-url="${u}"
+                         data-cover-url="${cover}">
+                      <div class="search-item-main"
+                           onclick="playSearchResult('${u}', '${t}', '${a}', '${cover}')">
                         ${cancion.title} - ${cancion.artist}
+                      </div>
+                      <div class="search-item-actions">
+                        <button
+                          type="button"
+                          class="search-btn search-btn-like ${liked ? 'is-liked' : ''}"
+                          data-song-id="${cancion.id}"
+                          data-liked="${liked ? '1' : '0'}"
+                          onclick="toggleSongLikeFromSearch(event, ${cancion.id}, this)">
+                          ${liked ? '♥' : '♡'}
+                        </button>
+                        <button
+                          type="button"
+                          class="search-btn search-btn-add"
+                          onclick="openAddToPlaylistFromSearch(event, ${cancion.id})">
+                          +
+                        </button>
+                      </div>
                     </div>
                 `;
             });
             html += '</div>';
         }
 
-        // Artistas
         if (results.artistas && results.artistas.length > 0) {
             html += '<div class="search-section"><h4>Artistas</h4>';
             results.artistas.forEach(artista => {
@@ -162,7 +188,6 @@ document.addEventListener('DOMContentLoaded', function () {
             html += '</div>';
         }
 
-        // Playlists
         if (results.playlists && results.playlists.length > 0) {
             html += '<div class="search-section"><h4>Playlists</h4>';
             results.playlists.forEach(playlist => {
@@ -183,7 +208,7 @@ document.addEventListener('DOMContentLoaded', function () {
         panel.hidden = false;
     }
 
-    // Cerrar panel al hacer clic fuera del área de búsqueda
+    // Cierre del panel al hacer clic fuera del área de búsqueda
     document.addEventListener('click', function (e) {
         const panel  = document.getElementById('search-panel');
         const search = document.getElementById('search');
@@ -194,17 +219,14 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
-// Reproducir una canción desde el panel de búsqueda
 function playSearchResult(audioUrl, title, artist, coverUrl = '') {
     hideSearchPanel();
 
-    // Si el reproductor ya está cargado en la SPA
     if (window.MDFCore && typeof window.MDFCore.playSong === 'function') {
         window.MDFCore.playSong(audioUrl, title, artist, coverUrl);
         return;
     }
 
-    // Si no está cargado, redirigimos a /home/?view=reproductor&song=...
     const main     = document.getElementById('main-content');
     const baseHome = (main && main.dataset && main.dataset.urlHome) || '/home/';
 
@@ -218,13 +240,70 @@ function playSearchResult(audioUrl, title, artist, coverUrl = '') {
     window.location.href = url.toString();
 }
 
-// Ir al perfil de un artista
+function toggleSongLikeFromSearch(evt, songId, btn) {
+    if (evt) evt.stopPropagation();
+    if (!btn) return;
+
+    const csrftoken = getCookie('csrftoken');
+
+    fetch(`/api/like/song/${songId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrftoken,
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        const liked = !!data.liked;
+
+        const allButtons = document.querySelectorAll(
+            `.search-btn-like[data-song-id="${songId}"]`
+        );
+        allButtons.forEach(b => {
+            b.dataset.liked = liked ? '1' : '0';
+            b.classList.toggle('is-liked', liked);
+            b.textContent = liked ? '♥' : '♡';
+        });
+
+        if (window.MDFCore && typeof window.MDFCore.syncLikeModelFromClient === 'function') {
+            let meta = null;
+            const row = btn.closest('.search-item-song');
+            if (row) {
+                meta = {
+                    title:    row.dataset.title  || '',
+                    artist:   row.dataset.artist || '',
+                    audioUrl: row.dataset.audioUrl || '',
+                    coverUrl: row.dataset.coverUrl || '',
+                    genre:    row.dataset.genre || ''
+                };
+            }
+            window.MDFCore.syncLikeModelFromClient(songId, liked, meta);
+        }
+    })
+    .catch(err => {
+        console.error('Error al dar like a la canción:', err);
+    });
+}
+
+function openAddToPlaylistFromSearch(evt, songId) {
+    if (evt) evt.stopPropagation();
+
+    hideSearchPanel();
+
+    if (typeof window.openAddToPlaylistForSong === 'function') {
+        window.openAddToPlaylistForSong(songId);
+        return;
+    }
+
+    alert('No se encontró la función para agregar a playlist.');
+}
+
 function viewArtist(username) {
     hideSearchPanel();
     window.location.href = `/artista/${encodeURIComponent(username)}/`;
 }
 
-// Ir a una playlist usando la SPA de /home/
 function viewPlaylist(playlistId) {
     hideSearchPanel();
 
@@ -238,10 +317,24 @@ function viewPlaylist(playlistId) {
     window.location.href = url.toString();
 }
 
-// Ocultar panel de búsqueda rápido
 function hideSearchPanel() {
     const panel = document.getElementById('search-panel');
     if (panel) {
         panel.hidden = true;
     }
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            cookie = cookie.trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
 }

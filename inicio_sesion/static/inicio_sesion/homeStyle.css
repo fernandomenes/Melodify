@@ -374,3 +374,67 @@ a.back:focus { background: #262626; }
     text-align: center;
     color: #888;
 }
+
+.search-item-song {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.search-item-main {
+  flex: 1;
+}
+
+.search-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.search-btn {
+  border: 1px solid #444;
+  background: #1f1f1f;
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.search-btn-like.is-liked {
+  border-color: #ff0066;
+  color: #ff0066;
+}
+
+.search-item-song {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.search-item-main {
+  flex: 1;
+}
+
+.search-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.search-btn {
+  border: 1px solid #444;
+  background: #1f1f1f;
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.search-btn-like.is-liked {
+  border-color: #ff0066;
+  color: #ff0066;
+}
