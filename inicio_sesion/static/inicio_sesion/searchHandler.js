@@ -3,9 +3,39 @@
 document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('search-input');
     const searchForm = document.getElementById('search-form');
-    
+    const main = document.getElementById('main-content');
+    const initialView = main?.dataset?.initialView || '';
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get('view');
+    const playlistIdFromURL = params.get('playlist');
+
+    if (initialView === 'home' && viewParam === 'playlist') {
+        setTimeout(() => {
+            const mainEl = document.getElementById('main-content');
+            if (!mainEl) return;
+
+            const items = document.querySelectorAll('#menuLateral .menu-item');
+            items.forEach(it => it.classList.remove('active'));
+            const playlistItem = document.querySelector('#menuLateral .menu-item[data-view="playlist"]');
+            if (playlistItem) playlistItem.classList.add('active');
+
+            mainEl.dataset.view = 'playlist';
+
+            try {
+                const username = mainEl.dataset.username || '';
+
+                if (typeof initPlayList === 'function') {
+                    initPlayList(username);       // prepara #content y muestra listas
+                }
+                if (playlistIdFromURL && typeof verSongs === 'function') {
+                    setTimeout(() => verSongs(playlistIdFromURL), 150);
+                }
+            } catch (err) {
+                console.warn('Error al inicializar playlist desde la URL:', err);
+            }
+        }, 0);
+    }
     if (searchInput && searchForm) {
-        // Manejar la tecla Enter
         searchInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -13,7 +43,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // También manejar el submit del formulario por si acaso
         searchForm.addEventListener('submit', function(e) {
             e.preventDefault();
             performSearch();
@@ -25,21 +54,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const query = searchInput.value.trim();
         
         if (query.length > 0) {
-            // Redirigir a la página de búsqueda con el query
             window.location.href = `/buscar/?q=${encodeURIComponent(query)}`;
         } else {
-            // Si está vacío, ir a la página de búsqueda sin query
             window.location.href = '/buscar/';
         }
     }
     
-    // Búsqueda en tiempo real (opcional)
     let searchTimeout;
     searchInput.addEventListener('input', function() {
         clearTimeout(searchTimeout);
         const query = this.value.trim();
         
-        if (query.length >= 2) { // Solo buscar si tiene al menos 2 caracteres
+        if (query.length >= 2) { 
             searchTimeout = setTimeout(() => {
                 fetchSearchResults(query);
             }, 300);
@@ -144,9 +170,16 @@ function viewArtist(username) {
 }
 
 function viewPlaylist(playlistId) {
-    window.location.href = `/playlist/${playlistId}/`;
+    const main = document.getElementById('main-content');
+    const baseHome =
+        (main && main.dataset && main.dataset.urlHome) ||
+        '/home/';
+
     hideSearchPanel();
+    window.location.href =
+        `${baseHome}?view=playlist&playlist=${encodeURIComponent(playlistId)}`;
 }
+
 
 function hideSearchPanel() {
     const panel = document.getElementById('search-panel');

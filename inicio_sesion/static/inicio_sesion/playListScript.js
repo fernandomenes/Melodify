@@ -464,14 +464,20 @@ function verSongs(playlistId) {
               <div class="song-title"><strong>${title}</strong></div>
               <div class="song-author"><small style="color:#b3b3b3">${author}</small></div>
               <br>
-              ${(() => {
-                  const liked = song.liked ? true : false;
-                  const likesN = song.likes_count || 0;
-                  return `<button class="btnRoundPlaylist" id="like-song-btn-${song.id}" onclick="likeSong(${song.id})">
-                              ${liked ? `Liked (${likesN})` : `Like (${likesN})`}
-                          </button>`;
-              })()}
-              <button class="btnRoundPlaylist" onclick="deleteFromPlaylistSong(${song.id},${playlistId})">eliminar</button>
+            ${(() => {
+                const liked = song.liked ? true : false;
+                const likesN = song.likes_count || 0;
+                return `<button class="btnRoundPlaylist js-like-btn"
+                    id="like-song-btn-${song.id}"
+                    onclick="likeSong(event, ${song.id})">
+                ${liked ? `Liked (${likesN})` : `Like (${likesN})`}
+            </button>`;
+            })()}
+
+            <button class="btnRoundPlaylist js-delete-btn"
+                    onclick="deleteFromPlaylistSong(event, ${song.id}, ${playlistId})">
+                eliminar
+            </button>
             </div>
             
           </li>`;
@@ -644,7 +650,13 @@ function addSongToPlaylist(idSong,idPlaylist,totalSong) {
 
 }
 
-async function likeSong(idSong) {
+async function likeSong(ev, idSong) {
+    // Muy importante: detener el click para que NO suba al <li class="song-item">
+    if (ev) {
+        ev.stopPropagation();
+        ev.preventDefault();
+    }
+
     console.log('Like song:', idSong);
     const csrf = getCookie('csrftoken');
 
@@ -693,10 +705,13 @@ async function likeSong(idSong) {
     }
 }
 
+function deleteFromPlaylistSong(ev, idSong, playlistId){
+    // Igual: que no dispare el play/pause del reproductor
+    if (ev) {
+        ev.stopPropagation();
+        ev.preventDefault();
+    }
 
-
-
-function deleteFromPlaylistSong(idSong,playlistId){
     console.log('delete', idSong);
     if (!confirm('¿Quitar esta canción de la playlist?')) {
         return;
@@ -730,5 +745,34 @@ function deleteFromPlaylistSong(idSong,playlistId){
             console.error('Error al eliminar:', error);
             alert('Error: ' + error.message);
         });
-
 }
+
+    fetch('/playlist/removeSong/', {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            playlist_id: playlistId,
+            song_id: idSong
+        })
+    })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.error || `Error ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Éxito:', data.message);
+            // Recargar la playlist actual
+            verSongs(playlistId);
+        })
+        .catch(error => {
+            console.error('Error al eliminar:', error);
+            alert('Error: ' + error.message);
+        });
+
