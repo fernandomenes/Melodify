@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Melodify Player — Variables de tema
+   Melodify Player — Variables de tema y visualización
    ========================================================================== */
 :root{
   --bg:#121212; --card:#1b1b1b; --line:#2a2a2a; --muted:#9aa0a6;
@@ -7,12 +7,12 @@
   --glow-bg-1:#221a36; --glow-bg-2:#191627;
   --glow-border:#6f58ff; --glow-outer:rgba(122,60,255,.25);
 
-  /* Ganancia visual del glow (subir para mas intensidad) */
+  /* Ganancia visual del glow (subir para más intensidad) */
   --viz-k: 3.6;
 }
 
 /* ==========================================================================
-   Barra del reproductor (FLOTANTE)
+   Barra del reproductor (flotante)
    ========================================================================== */
 ._mdf-player-bar{
   position:fixed; left:50%; transform:translateX(-50%); bottom:16px;
@@ -25,15 +25,15 @@
   align-items:center; gap:16px; padding:0 18px; z-index:1000; color:var(--text);
   box-shadow:0 10px 28px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.03) inset;
 
-  --viz-int: 0;  /* la JS lo actualiza */
+  --viz-int: 0;  /* JS actualiza en tiempo real */
   --viz-hue: 270;
 
-  /* Transiciones cortas para que la respuesta sea “snappy” (fix typo) */
+  /* Transiciones cortas para una respuesta “snappy” */
   transition: box-shadow .04s linear, outline-color .04s linear;
 }
 ._mdf-player-bar.is-visible{ display:grid; }
 
-/* Columna izquierda (portada + meta) */
+/* Columna izquierda (portada + metadatos) */
 ._mdf-now{ display:flex; align-items:center; gap:12px; min-width:0; }
 ._mdf-cover{
   width:48px; height:48px; border-radius:10px; background:#222; object-fit:cover;
@@ -46,7 +46,7 @@
 }
 ._mdf-meta{ display:flex; flex-direction:column; min-width:0; flex:1; }
 
-/* Título recortado */
+/* Título/autor recortados */
 ._mdf-player-title{
   font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   max-width:min(56vw, 560px);
@@ -82,6 +82,7 @@
 ._mdf-btn:active, ._mdf-speed:active{ transform:translateY(1px); }
 ._mdf-btn:focus-visible, ._mdf-speed:focus-visible{ outline:2px solid var(--accent-2); outline-offset:2px; }
 
+/* Botón primario (Play/Pause) */
 ._mdf-btn--primary{
   background:var(--accent)!important; border-color:var(--accent-2)!important;
   box-shadow:
@@ -95,13 +96,14 @@
 /* Botón velocidad */
 ._mdf-speed{ padding:0 10px; font-weight:600; }
 
+/* Oculta adornos originales del round-progress */
 ._mdf-circle,
 ._mdf-ctrls ._mdf-spikes,
 canvas._mdf-spikes { display:none !important; }
 ._mdf-ctrls::before,
 ._mdf-ctrls::after { content:none !important; animation:none !important; background:none !important; }
 
-/* Columna derecha (tiempo, seek, volumen) */
+/* Columna derecha (tiempos, seek, volumen) */
 ._mdf-right{
   display:flex; align-items:center; gap:12px; justify-content:flex-end; min-width:420px;
 }
@@ -110,7 +112,7 @@ canvas._mdf-spikes { display:none !important; }
 ._mdf-vol{ width:140px; display:inline-block; }
 
 /* ==========================================================================
-   Sliders (seek/volume) — con “relleno”
+   Sliders (seek/volumen) — con “relleno”
    ========================================================================== */
 ._mdf-player-seek, ._mdf-vol{
   -webkit-appearance:none; appearance:none; height:4px; background:#2b2b2b;
@@ -134,8 +136,10 @@ canvas._mdf-spikes { display:none !important; }
 ._mdf-circle{ display:none !important; }
 
 /* ==========================================================================
-   Listado de canciones + vista
+   Listado de canciones + vista de reproductor
    ========================================================================== */
+
+/* Listado principal de canciones */
 .songs-wrap{ width:min(1180px, 92vw); margin:8px 0 120px; }
 .song-item{
   display:grid; grid-template-columns:72px 1fr auto; align-items:center; gap:14px;
@@ -166,7 +170,7 @@ canvas._mdf-spikes { display:none !important; }
   box-shadow:0 0 0 1px rgba(122,60,255,.35) inset, 0 0 18px var(--glow-outer);
 }
 
-/* Vista Reproductor */
+/* Layout de la vista Reproductor */
 .rep-grid{ display:grid; grid-template-columns:1fr 360px; gap:16px; }
 @media (max-width:960px){
   .rep-grid{ grid-template-columns:1fr; }
@@ -184,6 +188,8 @@ canvas._mdf-spikes { display:none !important; }
   display:inline-block; min-width:22px; padding:0 6px; border-radius:999px;
   border:1px solid var(--line); font-size:12px; text-align:center;
 }
+
+/* Chips de géneros/listas rápidas */
 #rep-genres{ display:flex; flex-wrap:wrap; gap:8px; align-items:flex-start; }
 .rep-chip{
   display:inline-flex!important; align-items:center; gap:8px; line-height:1;
@@ -203,6 +209,8 @@ canvas._mdf-spikes { display:none !important; }
   box-shadow:0 0 0 1px rgba(122,60,255,.35) inset, inset 0 0 18px rgba(122,60,255,.35), 0 0 18px var(--glow-outer);
   color:#fff; border-radius:999px!important;
 }
+
+/* Listas auxiliares (Top10, Discover, etc.) */
 .rep-list{ list-style:none; margin:0; padding:0; }
 .rep-list li{
   display:flex; align-items:center; justify-content:space-between; gap:10px;
@@ -218,6 +226,7 @@ canvas._mdf-spikes { display:none !important; }
   color:#fff;
 }
 
+/* Estado vacío */
 .rep-empty{
   background:var(--card); border:1px solid var(--line); border-radius:12px;
   padding:32px 24px; color:#b3b3b3; min-height:240px;
@@ -225,6 +234,9 @@ canvas._mdf-spikes { display:none !important; }
 }
 .rep-left .songs-wrap{ width:100%; max-width:none; margin:8px 0 120px; }
 
+/* ==========================================================================
+   Ajustes de glow/borde de la barra del reproductor
+   ========================================================================== */
 ._mdf-player-bar{
   border-color: hsl(0 0% 16% / 1);
   outline: 1px solid hsl(var(--viz-hue) 70% 60% / calc(.26 * (var(--viz-int) * var(--viz-k))));
@@ -235,15 +247,16 @@ canvas._mdf-spikes { display:none !important; }
       hsl(var(--viz-hue) 80% 60% / calc(.22 + .26 * (var(--viz-int) * var(--viz-k))));
 }
 
+/* Limpia decoraciones previas del wrapper original */
 ._mdf-player-bar::before,
 ._mdf-player-bar::after{
   content:none !important;
   display:none !important;
 }
 
-/* =========================
-   Desplazar barra por sidebar
-   ========================= */
+/* ==========================================================================
+   Ajuste de posición de la barra según sidebar
+   ========================================================================== */
 ._mdf-player-bar{
   --sidebar-open: 248px;
   --sidebar-collapsed: 72px;
@@ -266,14 +279,14 @@ canvas._mdf-spikes { display:none !important; }
   }
 }
 
+/* Micro-ajustes de layout */
 ._mdf-player-title{ max-width: min(50vw, 520px); }
-
-/* Más espacio para el seek */
 ._mdf-right{ gap: 10px; min-width: 360px; }
 ._mdf-time{ min-width: 88px; }
 ._mdf-player-seek{ flex: 1 1 440px; }
 ._mdf-vol{ width: 128px; }
 
+/* Variación de tema en blanco (modo “white glow”) */
 ._mdf-player-bar.mdf-whiteglow{
   --accent:#ffffff; --accent-2:#dfe4ea;
   filter:
@@ -281,6 +294,6 @@ canvas._mdf-spikes { display:none !important; }
     drop-shadow(0 0 25px rgba(255,255,255,.20));
 }
 
+/* Round progress integrado sin sombra extra */
 ._mdf-ctrls { position: relative; }
 ._mdf-ctrls.mdf-round-progress { box-shadow: none !important; }
-

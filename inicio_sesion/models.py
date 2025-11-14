@@ -1,12 +1,22 @@
 from django.core.validators import FileExtensionValidator, MaxLengthValidator
 from django.db import models
-from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 
+
+# ======================================================================
+# Usuarios y Perfiles
+# ======================================================================
 
 class Users(models.Model):
-    """Modelo de usuario de la plataforma (Administrador, Artista o Usuario)."""
+    """
+    Modelo de usuario de la plataforma.
 
+    El campo `type` se usa para rol:
+    - "Administrador"
+    - "Artista"
+    - "Usuario"
+    """
     user = models.CharField(max_length=100, unique=True)
     password = models.CharField(max_length=100)
     type = models.CharField(max_length=50)
@@ -15,60 +25,92 @@ class Users(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # Cuenta protegida a nivel de gestión (no eliminable/renombrable/desactivable).
+    # Cuenta protegida en la interfaz de gestión (no se elimina/renombra/desactiva).
     is_superadmin = models.BooleanField(default=False)
-
-    def __str__(self) -> str:
-        return self.user
 
     class Meta:
         db_table = "Users"
 
+    def __str__(self) -> str:
+        return self.user
+
 
 class ArtistProfile(models.Model):
-    """Perfil complementario para artistas (descripción hasta 200 caracteres)."""
+    """
+    Perfil adicional para usuarios con rol de artista.
 
-    user = models.OneToOneField(Users, on_delete=models.CASCADE, related_name="artist_profile")
-    description = models.CharField(max_length=200, blank=True, validators=[MaxLengthValidator(200)])
-
-    def __str__(self) -> str:
-        return f"Perfil {self.user.user}"
+    Permite almacenar una breve descripción (hasta 200 caracteres).
+    """
+    user = models.OneToOneField(
+        Users,
+        on_delete=models.CASCADE,
+        related_name="artist_profile",
+    )
+    description = models.CharField(
+        max_length=200,
+        blank=True,
+        validators=[MaxLengthValidator(200)],
+    )
 
     class Meta:
         db_table = "ArtistProfiles"
 
+    def __str__(self) -> str:
+        return f"Perfil {self.user.user}"
+
+
+# ======================================================================
+# Canciones
+# ======================================================================
 
 class Song(models.Model):
     """
     Canción disponible para reproducción y gestión.
-
-    Campos clave:
-      - audio_file: archivo de audio validado por extensión.
-      - title / artist_display_name: metadatos visibles.
-      - owner_user: usuario Artista que sube la canción.
-      - audio_sha256: hash del contenido para deduplicación lógica.
-      - visibility: estado de publicación ('public' | 'removed').
     """
-
     title = models.CharField(max_length=200)
     artist_display_name = models.CharField(max_length=200)
-    genre = models.CharField(max_length=40, blank=True, default="", db_index=True)
-    owner_user = models.CharField(max_length=100, db_index=True)
+    genre = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+    # Usuario propietario (username en Users.user)
+    owner_user = models.CharField(
+        max_length=100,
+        db_index=True,
+    )
 
     audio_file = models.FileField(
         upload_to="uploaded_songs/",
         validators=[
-            FileExtensionValidator(allowed_extensions=["mp3", "wav", "ogg", "m4a", "flac"])
+            FileExtensionValidator(
+                allowed_extensions=["mp3", "wav", "ogg", "m4a", "flac"]
+            )
         ],
     )
-    cover_image = models.ImageField(upload_to="uploaded_covers/", null=True, blank=True)
+    cover_image = models.ImageField(
+        upload_to="uploaded_covers/",
+        null=True,
+        blank=True,
+    )
 
-    audio_sha256 = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    # Hash del audio (para evitar duplicados por usuario)
+    audio_sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
+
     visibility = models.CharField(
         max_length=16,
-        choices=(("public", "public"), ("removed", "removed")),
+        choices=(
+            ("public", "public"),
+            ("removed", "removed"),
+        ),
         default="public",
         db_index=True,
     )
@@ -80,43 +122,77 @@ class Song(models.Model):
             models.Index(
                 fields=["owner_user", "audio_sha256", "visibility"],
                 name="idx_song_owner_hash_vis",
-            )
+            ),
         ]
 
     def __str__(self) -> str:
         return f"{self.title} — {self.artist_display_name}"
 
 
+# ======================================================================
+# Playlists (tablas externas / legadas, no gestionadas por migraciones)
+# ======================================================================
+
 class PlayList(models.Model):
+    """
+    Playlist almacenada en tabla externa.
+
+    Nota: `managed = False`, Django no crea ni altera la tabla.
+    """
     id = models.AutoField(primary_key=True)
+    # ID de la tabla Users (entero, no FK real)
     idUser = models.IntegerField()
     name = models.CharField(max_length=200)
-    portada = models.URLField()  # o ImageField si subes imágenes
+    # En la práctica se usa muchas veces como cadena vacía, se marca blank=True.
+    portada = models.URLField(blank=True)
     isprivate = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'PlayList'  # ¡IMPORTANTE!
-        managed = False  # ← Django NO la modificará
+        db_table = "PlayList"
+        managed = False  # Django no gestiona esta tabla con migraciones
+
+    def __str__(self) -> str:
+        return f"Playlist {self.name} (user_id={self.idUser})"
+
 
 class PlayListSong(models.Model):
+    """
+    Relación canción–playlist (tabla intermedia externa).
+
+    Se utiliza `playlist_id` y `song_id` como enteros, sin FKs reales.
+    """
     playlist_id = models.IntegerField()
     song_id = models.IntegerField()
     position = models.IntegerField()
 
     class Meta:
-        db_table = 'PlayListSongs'     # ← Nombre exacto de la tabla en DB
-        managed = False               # ← ¡¡CRUCIAL!! Django NO crea ni modifica la tabla
-        # unique_together = ('playlist_id', 'song_id')  # ← Quita esto si da error
-        # ordering = ['position']                      # ← Quita si da error
+        db_table = "PlayListSongs"
+        managed = False  # Django no gestiona esta tabla con migraciones
+        # unique_together = ('playlist_id', 'song_id')
+        # ordering = ['position']
+
+    def __str__(self) -> str:
+        return f"PlaylistSong pl={self.playlist_id} song={self.song_id} pos={self.position}"
+
+
+# ======================================================================
+# Likes genéricos (Song / PlayList / otros con GFK)
+# ======================================================================
 
 class LikeMedia(models.Model):
     """
-    Likes genéricos para Song o PlayList (tabla única).
-    - user: FK a Users
+    Registro de "likes" genérico para distintos tipos de objeto.
+
+    - user: FK a Users.
     - content_type + object_id -> GenericForeignKey al objeto likeado
+      (por ejemplo Song o PlayList).
     """
-    user = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="likes")
+    user = models.ForeignKey(
+        Users,
+        on_delete=models.CASCADE,
+        related_name="likes",
+    )
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField(db_index=True)
     content_object = GenericForeignKey("content_type", "object_id")
@@ -127,7 +203,10 @@ class LikeMedia(models.Model):
         db_table = "LikeMedia"
         unique_together = (("user", "content_type", "object_id"),)
         indexes = [
-            models.Index(fields=["content_type", "object_id"], name="idx_likemedia_ct_obj"),
+            models.Index(
+                fields=["content_type", "object_id"],
+                name="idx_likemedia_ct_obj",
+            ),
         ]
 
     def __str__(self) -> str:

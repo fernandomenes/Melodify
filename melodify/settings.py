@@ -89,10 +89,8 @@ USE_TZ = True
 
 # ----------------------------- Estáticos/Media ---------------------------
 STATIC_URL = "/static/"
-# Necesario en producción para collectstatic
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Incluye solo si existen para evitar W004
 STATICFILES_DIRS = []
 if (BASE_DIR / "static").exists():
     STATICFILES_DIRS.append(BASE_DIR / "static")

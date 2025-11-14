@@ -21,7 +21,6 @@ urlpatterns = [
     path("usuarios/editar/<str:username>/", v.editar_usuario, name="editar_usuario"),
     path("usuarios/eliminar/<str:username>/", v.eliminar_usuario, name="eliminar_usuario"),
     path("undo/", v.revertir_accion, name="revertir_accion"),
-      path("undo/", v.revertir_accion, name="revertir"),
 
     # ------------------------------------------------------------------
     # Catálogo
@@ -37,7 +36,7 @@ urlpatterns = [
     path("canciones/eliminar-multiples/", vm.eliminar_canciones_bulk, name="eliminar_canciones_bulk"),
 
     # ------------------------------------------------------------------
-    # Deshacer en muro (reutiliza lógica de música)
+    # Deshacer en muro
     # ------------------------------------------------------------------
     path("muro/undo/", vm.revertir_mi_cancion, name="revertir_muro"),
 ]

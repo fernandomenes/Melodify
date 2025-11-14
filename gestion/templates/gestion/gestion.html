@@ -1,7 +1,21 @@
-<!-- Dashboard principal de administración  -->
 {% load static %}
 <!doctype html>
 <html lang="es">
+  <!--
+    gestion/gestion.html
+    Panel de administración para usuarios con rol "Administrador":
+
+      • Cabecera con usuario actual + menú de cuenta
+      • Sidebar mínimo (Home / Perfil, siempre fuera de la SPA)
+      • Formulario para alta de artistas
+      • Formulario para alta de administradores
+      • Pestañas:
+          - Usuarios  → administración de cuentas (activar, desactivar, editar, eliminar)
+          - Catálogo → catálogo de canciones públicas con filtro + borrado múltiple
+      • Soporte de “Deshacer” (undo) integrando el endpoint revertir_accion
+      • Incluye gestion.js (lógica rica) + pequeño fallback en caso de que no cargue
+  -->
+
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
 <head>
@@ -10,7 +24,7 @@
   <title>Gestión (Administrador) | Melodify</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Bloquea la SPA del Home en esta carga -->
+  <!-- Desactiva la SPA del Home en esta carga (vista completamente de servidor) -->
   <script>window.__DISABLE_HOME_SCRIPT__ = true;</script>
 
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
@@ -67,6 +81,7 @@
 </head>
 <body data-role="{{ role|lower }}">
 
+<!-- Cabecera superior: usuario logueado + menú de cuenta -->
 <div id="header">
   <div class="user-info" id="user-trigger">
     <div class="user-icon">
@@ -80,18 +95,22 @@
   </div>
 </div>
 
-
+<!-- Sidebar mínimo: navegación fuera de la SPA (Home / Perfil) -->
 <div id="menuLateral">
   <div class="logo" id="toggle-menu">
     <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
     <span class="logo-text">Melodify</span>
   </div>
 
-  <!-- Sidebar mínimo (sin “Gestión” para evitar interferencias) -->
   <a class="menu-item" data-view="home" href="{% url 'home' %}?no_spa=1">Home</a>
-  <div class="menu-item" data-view="perfil"><a href="{% url 'home' %}?view=perfil&no_spa=1" style="display:block;color:inherit;text-decoration:none">Perfil</a></div>
+  <div class="menu-item" data-view="perfil">
+    <a href="{% url 'home' %}?view=perfil&no_spa=1" style="display:block;color:inherit;text-decoration:none">
+      Perfil
+    </a>
+  </div>
 </div>
 
+<!-- Contenedor principal: datos de contexto + endpoints usados por gestion.js -->
 <div id="main-content"
      data-initial-view="gestion"
      data-username="{{ username }}"
@@ -108,8 +127,10 @@
      data-live="0"
      data-feed-scope="catalogo-admin">
 
+  <!-- Botón hamburguesa para colapsar/expandir sidebar -->
   <button id="menu-toggle-btn">☰</button>
 
+  <!-- Botón de regreso al Home (vista de servidor, sin SPA) -->
   <a id="back-btn" class="back" href="{% url 'home' %}?no_spa=1" title="Volver a inicio" aria-label="Regresar">←</a>
 
   <div id="content">
@@ -118,8 +139,18 @@
         <h1 style="margin:0">Gestión (Administrador)</h1>
       </header>
 
+      <!-- Barra de progreso: registro de usuarios (admin) -->
+      <div id="upload-bar" class="upload-bar" role="status" aria-live="polite" aria-label="Progreso de registro">
+        <div class="row">
+          <div class="progress"><i></i></div>
+          <div class="label"><span id="upload-pct">0%</span></div>
+        </div>
+      </div>
+
+      <!-- Mensajes flash/inline controlados por gestion.js -->
       <div id="inline-msg" class="msg" style="display:none"></div>
 
+      <!-- Barra de “Deshacer” (undo) ligada a revertir_accion -->
       {% if undo_data %}
       <div id="undo-bar" class="undo-bar" style="display:flex">
         <form id="undo-form" method="post" action="{% url 'revertir_accion' %}">{% csrf_token %}
@@ -136,6 +167,7 @@
       </div>
       {% endif %}
 
+      <!-- Formularios de alta rápida: artista y administrador -->
       <div class="grid2">
         <div class="card">
           <h3 style="margin:0 0 12px">Registrar Artista</h3>
@@ -168,14 +200,16 @@
         </div>
       </div>
 
+      <!-- Pestañas de administración: Usuarios / Catálogo -->
       <div class="tabs" role="tablist" aria-label="Secciones de administración">
         <button class="tab-btn" data-tab="usuarios" role="tab" aria-controls="tab-usuarios" aria-selected="true">Usuarios</button>
         <button class="tab-btn" data-tab="catalogo" role="tab" aria-controls="tab-catalogo" aria-selected="false">Catálogo</button>
       </div>
 
-      {# === AQUÍ VA EL INCLUDE DEL PARCIAL === #}
+      {# Pestaña «Usuarios»: lista y acciones (contenido parcial en _usuarios_tab.html) #}
       {% include "gestion/_usuarios_tab.html" %}
 
+      <!-- Pestaña «Catálogo»: canciones, filtros y borrado múltiple -->
       <section id="tab-catalogo" class="tab" role="region" aria-label="Catálogo" hidden>
         <div class="filters">
           <select id="f-artist">
@@ -200,25 +234,28 @@
       </section>
     </div>
 
+    <!-- Modal de confirmación genérico (borrado, acciones destructivas) -->
     <div id="confirm-modal" class="modal" aria-hidden="true">
-  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-    <h4 class="title" id="confirm-title">Confirmar</h4>
-    <p id="confirm-text" class="muted" style="margin:0 0 8px">¿Eliminar este elemento?</p>
-    <div class="actions">
-      <button class="btn" id="confirm-cancel" type="button">Cancelar</button>
-      <button class="btn" id="confirm-accept" type="button">Eliminar</button>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+        <h4 class="title" id="confirm-title">Confirmar</h4>
+        <p id="confirm-text" class="muted" style="margin:0 0 8px">¿Eliminar este elemento?</p>
+        <div class="actions">
+          <button class="btn" id="confirm-cancel" type="button">Cancelar</button>
+          <button class="btn" id="confirm-accept" type="button">Eliminar</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- Back universal -->
+<!-- Enlace base para volver al Home desde scripts -->
 <script>window.MELODIFY_HOME_URL = "{% url 'home' %}";</script>
 <script src="{% static 'inicio_sesion/backToHome.js' %}?v={% now 'U' %}"></script>
 
-<!-- Gestion (externo, clásico; NO type="module") -->
+<!-- Script principal de gestión (maneja tabs, undo, filtros, bulk-delete, etc.) -->
 <script src="{% static 'gestion/gestion.js' %}?v={% now 'U' %}"></script>
 
-<!-- Fallback si gestion.js no cargó -->
+<!-- Fallback mínimo si gestion.js no pudo cargarse -->
 <script>
   if (!window.__gestion_loaded__) {
     console.warn('gestion.js no se cargó, aplicando fallback mínimo');

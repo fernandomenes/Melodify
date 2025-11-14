@@ -9,6 +9,7 @@ Supone autenticación previa y utiliza modelos/utilidades de la app
 
 from django.contrib import messages
 from django.contrib import messages as _msgs
+from django.contrib.contenttypes.models import ContentType
 
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -86,7 +87,7 @@ def _catalogo_html(request) -> str:
 
 def _is_fetch(request) -> bool:
     """Indica si la petición proviene del front (fetch) mediante la cabecera esperada."""
-    return request.headers.get("X-Requested-With") == "fetch"
+    return (request.headers.get("X-Requested-With") or "").lower() == "fetch"
 
 
 # --- Evita que mensajes previos "sangren" al login ---
@@ -241,19 +242,19 @@ def registrar_artista(request):
     if not artist_id or not password:
         _msg_error(request, "Completa: usuario y contraseña.")
         if _is_fetch(request):
-            return JsonResponse({"ok": False})
+            return JsonResponse({"ok": False, "error": "Completa: usuario y contraseña."})
         return redirect("gestion")
 
     if len(password) < 6:
         _msg_error(request, "La contraseña debe tener al menos 6 caracteres.")
         if _is_fetch(request):
-            return JsonResponse({"ok": False})
+            return JsonResponse({"ok": False, "error": "La contraseña debe tener al menos 6 caracteres."})
         return redirect("gestion")
 
     if description and len(description) > 200:
         _msg_error(request, "La descripción no puede superar 200 caracteres.")
         if _is_fetch(request):
-            return JsonResponse({"ok": False})
+            return JsonResponse({"ok": False, "error": "La descripción no puede superar 200 caracteres."})
         return redirect("gestion")
 
     try:
@@ -271,9 +272,17 @@ def registrar_artista(request):
             {"kind": "delete_user_created", "username": artist_id, "actor": username},
         )
     except IntegrityError:
-        _msg_error(request, "El usuario ya existe.")
+        msg = "El usuario ya existe."
+        _msg_error(request, msg)
+        if _is_fetch(request):
+            return JsonResponse({"ok": False, "error": msg})
+        return redirect("gestion")
     except Exception:
-        _msg_error(request, "No se pudo agregar el artista. Inténtelo más tarde.")
+        msg = "No se pudo agregar el artista. Inténtelo más tarde."
+        _msg_error(request, msg)
+        if _is_fetch(request):
+            return JsonResponse({"ok": False, "error": msg})
+        return redirect("gestion")
 
     if _is_fetch(request):
         return JsonResponse(

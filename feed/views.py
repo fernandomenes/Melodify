@@ -16,7 +16,7 @@ from django.views.decorators.http import require_GET
 from inicio_sesion.models import Song
 
 # ---------------------------------------------------------------------------
-# Resolución de rol (compatible con la infraestructura de «inicio_sesion»)
+# Resolución de rol
 # ---------------------------------------------------------------------------
 try:
     from inicio_sesion.auth_helpers import _get_user_role as _role_by_username, _require_session_user
