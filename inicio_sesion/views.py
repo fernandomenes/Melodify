@@ -265,6 +265,7 @@ def create_playlist(request):
 
 
 
+@require_http_methods(["GET"])
 def get_songs_by_playlist(request, playlist_id):
     """
     Retorna las canciones de una playlist con el formato requerido por el
@@ -277,6 +278,8 @@ def get_songs_by_playlist(request, playlist_id):
     - genre
     - audioUrl
     - coverUrl
+    - likes_count
+    - liked
     """
     try:
         logger.info(f"Buscando canciones para playlist_id: {playlist_id}")
@@ -309,6 +312,34 @@ def get_songs_by_playlist(request, playlist_id):
                 cu = str(ci) if ci else ""
             return cu or None
 
+        # --- Calcular likes totals y qué canciones gusta al usuario ---
+        # ContentType del modelo Song
+        ct_song = ContentType.objects.get_for_model(Song)
+
+        # Todas las likes para estas canciones
+        likes_qs = LikeMedia.objects.filter(content_type=ct_song, object_id__in=song_ids)
+
+        # Conteos por canción
+        counts = {}
+        for l in likes_qs:
+            counts[l.object_id] = counts.get(l.object_id, 0) + 1
+
+        # Usuario en sesión (si hay)
+        def _get_session_user_obj_local(req):
+            username = req.session.get("user")
+            if not username:
+                return None
+            try:
+                return Users.objects.get(user=username)
+            except Users.DoesNotExist:
+                return None
+
+        user = _get_session_user_obj_local(request)
+        user_liked_set = set()
+        if user:
+            user_liked_set = set(likes_qs.filter(user=user).values_list('object_id', flat=True))
+
+        # --- Construir mapa de canciones con campos extras ---
         songs_map = {}
         for s in qs:
             songs_map[s.id] = {
@@ -318,6 +349,9 @@ def get_songs_by_playlist(request, playlist_id):
                 "genre": getattr(s, "genre", "") or "",
                 "audioUrl": _audio_url(s),
                 "coverUrl": _cover_url(s),
+                # Campos nuevos:
+                "likes_count": counts.get(s.id, 0),
+                "liked": (s.id in user_liked_set),
             }
 
         # Reconstruye el orden definido en la playlist y omite entradas sin audio.

@@ -64,28 +64,49 @@ function getCookie(name) {
 async function likePlaylist(id) {
     console.log('Like en playlist:', id);
     const csrf = getCookie('csrftoken');
+
+    // Evitar doble click mientras se procesa
+    const btn = document.getElementById(`like-playlist-btn-${id}`);
+    if (btn) btn.disabled = true;
+
     try {
         const resp = await fetch(`/api/like/playlist/${id}/`, {
             method: 'POST',
             credentials: 'same-origin',
             headers: {
-                'Content-Type': 'application/json',
                 'X-CSRFToken': csrf,
                 'X-Requested-With': 'XMLHttpRequest'
             },
             body: null
         });
-        const data = await resp.json();
-        if (resp.status === 200) {
-            const btn = document.querySelector(`button[onclick="likePlaylist(${id})"]`);
-            if (btn) btn.textContent = data.liked ? `Liked (${data.total})` : `Like (${data.total})`;
-        } else if (data.error === 'login_required') {
+
+        // Intentar parsear JSON de forma segura
+        let data = null;
+        try {
+            data = await resp.json();
+        } catch (err) {
+            console.error('Respuesta no JSON:', err);
+        }
+
+        if (resp.ok && data) {
+            // Actualiza texto y clase visual
+            if (btn) {
+                btn.textContent = data.liked ? `Liked (${data.total})` : `Like (${data.total})`;
+                btn.classList.toggle('liked', !!data.liked);
+            }
+        } else if (resp.status === 401 || (data && data.error === 'login_required')) {
+            // No autenticado: ir a login
             window.location.href = '/login/';
         } else {
-            console.warn('Error likePlaylist', data);
+            console.warn('Error likePlaylist', resp.status, data);
+            alert('No se pudo procesar el like. Revisa la consola para más info.');
         }
     } catch (e) {
         console.error('Error likePlaylist:', e);
+        alert('Error de red al intentar dar like.');
+    } finally {
+        // Rehabilitar botón
+        if (btn) btn.disabled = false;
     }
 }
 
@@ -234,9 +255,17 @@ function showPlaylists() {
                 buttonsDiv.style.gap = '8px';
 
                 const likeBtn = document.createElement('button');
-                likeBtn.textContent = 'Like';
+                likeBtn.textContent = `Like (${p.likes_count || 0})`;
                 likeBtn.className = 'btnRoundPlaylist';
+                likeBtn.id = `like-playlist-btn-${p.id}`; // <- id único
                 likeBtn.addEventListener('click', () => likePlaylist(p.id));
+
+                // (inicializa texto según estado del backend)
+                if (p.liked) {
+                    likeBtn.textContent = `Liked (${p.likes_count || 0})`;
+                } else {
+                    likeBtn.textContent = `Like (${p.likes_count || 0})`;
+                }
 
                 const editBtn = document.createElement('button');
                 editBtn.textContent = 'Editar';
@@ -435,7 +464,13 @@ function verSongs(playlistId) {
               <div class="song-title"><strong>${title}</strong></div>
               <div class="song-author"><small style="color:#b3b3b3">${author}</small></div>
               <br>
-              <button class="btnRoundPlaylist" onclick="likeSong(${song.id})">like</button>
+              ${(() => {
+                  const liked = song.liked ? true : false;
+                  const likesN = song.likes_count || 0;
+                  return `<button class="btnRoundPlaylist" id="like-song-btn-${song.id}" onclick="likeSong(${song.id})">
+                              ${liked ? `Liked (${likesN})` : `Like (${likesN})`}
+                          </button>`;
+              })()}
               <button class="btnRoundPlaylist" onclick="deleteFromPlaylistSong(${song.id},${playlistId})">eliminar</button>
             </div>
             
@@ -609,34 +644,55 @@ function addSongToPlaylist(idSong,idPlaylist,totalSong) {
 
 }
 
-
 async function likeSong(idSong) {
-    console.log('like', idSong);
+    console.log('Like song:', idSong);
     const csrf = getCookie('csrftoken');
+
+    const btn = document.getElementById(`like-song-btn-${idSong}`);
+    if (btn) btn.disabled = true;
+
     try {
         const resp = await fetch(`/api/like/song/${idSong}/`, {
             method: 'POST',
             credentials: 'same-origin',
             headers: {
-                'Content-Type': 'application/json',
                 'X-CSRFToken': csrf,
                 'X-Requested-With': 'XMLHttpRequest'
             },
             body: null
         });
-        const data = await resp.json();
-        if (resp.status === 200) {
-            const btn = document.querySelector(`button[onclick="likeSong(${idSong})"]`);
-            if (btn) btn.textContent = data.liked ? `Liked (${data.total})` : `Like (${data.total})`;
-        } else if (data.error === 'login_required') {
-            window.location.href = '/login/';
-        } else {
-            console.warn('Error likeSong', data);
+
+        let data = null;
+        try {
+            data = await resp.json();
+        } catch (err) {
+            console.error("Respuesta no JSON:", err);
+        }
+
+        if (resp.ok && data) {
+            if (btn) {
+                btn.textContent = data.liked
+                    ? `Liked (${data.total})`
+                    : `Like (${data.total})`;
+
+                btn.classList.toggle("liked", !!data.liked);
+            }
+        }
+        else if (resp.status === 401 || (data && data.error === "login_required")) {
+            window.location.href = "/login/";
+        }
+        else {
+            console.warn("Error likeSong", resp.status, data);
+            alert("No se pudo procesar el like.");
         }
     } catch (e) {
-        console.error('Error likeSong:', e);
+        console.error("Error likeSong:", e);
+        alert("Error de conexión al procesar el like.");
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
+
 
 
 
