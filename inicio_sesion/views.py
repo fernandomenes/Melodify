@@ -75,8 +75,7 @@ def pantallaHome(request):
     playlists = []
     if role_lower == "artista":
         qs = (
-            Song.objects
-            .filter(owner_user=session_user, visibility="public")
+            Song.objects.filter(owner_user=session_user, visibility="public")
             .only("id", "title", "artist_display_name", "audio_file", "cover_image", "genre")
         )
         songs = [
@@ -199,6 +198,7 @@ def pantallaLogin(request):
 
 # ---------- Playlists (API JSON) ----------
 
+
 def playlist_getAll(request):
     """Devuelve un listado plano de playlists en formato JSON."""
     data = list(
@@ -245,13 +245,21 @@ def create_playlist(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
+@require_http_methods(["GET"])
 def get_songs_by_playlist(request, playlist_id):
     """
     Devuelve las canciones asociadas a una playlist en el orden definido
     en la tabla intermedia.
 
-    Formato de cada canción:
-        id, title, artist_display_name, genre, audioUrl, coverUrl
+    Formato por canción:
+    - id
+    - title
+    - artist_display_name
+    - genre
+    - audioUrl
+    - coverUrl
+    - likes_count
+    - liked
     """
     try:
         logger.info(f"Buscando canciones para playlist_id: {playlist_id}")
@@ -278,17 +286,35 @@ def get_songs_by_playlist(request, playlist_id):
             cu = _safe_file_url(getattr(s, "cover_image", None))
             return cu or None
 
-        songs_map = {
-            s.id: {
+        # --- Calcular likes totales y qué canciones le gustan al usuario ---
+        ct_song = ContentType.objects.get_for_model(Song)
+
+        likes_qs = LikeMedia.objects.filter(content_type=ct_song, object_id__in=song_ids)
+
+        counts = {}
+        for l in likes_qs:
+            counts[l.object_id] = counts.get(l.object_id, 0) + 1
+
+        user = _get_session_user_obj(request)
+        user_liked_set = set()
+        if user:
+            user_liked_set = set(
+                likes_qs.filter(user=user).values_list("object_id", flat=True)
+            )
+
+        # --- Construir mapa de canciones con campos extras ---
+        songs_map = {}
+        for s in qs:
+            songs_map[s.id] = {
                 "id": s.id,
                 "title": s.title,
                 "artist_display_name": getattr(s, "artist_display_name", "") or "",
                 "genre": getattr(s, "genre", "") or "",
                 "audioUrl": _audio_url(s),
                 "coverUrl": _cover_url(s),
+                "likes_count": counts.get(s.id, 0),
+                "liked": (s.id in user_liked_set),
             }
-            for s in qs
-        }
 
         ordered = []
         for sid in song_ids:
@@ -384,11 +410,12 @@ def mis_likes_json(request):
         return JsonResponse({"error": "login_required"}, status=401)
 
     ct_song = ContentType.objects.get_for_model(Song)
-    like_qs = LikeMedia.objects.filter(user=user, content_type=ct_song).values_list("object_id", flat=True)
+    like_qs = LikeMedia.objects.filter(user=user, content_type=ct_song).values_list(
+        "object_id", flat=True
+    )
 
     songs_qs = (
-        Song.objects
-        .filter(id__in=list(like_qs), visibility="public")
+        Song.objects.filter(id__in=list(like_qs), visibility="public")
         .only("id", "title", "artist_display_name", "genre", "audio_file", "cover_image")
         .order_by("-created_at")
     )
@@ -405,14 +432,16 @@ def mis_likes_json(request):
         au = _audio_url(s)
         if not au:
             continue
-        songs.append({
-            "id": s.id,
-            "title": s.title,
-            "artist_display_name": getattr(s, "artist_display_name", "") or "",
-            "genre": getattr(s, "genre", "") or "",
-            "audioUrl": au,
-            "coverUrl": _cover_url(s),
-        })
+        songs.append(
+            {
+                "id": s.id,
+                "title": s.title,
+                "artist_display_name": getattr(s, "artist_display_name", "") or "",
+                "genre": getattr(s, "genre", "") or "",
+                "audioUrl": au,
+                "coverUrl": _cover_url(s),
+            }
+        )
 
     return JsonResponse({"id": "pl:likes", "name": "Mis likes", "songs": songs})
 
@@ -460,11 +489,12 @@ def remove_song_from_playlist(request):
         song_id = data.get("song_id")
 
         if playlist_id is None or song_id is None:
-            return JsonResponse({"error": "Se requieren playlist_id y song_id"}, status=400)
+            return JsonResponse(
+                {"error": "Se requieren playlist_id y song_id"}, status=400
+            )
 
         deleted_count, _ = PlayListSong.objects.filter(
-            playlist_id=playlist_id,
-            song_id=song_id
+            playlist_id=playlist_id, song_id=song_id
         ).delete()
 
         if deleted_count == 0:
@@ -479,6 +509,7 @@ def remove_song_from_playlist(request):
 
 
 # ---------- Búsqueda ----------
+
 
 def buscar(request):
     """
@@ -495,22 +526,29 @@ def buscar(request):
 
     if query:
         resultados["canciones"] = (
-            Song.objects
-            .filter(Q(title__icontains=query) | Q(artist_display_name__icontains=query), visibility="public")
-            .only("id", "title", "artist_display_name", "audio_file", "cover_image", "genre")
-        )[:20]
+            Song.objects.filter(
+                Q(title__icontains=query) | Q(artist_display_name__icontains=query),
+                visibility="public",
+            )
+            .only(
+                "id",
+                "title",
+                "artist_display_name",
+                "audio_file",
+                "cover_image",
+                "genre",
+            )[:20]
+        )
 
         resultados["artistas"] = (
-            Users.objects
-            .filter(Q(user__icontains=query) & Q(type__iexact="artista"))
-            .only("id", "user", "avatar", "created_at")
-        )[:20]
+            Users.objects.filter(Q(user__icontains=query) & Q(type__iexact="artista"))
+            .only("id", "user", "avatar", "created_at")[:20]
+        )
 
         resultados["playlists"] = (
-            PlayList.objects
-            .filter(Q(name__icontains=query) & Q(isprivate=False))
-            .only("id", "idUser", "name", "portada", "isprivate", "created_at")
-        )[:20]
+            PlayList.objects.filter(Q(name__icontains=query) & Q(isprivate=False))
+            .only("id", "idUser", "name", "portada", "isprivate", "created_at")[:20]
+        )
 
     session_user = request.session.get("user", "")
     session_role = request.session.get("role", "")
@@ -554,31 +592,41 @@ def api_buscar(request):
             visibility="public",
         )[:5]
         for c in canciones:
-            results["canciones"].append({
-                "id": c.id,
-                "title": c.title,
-                "artist": c.artist_display_name,
-                "audioUrl": _safe_file_url(c.audio_file),
-                "coverUrl": _safe_file_url(c.cover_image),
-            })
+            results["canciones"].append(
+                {
+                    "id": c.id,
+                    "title": c.title,
+                    "artist": c.artist_display_name,
+                    "audioUrl": _safe_file_url(c.audio_file),
+                    "coverUrl": _safe_file_url(c.cover_image),
+                }
+            )
 
         # Artistas
-        artistas = Users.objects.filter(Q(user__icontains=query) & Q(type__iexact="artista"))[:5]
+        artistas = Users.objects.filter(
+            Q(user__icontains=query) & Q(type__iexact="artista")
+        )[:5]
         for a in artistas:
-            results["artistas"].append({
-                "id": a.id,
-                "username": a.user,
-                "avatarUrl": _safe_file_url(a.avatar),
-            })
+            results["artistas"].append(
+                {
+                    "id": a.id,
+                    "username": a.user,
+                    "avatarUrl": _safe_file_url(a.avatar),
+                }
+            )
 
         # Playlists públicas
-        playlists = PlayList.objects.filter(Q(name__icontains=query) & Q(isprivate=False))[:5]
+        playlists = PlayList.objects.filter(
+            Q(name__icontains=query) & Q(isprivate=False)
+        )[:5]
         for p in playlists:
-            results["playlists"].append({
-                "id": p.id,
-                "name": p.name,
-                "coverUrl": p.portada,
-            })
+            results["playlists"].append(
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "coverUrl": p.portada,
+                }
+            )
 
     except Exception as e:
         logger.error(f"Error en api_buscar: {str(e)}")
