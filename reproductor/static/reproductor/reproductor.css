@@ -571,17 +571,18 @@
 /* ==========================================================================
    Botón "agregar a playlist"
    ========================================================================== */
-
-/* Título y botones en línea con separación adecuada */
-.rep-left .song-title {
+/* Título y botones en línea con separación adecuada (reproductor + home) */
+.rep-left .song-title,
+.home-all-songs .song-title {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
 }
 
-/* Botón circular tipo chip con "+" */
-.rep-left .song-title .song-add-btn {
+/* Botón circular tipo chip con "+" (reproductor + home) */
+.rep-left .song-title .song-add-btn,
+.home-all-songs .song-title .song-add-btn {
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.03);
@@ -609,8 +610,8 @@
     transform 0.12s ease;
 }
 
-/* Hover: énfasis visual del botón */
-.rep-left .song-title .song-add-btn:hover {
+.rep-left .song-title .song-add-btn:hover,
+.home-all-songs .song-title .song-add-btn:hover {
   background: var(--accent, #ff4fa3);
   color: #050505;
   border-color: transparent;
@@ -618,15 +619,16 @@
   transform: translateY(-1px) scale(1.03);
 }
 
-/* Foco accesible (teclado) */
-.rep-left .song-title .song-add-btn:focus-visible {
+.rep-left .song-title .song-add-btn:focus-visible,
+.home-all-songs .song-title .song-add-btn:focus-visible {
   box-shadow:
     0 0 0 2px #000,
     0 0 0 4px var(--accent, #ff4fa3);
 }
 
-/* Estado activo al hacer clic */
-.rep-left .song-title .song-add-btn:active {
+.rep-left .song-title .song-add-btn:active,
+.home-all-songs .song-title .song-add-btn:active {
   transform: translateY(0) scale(0.96);
   box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
 }
+

@@ -78,13 +78,12 @@ class GestionTests(TestCase):
         """Principal N-1: ID + descripción + password (>=10) ⇒ alta exitosa."""
         payload = {
             "user": "nuevo_artista",
-            "password": "contraseña10",   # 11 chars
+            "password": "contraseña10",   
             "description": "Artista de prueba para el caso principal.",
         }
         resp = self.c.post(self.url_reg_artista, payload, follow=False)
         self.assertIn(resp.status_code, (302, 303))
         self.assertTrue(Users.objects.filter(user="nuevo_artista", type="Artista").exists())
-        # Perfil creado con descripción
         u = Users.objects.get(user="nuevo_artista")
         self.assertTrue(ArtistProfile.objects.filter(user=u).exists())
 
@@ -172,7 +171,6 @@ class GestionCambioUsernameTests(TestCase):
                 return pattern()
             except NoReverseMatch:
                 continue
-        # Fallback común si se usa otra convención de rutas
         return f"/gestion/usuario/{username}/editar/"
 
     def test_cambio_username_propagado_a_songs(self):
@@ -181,8 +179,8 @@ class GestionCambioUsernameTests(TestCase):
         payload = {
             "user": "artist_renamed",
             "password": "",
-            "role": "Artista",          # se normaliza a minúsculas en la vista
-            "description": "Bio ok",    # requerido para artistas
+            "role": "Artista",          
+            "description": "Bio ok",    
         }
         resp = self.c.post(url, payload, follow=False)
         self.assertIn(resp.status_code, (302, 303))

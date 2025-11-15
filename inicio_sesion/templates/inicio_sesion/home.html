@@ -18,21 +18,33 @@
   <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
 
   <script>
-    /* Ruta del módulo JS del reproductor utilizada por homeScript (import dinámico) */
+    /*
+      Ruta del módulo JS del reproductor.
+      homeScript.js hará un import dinámico de esta URL (window.REPRODUCTOR_SRC)
+      para inicializar el reproductor central.
+    */
     window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
   </script>
 
-  <!-- UI de playlists -->
+  <!-- UI de playlists (SPA de PlayList) -->
   <script src="{% static 'inicio_sesion/playListScript.js' %}"></script>
   <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
 </head>
 
 <body class="page-home">
-  <!-- Encabezado -->
+  <!-- =========================================================
+       Header superior (buscador + usuario)
+       ========================================================= -->
   <div id="header">
-    <!-- Buscador -->
+    <!-- Buscador global -->
     <div id="search" class="search">
-      <form id="search-form" role="search" aria-label="Buscar" method="get" action="{% url 'buscar' %}">
+      <form
+        id="search-form"
+        role="search"
+        aria-label="Buscar"
+        method="get"
+        action="{% url 'buscar' %}"
+      >
         <input
           id="search-input"
           name="q"
@@ -40,12 +52,14 @@
           placeholder="Buscar canciones, artistas o playlists…"
           autocomplete="off"
           aria-controls="search-panel"
-          required />
+          required
+        />
       </form>
+      <!-- Panel flotante de autosuggest (lo maneja searchHandler.js) -->
       <div id="search-panel" class="search-panel" hidden></div>
     </div>
 
-    <!-- Información de usuario -->
+    <!-- Información de usuario (avatar simple con inicial) -->
     <div class="user-info" id="user-trigger">
       <div class="user-icon">
         {{ session_user|default:"U"|first }}
@@ -58,66 +72,95 @@
     </div>
   </div>
 
-  <!-- Menú lateral -->
+  <!-- =========================================================
+       Menú lateral (SPA + vistas de servidor)
+       ========================================================= -->
   <div id="menuLateral">
     <div class="logo" id="toggle-menu">
       <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
       <span class="logo-text">Melodify</span>
     </div>
 
-    <!-- Home (vista principal) -->
+    <!-- Home (ruta real del backend, pero también vista principal de la SPA) -->
     <a class="menu-item" data-view="home" href="{% url 'home' %}">Home</a>
 
-    <!-- Vistas internas de la SPA -->
+    <!-- Vistas internas de la SPA (las renderiza homeScript.js dentro de #content) -->
     <div class="menu-item" data-view="playlist">PlayList</div>
     <div class="menu-item" data-view="reproductor">Reproductor</div>
     <div class="menu-item" data-view="perfil">Perfil</div>
 
-    <!-- Vistas servidas desde el backend -->
-    <div class="menu-item" data-view="mi-muro">Muro del artista</div>
-    <div class="menu-item" data-view="gestion">Gestión</div>
+    <!-- Vistas servidas desde el backend (se navega cambiando URL) -->
+    {% if session_role|lower == "artista" %}
+      <div class="menu-item" data-view="mi-muro">Muro del artista</div>
+    {% endif %}
+
+    {% if session_role|lower == "administrador" %}
+      <div class="menu-item" data-view="gestion">Gestión</div>
+    {% endif %}
   </div>
 
-  <!-- Contenido -->
-  <div id="main-content"
-       data-initial-view="home"
-       data-username="{{ session_user }}"
-       data-role="{{ session_role }}"
-       data-avatar="{{ session_avatar_url }}"
-       data-description="{{ session_description }}"
-       data-created-at="{{ session_created_at }}"
-       data-url-home="{% url 'home' %}"
-       data-url-musica="/musica/"
-       data-url-mi-muro="{% url 'mi_muro' %}"
-       data-url-gestion="{% url 'gestion' %}"
-       data-url-mi-musica-json="{% url 'mi_musica_json' %}"
-       data-url-mis-likes-json="{% url 'mis_likes_json' %}">
-    
+  <!-- =========================================================
+       Contenedor principal SPA
+       ========================================================= -->
+  <div
+    id="main-content"
+    data-initial-view="home"
+    data-username="{{ session_user }}"
+    data-role="{{ session_role }}"
+    data-avatar="{{ session_avatar_url }}"
+    data-description="{{ session_description }}"
+    data-created-at="{{ session_created_at }}"
+    data-url-home="{% url 'home' %}"
+    data-url-musica="/musica/"
+    data-url-mi-muro="{% url 'mi_muro' %}"
+    data-url-gestion="{% url 'gestion' %}"
+    data-url-mis-likes-json="{% url 'mis_likes_json' %}"
+    data-url-all-songs-json="{% url 'all_songs_json' %}"
+  >
+    <!-- Botón hamburguesa (responsive) -->
     <button id="menu-toggle-btn">☰</button>
 
-    <!-- Botón de regreso manejado por la SPA (oculto en Home por CSS) -->
-    <a id="back-btn" class="back" href="{% url 'home' %}" title="Volver a inicio" aria-label="Regresar">←</a>
+    <!-- Botón back universal (SPA; se oculta en Home por CSS) -->
+    <a
+      id="back-btn"
+      class="back"
+      href="{% url 'home' %}"
+      title="Volver a inicio"
+      aria-label="Regresar"
+    >←</a>
 
+    <!-- Aquí homeScript.js inyecta las vistas (home, playlist, reproductor, perfil, etc.) -->
     <div id="content"></div>
   </div>
 
-  <!-- Playlists para el reproductor (inyectadas desde views.py) -->
+  <!-- =========================================================
+       Playlists iniciales para el reproductor
+       (inyectadas desde views.py: pantallaHome)
+       ========================================================= -->
   <script id="playlists-data-json" type="application/json">
     {{ playlists_json|default:"[]"|safe }}
   </script>
 
-  <!-- Scripts: barra del reproductor y SPA -->
+  <!-- =========================================================
+       Scripts: barra del reproductor + SPA + búsqueda
+       ========================================================= -->
+
+  <!-- Barra flotante del reproductor (UI global) -->
   <script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
+
+  <!-- SPA principal (router de vistas, carga del reproductor, etc.) -->
   <script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
 
-  <!-- Manejo de logout (POST con CSRF) y control de caché -->
+  <!-- Manejo de logout (POST con CSRF) y control de caché/navegación -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       const logoutLink = document.getElementById('menu-logout');
       const logoutUrl  = "{% url 'logout' %}";
+
       if (logoutLink) {
         logoutLink.addEventListener('click', function(e) {
           e.preventDefault();
+
           if (confirm('¿Seguro que deseas cerrar sesión?')) {
             const form  = document.createElement('form');
             form.method = 'POST';
@@ -132,16 +175,21 @@
             document.body.appendChild(form);
             form.submit();
           }
+
           const userMenu = document.getElementById('user-menu');
           if (userMenu) userMenu.classList.remove('show');
         });
       }
 
-      // Control de navegación desde caché tras logout
+      // Si el usuario vuelve con el botón "atrás" después de logout, refrescar
       if (performance.navigation && performance.navigation.type === 2) {
         window.location.href = "{% url 'home' %}";
       }
-      window.onpageshow = function(ev){ if (ev.persisted) window.location.reload(); };
+      window.onpageshow = function(ev) {
+        if (ev.persisted) {
+          window.location.reload();
+        }
+      };
 
       // Evitar reenvío de formularios al refrescar
       if (window.history.replaceState) {
@@ -150,7 +198,7 @@
     });
   </script>
 
-  <!-- Script de manejo de búsqueda -->
+  <!-- Script de autosuggest + navegación de búsqueda -->
   <script src="{% static 'inicio_sesion/searchHandler.js' %}?v={% now 'U' %}"></script>
 </body>
 </html>
