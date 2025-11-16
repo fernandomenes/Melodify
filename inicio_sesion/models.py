@@ -140,17 +140,15 @@ class PlayList(models.Model):
     Nota: `managed = False`, Django no crea ni altera la tabla.
     """
     id = models.AutoField(primary_key=True)
-    # ID de la tabla Users (entero, no FK real)
     idUser = models.IntegerField()
     name = models.CharField(max_length=200)
-    # En la práctica se usa muchas veces como cadena vacía, se marca blank=True.
     portada = models.URLField(blank=True)
     isprivate = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "PlayList"
-        managed = False  # Django no gestiona esta tabla con migraciones
+        managed = True  
 
     def __str__(self) -> str:
         return f"Playlist {self.name} (user_id={self.idUser})"
@@ -168,9 +166,7 @@ class PlayListSong(models.Model):
 
     class Meta:
         db_table = "PlayListSongs"
-        managed = False  # Django no gestiona esta tabla con migraciones
-        # unique_together = ('playlist_id', 'song_id')
-        # ordering = ['position']
+        managed = True 
 
     def __str__(self) -> str:
         return f"PlaylistSong pl={self.playlist_id} song={self.song_id} pos={self.position}"
