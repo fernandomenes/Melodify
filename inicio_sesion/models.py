@@ -1,4 +1,4 @@
-from django.core.validators import FileExtensionValidator, MaxLengthValidator 
+from django.core.validators import FileExtensionValidator, MaxLengthValidator
 from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -134,15 +134,15 @@ class Song(models.Model):
 # ======================================================================
 
 class PlayList(models.Model):
-    id        = models.AutoField(primary_key=True)
-    idUser    = models.IntegerField()
-    name      = models.CharField(max_length=200)
-    portada   = models.URLField(blank=True)
-    isprivate = models.BooleanField(default=False)
+    id         = models.AutoField(primary_key=True)
+    idUser     = models.IntegerField()
+    name       = models.CharField(max_length=200)
+    portada    = models.CharField(max_length=200, blank=True, default="")
+    isprivate  = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "inicio_sesion_playlist"   # <- así está en Neon
+        db_table = "inicio_sesion_playlist"
         managed  = False
 
     def __str__(self): return f"Playlist {self.name} (user_id={self.idUser})"
@@ -154,12 +154,13 @@ class PlayListSong(models.Model):
     position    = models.IntegerField()
 
     class Meta:
-        db_table = "PlayListSong"   # <- mayúsculas exactas como aparece en Neon
+        db_table = "PlayListSong"
         managed  = False
         unique_together = (("playlist_id", "song_id"),)
 
     def __str__(self):
         return f"PlaylistSong pl={self.playlist_id} song={self.song_id} pos={self.position}"
+
 
 # ======================================================================
 # Likes genéricos (Song / PlayList / otros con GFK)
