@@ -1,4 +1,4 @@
-from django.core.validators import FileExtensionValidator, MaxLengthValidator
+from django.core.validators import FileExtensionValidator, MaxLengthValidator 
 from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -147,8 +147,8 @@ class PlayList(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "PlayList"
-        managed = True  
+        db_table = "inicio_sesion_playlist"
+        managed = False
 
     def __str__(self) -> str:
         return f"Playlist {self.name} (user_id={self.idUser})"
@@ -165,8 +165,9 @@ class PlayListSong(models.Model):
     position = models.IntegerField()
 
     class Meta:
-        db_table = "PlayListSongs"
-        managed = True 
+        db_table = "inicio_sesion_playlistsong"
+        managed = False
+        unique_together = (("playlist_id", "song_id"),)
 
     def __str__(self) -> str:
         return f"PlaylistSong pl={self.playlist_id} song={self.song_id} pos={self.position}"
