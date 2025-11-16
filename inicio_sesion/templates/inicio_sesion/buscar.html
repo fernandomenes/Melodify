@@ -461,5 +461,10 @@
 
   <!-- Búsqueda en tiempo real -->
   <script src="{% static 'inicio_sesion/searchHandler.js' %}?v={% now 'U' %}"></script>
+<script>
+  window.PLAYLISTS_SRC = "{% static 'playlist/playlist.js' %}";
+</script>
+<script src="{% static 'playlist/playlist.js' %}" defer></script>
+
 </body>
 </html>

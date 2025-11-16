@@ -29,8 +29,9 @@
         href="{% static 'inicio_sesion/PlayListStyles.css' %}?v={% now 'U' %}">
 
   <script>
-    // Ruta compartida del módulo del reproductor (Home / Muro / Gestión)
     window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
+    window.PLAYLISTS_SRC  = "{% static 'inicio_sesion/playListScript.js' %}?v={% now 'U' %}";
+
   </script>
 
   {# Carga del módulo del reproductor (ESM) solo una vez en Gestión #}
@@ -599,7 +600,7 @@
   <script src="{% static 'inicio_sesion/backToHome.js' %}?v={% now 'U' %}"></script>
 
   {# Módulo de playlists (expuesto en window.* para MDFCore) #}
-  <script src="{% static 'inicio_sesion/playListScript.js' %}?v={% now 'U' %}"></script>
+  <script src="{% static 'inicio_sesion/PlayListScript.js' %}?v={% now 'U' %}"></script>
 
   {# Barra flotante del reproductor (cola global) #}
   <script defer

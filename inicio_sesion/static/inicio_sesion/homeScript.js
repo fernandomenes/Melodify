@@ -172,9 +172,9 @@ if (__SPA_DISABLED__) {
       Array.isArray(playlists) && playlists.length > 0;
 
     // Para artistas sin playlists, se expone una playlist virtual "Mi música"
-    if (ROLE === "artista" && !HOME_HAS_PERSONAL_PLAYLISTS) {
-      playlists = [{ id: 1, name: "Mi música", songs: [] }];
-    }
+    //if (ROLE === "artista" && !HOME_HAS_PERSONAL_PLAYLISTS) {
+      //playlists = [{ id: 1, name: "Mi música", songs: [] }];
+   // }
 
     window._playlists = playlists;
     window.__HOME_HAS_PERSONAL_PLAYLISTS__ = HOME_HAS_PERSONAL_PLAYLISTS;
@@ -328,13 +328,14 @@ if (__SPA_DISABLED__) {
     </button>`;
 
         addHTML = `
-          <button type="button"
-                  class="song-add-btn"
-                  data-song-id="${idStr}"
-                  title="Añadir a playlist"
-                  onclick="window.MDFCore && window.MDFCore.openAddToPlaylistDialog && window.MDFCore.openAddToPlaylistDialog(event, '${idStr}')">
-            +
-          </button>`;
+  <button type="button"
+          class="song-add-btn"
+          data-song-id="${idStr}"
+          title="Añadir a playlist"
+          onclick="(window.openAddToPlaylistForSong && window.openAddToPlaylistForSong('${idStr}')) || (window.MDFCore && window.MDFCore.openAddToPlaylistDialog && window.MDFCore.openAddToPlaylistDialog(event, '${idStr}'))">
+    +
+  </button>`;
+
       }
 
       return `
@@ -1169,4 +1170,13 @@ if (__SPA_DISABLED__) {
 
     await inicializarApp();
   });
+}
+
+window.MDFCore = window.MDFCore || {};
+if (!window.MDFCore.openAddToPlaylistDialog) {
+  window.MDFCore.openAddToPlaylistDialog = function (_ev, songId) {
+    if (typeof window.openAddToPlaylistForSong === 'function') {
+      window.openAddToPlaylistForSong(songId);
+    }
+  };
 }
