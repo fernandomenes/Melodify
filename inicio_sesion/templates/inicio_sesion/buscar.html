@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}?v={% now 'U' %}">
 
   <style>
-    /* Mejoras para el buscador */
+    /* Estilos del buscador */
     .search {
       position: relative;
       flex: 1;
@@ -53,7 +53,30 @@
       z-index: 1000;
     }
 
-    /* Responsive */
+    .search-btn-like {
+      min-width: 28px;
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid #444;
+      background: #181818;
+      color: #ddd;
+      cursor: pointer;
+    }
+
+ 
+
+    .search-btn-add {
+      min-width: 28px;
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid #444;
+      background: #181818;
+      color: #ddd;
+      cursor: pointer;
+    }
+
     @media (max-width: 768px) {
       .search {
         max-width: 300px;
@@ -128,6 +151,12 @@
     .song-artist {
       color: #b3b3b3;
       font-size: 14px;
+    }
+
+    .song-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     .artist-result,
@@ -248,7 +277,8 @@
        data-role="{{ session_role }}"
        data-avatar="{{ session_avatar_url }}"
        data-url-home="{% url 'home' %}"
-       data-url-buscar="{% url 'buscar' %}">
+       data-url-buscar="{% url 'buscar' %}"
+       data-url-muro-base="/muro/">
 
     <button id="menu-toggle-btn">☰</button>
     <a id="back-btn" class="back" href="{% url 'home' %}" title="Volver a inicio" aria-label="Regresar">←</a>
@@ -281,10 +311,12 @@
               <h3>Canciones</h3>
               <div class="result-grid">
                 {% for cancion in resultados.canciones %}
-                  <div class="song-result"
+                  <div class="song-result search-item-song"
+                       data-song-id="{{ cancion.id }}"
                        data-audio-url="{{ cancion.audio_file.url }}"
                        data-title="{{ cancion.title }}"
                        data-author="{{ cancion.artist_display_name }}"
+                       data-artist="{{ cancion.artist_display_name }}"
                        data-cover-url="{% if cancion.cover_image %}{{ cancion.cover_image.url }}{% else %}{% static 'inicio_sesion/img_song.png' %}{% endif %}"
                        onclick="playSongFromSearch(this)">
 
@@ -297,6 +329,24 @@
                     <div class="song-info">
                       <div class="song-title">{{ cancion.title }}</div>
                       <div class="song-artist">{{ cancion.artist_display_name }}</div>
+                    </div>
+
+                    <div class="song-actions">
+                      <button
+  type="button"
+  class="search-btn-like song-like-btn"
+  data-song-id="{{ cancion.id }}"
+  data-liked="{% if cancion.is_liked %}1{% else %}0{% endif %}"
+  onclick="toggleSongLikeFromSearch(event, '{{ cancion.id }}', this)">
+  ♡
+</button>
+
+                      <button
+                        type="button"
+                        class="search-btn-add"
+                        onclick="openAddToPlaylistFromSearch(event, '{{ cancion.id }}')">
+                        +
+                      </button>
                     </div>
                   </div>
                 {% endfor %}
@@ -354,22 +404,21 @@
     </div>
   </div>
 
-  <!-- Scripts propios de la vista -->
+  <div id="like-toast" aria-live="polite"></div>
+
+  <!-- Lógica de la vista de búsqueda -->
   <script>
-    // Reproduce una canción de los resultados de /buscar usando el reproductor global
     function playSongFromSearch(element) {
       const audioUrl = element.dataset.audioUrl;
       const title    = element.dataset.title;
       const author   = element.dataset.author;
       const coverUrl = element.dataset.coverUrl || '';
 
-      // Reutilizamos la función global definida en searchHandler.js
       if (typeof playSearchResult === 'function') {
         playSearchResult(audioUrl, title, author, coverUrl);
       }
     }
 
-    // Enfocar el cuadro de búsqueda si ya hay query
     document.addEventListener('DOMContentLoaded', function () {
       const searchInput = document.getElementById('search-input');
       if (searchInput && searchInput.value) {
@@ -377,7 +426,6 @@
         searchInput.select();
       }
 
-      // Lógica de logout por POST (igual que en home)
       const logoutLink = document.getElementById('menu-logout');
       const logoutUrl  = "{% url 'logout' %}";
       if (logoutLink) {
@@ -404,14 +452,14 @@
     });
   </script>
 
-  <!-- Back universal -->
+  <!-- Volver a la pantalla principal -->
   <script>window.MELODIFY_HOME_URL = "{% url 'home' %}";</script>
   <script src="{% static 'inicio_sesion/backToHome.js' %}?v={% now 'U' %}"></script>
 
-  <!-- Script principal SPA (respetará data-initial-view="buscar") -->
+  <!-- SPA principal -->
   <script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
 
-  <!-- Script para manejo de búsqueda en tiempo real -->
+  <!-- Búsqueda en tiempo real -->
   <script src="{% static 'inicio_sesion/searchHandler.js' %}?v={% now 'U' %}"></script>
 </body>
 </html>

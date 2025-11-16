@@ -1,25 +1,35 @@
 /* ==========================================================================
-   PlayList UI • Módulo de listas del usuario (crear, editar, borrar, likes)
-   - Vista principal de playlists
-   - Vista de canciones de una playlist
-   - Popups para crear/renombrar playlists y agregar canciones
-   - Integración con el reproductor (window.MDFCore, window._playlists)
+   Melodify — Playlists del usuario
+   UI de gestión de playlists:
+   - Crear, renombrar y eliminar playlists propias.
+   - Listar playlists y su contenido (canciones).
+   - Dar / quitar like a playlists y canciones.
+   - Agregar / quitar canciones de una playlist.
+   - Integración con MDFCore (reproductor) y toasts globales.
    ========================================================================== */
 
+/* PlayList UI: listas del usuario (crear, editar, borrar, likes). */
+
 // ---------------------------------------------------------------------------
-// Estado global simple
+// Estado global
 // ---------------------------------------------------------------------------
+
 let currentViewPlaylist  = "allPlayList"; // "allPlayList" | "allSongsPlayList"
-let content              = null;          // Contenedor principal (#content en home.html)
-let USERNAME             = null;          // Usuario en sesión (inyectado desde plantilla)
+let content              = null;          // Contenedor principal (#content)
+let USERNAME             = null;          // Usuario en sesión
 
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
 // Inicialización
-// ---------------------------------------------------------------------------
+// ===========================================================================
 
 /**
- * Punto de entrada desde homeScript: inicia la vista de playlists del usuario.
+ * Inicializa la sección de Playlists.
+ *
+ * Se llama desde la SPA (homeScript) pasando el usuario en sesión. Almacena
+ * referencias globales mínimas y dispara el render de la lista de playlists.
+ *
+ * @param {string} username - Nombre de usuario logueado.
  */
 function initPlayList(username) {
     USERNAME = username;
@@ -28,8 +38,10 @@ function initPlayList(username) {
 }
 
 /**
- * Botón "back" específico de la sección Playlist.
- * Vuelve a la lista de playlists cuando se está viendo las canciones de una.
+ * Handler del botón "back" en la vista de Playlists.
+ *
+ * Si el usuario está viendo el detalle de una playlist (allSongsPlayList),
+ * regresa al listado principal de playlists.
  */
 function clickBackBtnPlaylist() {
     if (currentViewPlaylist === "allSongsPlayList") {
@@ -38,25 +50,105 @@ function clickBackBtnPlaylist() {
 }
 
 
-// ---------------------------------------------------------------------------
-// Helpers generales (CSRF, etc.)
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Helpers generales
+// ===========================================================================
 
 /**
- * Lee el valor de una cookie por nombre (usado para obtener el csrftoken).
+ * Obtiene el valor de una cookie por nombre.
+ *
+ * @param {string} name - Nombre de la cookie.
+ * @returns {string|null} Valor decodificado o null si no existe.
  */
 function getCookie(name) {
     const v = document.cookie.split('; ').find(row => row.startsWith(name + '='));
     return v ? decodeURIComponent(v.split('=')[1]) : null;
 }
 
+/**
+ * Muestra un toast al agregar o quitar canciones de una playlist.
+ *
+ * Prioriza los helpers globales:
+ *  - __melodifyShowPlaylistToast (Gestión)
+ *  - __melodifyShowToast (genérico)
+ * y como último fallback reutiliza #like-toast.
+ *
+ * @param {boolean} added - true si se agregó, false si se quitó.
+ * @param {string}  playlistName - Nombre de la playlist (opcional).
+ */
+function notifyPlaylistSongChange(added, playlistName) {
+    const name = (playlistName || '').trim();
 
-// ---------------------------------------------------------------------------
-// CRUD Playlists (crear, editar, eliminar, like)
-// ---------------------------------------------------------------------------
+    // Gestión (admin): usa el helper global definido en gestion.js
+    if (typeof window.__melodifyShowPlaylistToast === 'function') {
+        window.__melodifyShowPlaylistToast(added, name);
+        return;
+    }
+
+    // Home u otras vistas: si hay un toast genérico
+    if (typeof window.__melodifyShowToast === 'function') {
+        window.__melodifyShowToast(
+            added
+                ? (name ? `Añadida a la playlist “${name}”` : 'Añadida a una playlist')
+                : (name ? `Quitada de la playlist “${name}”` : 'Quitada de la playlist')
+        );
+        return;
+    }
+
+    // Fallback mínimo: usar #like-toast si existe
+    const el = document.getElementById('like-toast');
+    if (!el) return;
+
+    el.textContent = added
+        ? (name ? `Añadida a la playlist “${name}”` : 'Añadida a una playlist')
+        : (name ? `Quitada de la playlist “${name}”` : 'Quitada de la playlist');
+
+    el.classList.add('show');
+    clearTimeout(el._hideTimer);
+    el._hideTimer = setTimeout(() => {
+        el.classList.remove('show');
+    }, 1400);
+}
+
+/**
+ * Variante de toast para el caso en el que la canción ya estaba en la playlist.
+ *
+ * @param {string} playlistName - Nombre de la playlist, opcional.
+ */
+function notifyPlaylistSongAlready(playlistName) {
+    const name = (playlistName || '').trim();
+    const msg = name
+        ? `La canción ya está en la playlist “${name}”`
+        : 'La canción ya está en esa playlist';
+
+    // Si hay toast genérico
+    if (typeof window.__melodifyShowToast === 'function') {
+        window.__melodifyShowToast(msg);
+        return;
+    }
+
+    const el = document.getElementById('like-toast');
+    if (!el) return;
+
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._hideTimer);
+    el._hideTimer = setTimeout(() => {
+        el.classList.remove('show');
+    }, 1400);
+}
+
+
+// ===========================================================================
+// API de playlists: crear, editar, eliminar, like
+// ===========================================================================
 
 /**
  * Crea una nueva playlist para el usuario actual.
+ *
+ * POST /playlist/create/
+ *
+ * @param {string} namePlaylist - Nombre de la nueva playlist.
  */
 function crearPlaylist(namePlaylist) {
     fetch('/playlist/create/', {
@@ -88,8 +180,11 @@ function crearPlaylist(namePlaylist) {
 }
 
 /**
- * Marca o desmarca "like" sobre una playlist.
- * Actualiza el contador y el estado visual del botón.
+ * Marca o desmarca like en una playlist.
+ *
+ * POST /api/like/playlist/<id>/
+ *
+ * @param {number|string} id - ID de la playlist.
  */
 async function likePlaylist(id) {
     console.log('Like en playlist:', id);
@@ -137,6 +232,11 @@ async function likePlaylist(id) {
 
 /**
  * Actualiza el nombre de una playlist existente.
+ *
+ * PUT /playlist/<id>/update/
+ *
+ * @param {number|string} id - ID de la playlist.
+ * @param {string} newname - Nuevo nombre.
  */
 function editarPlaylist(id, newname) {
     console.log('Editar playlist:', id);
@@ -167,7 +267,11 @@ function editarPlaylist(id, newname) {
 }
 
 /**
- * Elimina una playlist completa (tras confirmación).
+ * Elimina completamente una playlist (no sus canciones del catálogo).
+ *
+ * DELETE /playlist/<id>/delete/
+ *
+ * @param {number|string} playlistId - ID de la playlist.
  */
 function eliminarPlaylist(playlistId) {
     if (!confirm('¿Seguro que deseas eliminar esta playlist?')) {
@@ -199,13 +303,18 @@ function eliminarPlaylist(playlistId) {
 }
 
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
 // Vista principal: listado de playlists
-// ---------------------------------------------------------------------------
+// ===========================================================================
 
 /**
  * Recupera y muestra todas las playlists del usuario.
- * Incluye botón global para crear nueva playlist.
+ *
+ * GET /playlist/getAllList
+ *
+ * Pinta:
+ *  - Título "Play List" y botón (+) para nueva playlist.
+ *  - Tarjetas con portada, likes y acciones (Editar / Eliminar).
  */
 function showPlaylists() {
     currentViewPlaylist = "allPlayList";
@@ -222,7 +331,7 @@ function showPlaylists() {
 
             content.innerHTML = '';
 
-            // Encabezado centrado (título + botón "nueva playlist")
+            // Encabezado: título y botón para nueva playlist
             const headerContainer = document.createElement('div');
             headerContainer.style.display         = 'flex';
             headerContainer.style.justifyContent  = 'center';
@@ -256,18 +365,15 @@ function showPlaylists() {
                 li.style.position      = 'relative';
                 li.style.flexDirection = 'column';
 
-                // Nombre de la playlist
                 const nameDiv = document.createElement('div');
                 nameDiv.innerHTML       = `<strong>${p.name}</strong>`;
                 nameDiv.style.marginBottom = '8px';
                 li.appendChild(nameDiv);
 
-                // Contenedor para portada + botones
                 const mediaContainer = document.createElement('div');
                 mediaContainer.style.display       = 'flex';
                 mediaContainer.style.alignItems    = 'flex-start';
 
-                // Portada clicable que abre el detalle de canciones
                 const img = document.createElement('img');
                 img.src   = '/static/inicio_sesion/img_playlist.png';
                 img.width = 307;
@@ -278,7 +384,6 @@ function showPlaylists() {
 
                 mediaContainer.appendChild(img);
 
-                // Columna de botones de acción
                 const buttonsDiv = document.createElement('div');
                 buttonsDiv.style.display        = 'flex';
                 buttonsDiv.style.flexDirection  = 'column';
@@ -286,7 +391,6 @@ function showPlaylists() {
                 buttonsDiv.style.justifyContent = 'flex-start';
                 buttonsDiv.style.gap            = '8px';
 
-                // Botón like
                 const likeBtn = document.createElement('button');
                 likeBtn.className = 'btnRoundPlaylist';
                 likeBtn.id        = `like-playlist-btn-${p.id}`;
@@ -295,12 +399,10 @@ function showPlaylists() {
                     : `Like (${p.likes_count || 0})`;
                 likeBtn.addEventListener('click', () => likePlaylist(p.id));
 
-                // Botón editar
                 const editBtn = document.createElement('button');
                 editBtn.textContent = 'Editar';
                 editBtn.className   = 'btnRoundPlaylist';
 
-                // Botón eliminar
                 const deleteBtn = document.createElement('button');
                 deleteBtn.textContent = 'Eliminar';
                 deleteBtn.className   = 'btnRoundPlaylist';
@@ -314,7 +416,6 @@ function showPlaylists() {
                 li.appendChild(mediaContainer);
                 content.appendChild(li);
 
-                // Popup de renombrar playlist
                 const rect = editBtn.getBoundingClientRect();
                 editBtn.addEventListener('click', () =>
                     showAlertNewPlaylist(editBtn, rect, "update", p.id)
@@ -325,13 +426,18 @@ function showPlaylists() {
 }
 
 
-// ---------------------------------------------------------------------------
-// Popup inline para crear/renombrar playlist (junto al botón origen)
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Popup inline para crear/renombrar playlist
+// ===========================================================================
 
 /**
- * Muestra un pequeño formulario flotante al lado de un botón para
- * crear una nueva playlist o renombrar una existente.
+ * Muestra un formulario flotante (anclado a un botón) para crear o renombrar
+ * una playlist.
+ *
+ * @param {HTMLElement} btn           - Botón origen (para cálculo de posición).
+ * @param {DOMRect}     rectPosition  - BoundingClientRect del botón.
+ * @param {"new"|"update"} option     - Modo creación o actualización.
+ * @param {number|null} idPlaylist    - ID de la playlist a renombrar (update).
  */
 function showAlertNewPlaylist(btn, rectPosition, option, idPlaylist) {
     const formContainer = document.createElement('div');
@@ -394,13 +500,21 @@ function showAlertNewPlaylist(btn, rectPosition, option, idPlaylist) {
 }
 
 
-// ---------------------------------------------------------------------------
-// Vista de canciones dentro de una playlist
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Detalle de playlist: ver canciones
+// ===========================================================================
 
 /**
- * Carga y muestra las canciones de una playlist concreta.
- * playlistName es opcional; si no se pasa, se intenta obtener del backend.
+ * Renderiza el detalle de una playlist (lista de canciones).
+ *
+ * GET /playlist/<id>/songs/
+ *
+ * Además:
+ *  - Actualiza window.__currentPlaylistContext para evitar duplicados al agregar.
+ *  - Normaliza datos para window._playlists (uso en MDFCore).
+ *
+ * @param {number|string} playlistId   - ID de la playlist.
+ * @param {string}        playlistName - Nombre opcional de la playlist.
  */
 function verSongs(playlistId, playlistName) {
     currentViewPlaylist = "allSongsPlayList";
@@ -427,9 +541,23 @@ function verSongs(playlistId, playlistName) {
                            playlistName ||
                            `Playlist ${playlistId}`;
 
+            // Guardar contexto actual de playlist (para detectar duplicados al agregar)
+            try {
+                const idsSet = new Set(
+                    (songs || []).map(s => String(s.id))
+                );
+                window.__currentPlaylistContext = {
+                    id: String(playlistId),
+                    name: plName,
+                    songIds: idsSet
+                };
+            } catch (e) {
+                console.warn('No se pudo actualizar __currentPlaylistContext:', e);
+            }
+
             content.innerHTML = '';
 
-            // Encabezado: nombre de la playlist + botón "agregar canción"
+            // Encabezado: nombre de la playlist y botón para agregar canción
             const headerContainer = document.createElement('div');
             headerContainer.style.display        = 'flex';
             headerContainer.style.justifyContent = 'center';
@@ -438,7 +566,7 @@ function verSongs(playlistId, playlistName) {
             headerContainer.style.margin         = '20px 0 50px 0';
 
             const title = document.createElement('h2');
-            title.textContent   = plName;
+            title.textContent    = plName;
             title.style.fontSize = '25px';
             title.style.margin   = '0';
 
@@ -446,7 +574,8 @@ function verSongs(playlistId, playlistName) {
             btn.className   = 'btnAddPlaylist';
             btn.textContent = '♫+';
             btn.addEventListener('click', function () {
-                showAlertSongSelector(btn, playlistId, totalSongs);
+                // Pasamos también el nombre de la playlist para el toast
+                showAlertSongSelector(btn, playlistId, totalSongs, plName);
             });
 
             headerContainer.appendChild(title);
@@ -510,6 +639,7 @@ function verSongs(playlistId, playlistName) {
 
                 return `
                     <li class="song-item"
+                        data-playlist-name="${esc(plName)}"
                         data-id="${esc(idSong)}"
                         data-audio-url="${esc(audio)}"
                         data-title="${esc(title)}"
@@ -524,17 +654,25 @@ function verSongs(playlistId, playlistName) {
                           <small style="color:#b3b3b3">${esc(author)}</small>
                         </div>
                         <br>
-                        ${(() => {
-                            const liked  = song.liked ? true : false;
-                            const likesN = song.likes_count || 0;
-                            return `<button class="btnRoundPlaylist js-like-btn"
-                                            id="like-song-btn-${song.id}"
-                                            onclick="likeSong(event, ${song.id})">
-                                      ${liked ? `Liked (${likesN})` : `Like (${likesN})`}
-                                    </button>`;
-                        })()}
+                      ${(() => {
+    const liked  = !!song.liked;
+    const likesN = song.likes_count ?? song.likes ?? 0;
+    const extraClass = liked ? " liked" : "";
+
+    return `<button class="btnRoundPlaylist js-like-btn${extraClass}"
+                    id="like-song-btn-${song.id}"
+                    onclick="likeSong(event, ${song.id})">
+              ${liked ? `Liked (${likesN})` : `Like (${likesN})`}
+            </button>`;
+})()}
+
                         <button class="btnRoundPlaylist js-delete-btn"
-                                onclick="deleteFromPlaylistSong(event, ${song.id}, ${playlistId})">
+                                onclick="deleteFromPlaylistSong(
+                                  event,
+                                  ${song.id},
+                                  ${playlistId},
+                                  this.closest('.song-item') && this.closest('.song-item').getAttribute('data-playlist-name')
+                                )">
                           eliminar
                         </button>
                       </div>
@@ -550,7 +688,7 @@ function verSongs(playlistId, playlistName) {
             const main = document.getElementById('main-content');
             if (main) main.dataset.view = 'playlist';
 
-            // Actualizar cache global de playlists para el reproductor
+            // Actualiza cache global de playlists para el reproductor
             try {
                 const prev   = Array.isArray(window._playlists) ? window._playlists : [];
                 const plId   = `pl:${playlistId}`;
@@ -583,15 +721,22 @@ function verSongs(playlistId, playlistName) {
 }
 
 
-// ---------------------------------------------------------------------------
-// Popup selector de canciones para agregar a una playlist
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Popup para elegir canción y agregarla a la playlist
+// ===========================================================================
 
 /**
- * Muestra un popup junto al botón para elegir una canción
- * y agregarla a la playlist indicada.
+ * Muestra un popup flotante (junto al botón) con la lista de canciones
+ * disponibles para agregar a la playlist actual.
+ *
+ * GET /playlist/allsongs
+ *
+ * @param {HTMLElement} btn        - Botón origen.
+ * @param {number}      idPlaylist - ID de la playlist.
+ * @param {number}      totalSongs - Número actual de canciones en la playlist.
+ * @param {string}      playlistName - Nombre de la playlist (para el toast).
  */
-function showAlertSongSelector(btn, idPlaylist, totalSongs) {
+function showAlertSongSelector(btn, idPlaylist, totalSongs, playlistName) {
     console.log('idPlaylist para agregar canción:', idPlaylist);
 
     if (document.getElementById('song-selector-popup')) {
@@ -654,7 +799,7 @@ function showAlertSongSelector(btn, idPlaylist, totalSongs) {
             popup.querySelectorAll('.song-item-selector').forEach(item => {
                 item.addEventListener('click', function () {
                     const idSong = this.dataset.id;
-                    addSongToPlaylist(idSong, idPlaylist, totalSongs);
+                    addSongToPlaylist(idSong, idPlaylist, totalSongs, playlistName);
                     document.body.removeChild(popup);
                     document.body.removeChild(overlay);
                 });
@@ -677,16 +822,34 @@ function showAlertSongSelector(btn, idPlaylist, totalSongs) {
 }
 
 
-// ---------------------------------------------------------------------------
-// Alta de canciones a playlist (desde vista y desde buscador)
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Agregar canción a playlist (detalle y buscador)
+// ===========================================================================
 
 /**
- * Agrega una canción a la playlist en la posición indicada
- * y recarga el detalle de la playlist.
+ * Agrega una canción a una playlist (desde el detalle de la playlist).
+ *
+ * POST /playlist/addsong/
+ *
+ * Usa window.__currentPlaylistContext para detectar duplicados de forma
+ * inmediata antes de preguntar al servidor.
+ *
+ * @param {number|string} idSong      - ID de la canción.
+ * @param {number|string} idPlaylist  - ID de la playlist.
+ * @param {number}        totalSong   - Número actual de canciones en la playlist.
+ * @param {string}        playlistName - Nombre de la playlist (para el toast).
  */
-function addSongToPlaylist(idSong, idPlaylist, totalSong) {
+function addSongToPlaylist(idSong, idPlaylist, totalSong, playlistName) {
     console.log('Agregando canción con ID:', idSong, 'totalSongs:', totalSong);
+
+    const ctx       = window.__currentPlaylistContext;
+    const songIdStr = String(idSong);
+
+    // Si estamos en esa playlist y ya contiene la canción → avisar y salir
+    if (ctx && String(ctx.id) === String(idPlaylist) && ctx.songIds && ctx.songIds.has(songIdStr)) {
+        notifyPlaylistSongAlready(playlistName || ctx.name);
+        return;
+    }
 
     const position = totalSong + 1;
 
@@ -697,9 +860,9 @@ function addSongToPlaylist(idSong, idPlaylist, totalSong) {
             'X-Requested-With': 'XMLHttpRequest'
         },
         body: JSON.stringify({
-            song_id:    idSong,
+            song_id:     idSong,
             playlist_id: idPlaylist,
-            position:   position
+            position:    position
         })
     })
     .then(response => {
@@ -712,6 +875,15 @@ function addSongToPlaylist(idSong, idPlaylist, totalSong) {
     })
     .then(data => {
         console.log('Canción agregada en posición:', data.position);
+
+        // Actualizamos el set local por si alguien lo usa antes del siguiente verSongs
+        if (ctx && String(ctx.id) === String(idPlaylist) && ctx.songIds) {
+            ctx.songIds.add(songIdStr);
+        }
+
+        // Toast de "añadida a playlist"
+        notifyPlaylistSongChange(true, playlistName || ctx?.name);
+
         verSongs(idPlaylist);
     })
     .catch(error => {
@@ -721,17 +893,32 @@ function addSongToPlaylist(idSong, idPlaylist, totalSong) {
 }
 
 /**
- * Versión usada por el buscador:
- * primero consulta cuántas canciones tiene la playlist y luego llama a addSongToPlaylist.
+ * Variante para agregar canción a playlist desde el buscador.
+ *
+ * 1) Obtiene la playlist para conocer tamaño y duplicados.
+ * 2) Reusa addSongToPlaylist(...) si todo es válido.
+ *
+ * @param {number|string} idSong      - ID de la canción.
+ * @param {number|string} idPlaylist  - ID de la playlist.
+ * @param {string}        playlistName - Nombre de la playlist (para el toast).
  */
-function addSongToPlaylistFromSearch(idSong, idPlaylist) {
+function addSongToPlaylistFromSearch(idSong, idPlaylist, playlistName) {
     console.log('Agregar desde buscador. Canción:', idSong, 'Playlist:', idPlaylist);
 
     fetch(`/playlist/${idPlaylist}/songs/`)
         .then(response => response.json())
         .then(data => {
-            const totalSongs = Array.isArray(data.songs) ? data.songs.length : 0;
-            addSongToPlaylist(idSong, idPlaylist, totalSongs);
+            const songs      = Array.isArray(data.songs) ? data.songs : [];
+            const totalSongs = songs.length;
+
+            // ¿Ya está esta canción en esa playlist?
+            const already = songs.some(s => String(s.id) === String(idSong));
+            if (already) {
+                notifyPlaylistSongAlready(playlistName);
+                return;
+            }
+
+            addSongToPlaylist(idSong, idPlaylist, totalSongs, playlistName);
         })
         .catch(error => {
             console.error('Error al obtener canciones de la playlist:', error);
@@ -740,13 +927,15 @@ function addSongToPlaylistFromSearch(idSong, idPlaylist) {
 }
 
 
-// ---------------------------------------------------------------------------
-// Selector de playlist (popup) para agregar canción desde el buscador
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Selección de playlist (popup) para agregar desde el buscador
+// ===========================================================================
 
 /**
- * Popup modal centrado que permite elegir una playlist
- * cuando se llama desde el buscador.
+ * Muestra un popup modal con la lista de playlists del usuario para elegir
+ * a cuál agregar una canción (flujo desde el buscador / Home).
+ *
+ * @param {number|string} idSong - ID de la canción a agregar.
  */
 function openAddToPlaylistForSong(idSong /* metaOpcional */) {
     if (document.getElementById('playlist-selector-popup')) {
@@ -822,6 +1011,7 @@ function openAddToPlaylistForSong(idSong /* metaOpcional */) {
                 html += `
                     <div class="playlist-item-selector"
                          data-id="${p.id}"
+                         data-name="${(p.name || '').replace(/"/g, '&quot;')}"
                          style="padding:8px 10px;border-radius:6px;
                                 border:1px solid #2a2a2a;margin-bottom:6px;
                                 cursor:pointer;">
@@ -832,8 +1022,9 @@ function openAddToPlaylistForSong(idSong /* metaOpcional */) {
 
             popup.querySelectorAll('.playlist-item-selector').forEach(item => {
                 item.addEventListener('click', function () {
-                    const idPlaylist = this.dataset.id;
-                    addSongToPlaylistFromSearch(idSong, idPlaylist);
+                    const idPlaylist   = this.dataset.id;
+                    const playlistName = this.dataset.name || this.textContent.trim();
+                    addSongToPlaylistFromSearch(idSong, idPlaylist, playlistName);
                     cerrar();
                 });
             });
@@ -843,16 +1034,22 @@ function openAddToPlaylistForSong(idSong /* metaOpcional */) {
             popup.innerHTML =
                 '<div style="color:red;">Error al cargar playlists.</div>';
         });
+
 }
 
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
 // Likes de canciones dentro de la playlist
-// ---------------------------------------------------------------------------
+// ===========================================================================
 
 /**
- * Marca o desmarca "like" en una canción dentro de la playlist.
- * Sincroniza también el modelo de likes del reproductor (MDFCore).
+ * Marca o desmarca like en una canción dentro de una playlist y sincroniza
+ * el modelo de likes en MDFCore (si está disponible).
+ *
+ * POST /api/like/song/<idSong>/
+ *
+ * @param {Event}         ev     - Evento click del botón.
+ * @param {number|string} idSong - ID de la canción.
  */
 async function likeSong(ev, idSong) {
     if (ev) {
@@ -894,6 +1091,7 @@ async function likeSong(ev, idSong) {
                 btn.classList.toggle("liked", liked);
             }
 
+            // Sincroniza modelo de likes en MDFCore (si existe)
             if (window.MDFCore && typeof window.MDFCore.syncLikeModelFromClient === 'function') {
                 let meta = null;
                 const row = btn ? btn.closest('.song-item') : null;
@@ -923,14 +1121,21 @@ async function likeSong(ev, idSong) {
 }
 
 
-// ---------------------------------------------------------------------------
-// Eliminación de canción desde la playlist
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Quitar canción de playlist (sin borrar del catálogo)
+// ===========================================================================
 
 /**
- * Quita una canción de la playlist actual (sin borrarla del catálogo).
+ * Quita una canción de la playlist sin eliminarla del catálogo global.
+ *
+ * DELETE /playlist/removeSong/
+ *
+ * @param {Event}         ev          - Evento click.
+ * @param {number|string} idSong      - ID de la canción.
+ * @param {number|string} playlistId  - ID de la playlist.
+ * @param {string}        playlistName - Nombre de la playlist (para el toast).
  */
-function deleteFromPlaylistSong(ev, idSong, playlistId) {
+function deleteFromPlaylistSong(ev, idSong, playlistId, playlistName) {
     if (ev) {
         ev.stopPropagation();
         ev.preventDefault();
@@ -962,6 +1167,10 @@ function deleteFromPlaylistSong(ev, idSong, playlistId) {
     })
     .then(data => {
         console.log('Canción eliminada de playlist:', data.message);
+
+        // Toast de "quitada de la playlist"
+        notifyPlaylistSongChange(false, playlistName);
+
         verSongs(playlistId);
     })
     .catch(error => {

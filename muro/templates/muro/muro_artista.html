@@ -7,7 +7,7 @@
   <title>Muro del artista — {{ artist.user }} | Melodify</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
-  <!-- Desactiva la SPA del Home en esta vista -->
+  <!-- Desactiva la SPA del home en esta vista -->
   <script>window.__DISABLE_HOME_SCRIPT__ = true;</script>
   <meta name="csrf-token" content="{{ csrf_token }}"/>
 
@@ -17,13 +17,39 @@
   <!-- Estilos base de la aplicación -->
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
+  <script src="{% static 'inicio_sesion/playListScript.js' %}"></script>
 
   <!-- Estilos específicos del muro -->
   <link rel="stylesheet" href="{% static 'muro/muro.css' %}?v={% now 'U' %}">
 
-  <!-- Reproductor (CSS) -->
+  <!-- Estilos del reproductor (JS manejado en muro.js) -->
   <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
+  <style>
+    /* Toast flotante para mensajes de playlists / likes en el muro */
+    #like-toast{
+      position:fixed;
+      left:50%;
+      bottom:80px; /* arriba de la barra de reproducción */
+      transform:translateX(-50%) translateY(10px);
+      background:rgba(0,0,0,.85);
+      color:#fff;
+      padding:8px 14px;
+      border-radius:999px;
+      font-size:13px;
+      z-index:9999;
+      opacity:0;
+      pointer-events:none;
+      transition:opacity .18s ease-out, transform .18s ease-out;
+    }
+    #like-toast.show{
+      opacity:1;
+      transform:translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+
 </head>
 <body class="page-muro">
 
@@ -79,12 +105,18 @@
       {% endif %}
       <div style="flex:1;">
         <h1 style="margin:0">{{ artist.user }}</h1>
+        {% if is_owner %}
+          <p class="muted" style="margin:4px 0 0">Este es tu muro público como artista en Melodify.</p>
+        {% else %}
+          <p class="muted" style="margin:4px 0 0">Muro público del artista en Melodify.</p>
+        {% endif %}
         {% if description %}
           <p class="muted" style="margin:6px 0 0">{{ description }}</p>
         {% endif %}
       </div>
     </header>
 
+    {# Barra de deshacer (solo owner) #}
     {% if undo_muro_data %}
       <div class="undo-bar" id="undo-bar">
         <form id="muro-undo-form" method="post" action="{% url 'revertir_mi_cancion' %}">
@@ -105,74 +137,76 @@
 
     <div id="inline-msg" class="msg" role="alert"></div>
 
+    {# Sección: subir canción (solo owner) #}
     {% if is_owner %}
-  <div class="card">
-    <h3 style="margin:0 0 12px">Subir canción</h3>
-    <div style="display:flex; gap:8px; margin:0 0 12px">
-      {# antes intentamos {% url 'muro_subida_masiva' %} #}
-      <a class="btn" href="/mi-muro/subida-masiva/">Subida masiva</a>
-    </div>
-    <form id="form-upload"
-          method="post"
-          enctype="multipart/form-data"
-          {# antes intentamos {% url 'subir_cancion_muro' %} #}
-          action="/mi-muro/subir/"
-          data-ajax="1">
-      {% csrf_token %}
-      <label for="title">Título</label>
-      <input id="title" name="title" type="text" required>
+      <div class="card">
+        <h3 style="margin:0 0 12px">Subir canción</h3>
+        <div style="display:flex; gap:8px; margin:0 0 12px">
+          <a class="btn" href="/mi-muro/subida-masiva/">Subida masiva</a>
+        </div>
 
-      <!-- Autor principal siempre es el usuario logueado -->
-      <p class="muted" style="margin:6px 0 0">
-        Esta canción se publicará como <strong>{{ session_user }}</strong>.
-      </p>
+        <form id="form-upload"
+              method="post"
+              enctype="multipart/form-data"
+              action="/mi-muro/subir/"
+              data-ajax="1">
+          {% csrf_token %}
 
-    <label for="genre" style="margin-top:10px">Género</label>
-    <select name="genre" id="genre" required>
-      <option value="" disabled selected>Selecciona un género</option>
-      <option value="pop">Pop</option>
-      <option value="rock">Rock</option>
-      <option value="electronica">Electrónica</option>
-      <option value="hiphop">Hip-Hop</option>
-      <option value="reggaeton">Reguetón</option>
-      <option value="regional">Regional Mexicano</option>
-      <option value="balada">Balada</option>
-      <option value="indie">Indie</option>
-      <option value="jazz">Jazz</option>
-      <option value="clasica">Clásica</option>
-      <option value="salsa">Salsa</option>
-      <option value="_other">Otro…</option>
-    </select>
+          <label for="title">Título</label>
+          <input id="title" name="title" type="text" required>
 
-    <input id="genre-other"
-           type="text"
-           placeholder="Escribe el género"
-           style="display:none;margin-top:8px"
-           data-for="genre">
+          <p class="muted" style="margin:6px 0 0">
+            Esta canción se publicará como <strong>{{ session_user }}</strong>.
+          </p>
 
-    <label style="margin-top:10px">Archivo de audio (.mp3, .wav, .ogg, .m4a, .flac)</label>
-    <input name="audio_file" type="file" accept=".mp3,.wav,.ogg,.m4a,.flac" required>
+          <label for="genre" style="margin-top:10px">Género</label>
+          <select name="genre" id="genre" required>
+            <option value="" disabled selected>Selecciona un género</option>
+            <option value="pop">Pop</option>
+            <option value="rock">Rock</option>
+            <option value="electronica">Electrónica</option>
+            <option value="hiphop">Hip-Hop</option>
+            <option value="reggaeton">Reguetón</option>
+            <option value="regional">Regional Mexicano</option>
+            <option value="balada">Balada</option>
+            <option value="indie">Indie</option>
+            <option value="jazz">Jazz</option>
+            <option value="clasica">Clásica</option>
+            <option value="salsa">Salsa</option>
+            <option value="_other">Otro…</option>
+          </select>
 
-    <label style="margin-top:10px">Portada (opcional)</label>
-    <input name="cover_image" type="file" accept=".png,.jpg,.jpeg,.webp">
+          <input id="genre-other"
+                 type="text"
+                 placeholder="Escribe el género"
+                 style="display:none;margin-top:8px"
+                 data-for="genre">
 
-    <button class="btn" type="submit">Subir</button>
-  </form>
-</div>
+          <label style="margin-top:10px">Archivo de audio (.mp3, .wav, .ogg, .m4a, .flac)</label>
+          <input name="audio_file" type="file" accept=".mp3,.wav,.ogg,.m4a,.flac" required>
 
+          <label style="margin-top:10px">Portada (opcional)</label>
+          <input name="cover_image" type="file" accept=".png,.jpg,.jpeg,.webp">
+
+          <button class="btn" type="submit" style="margin-top:12px">Subir</button>
+        </form>
+      </div>
     {% endif %}
 
+    {# Sección: lista de canciones #}
     <section aria-label="Canciones">
       <h3 style="margin:0 0 12px">Canciones</h3>
 
-      <div class="toolbar" id="muro-bulk-toolbar">
-        <label style="display:flex;align-items:center;gap:6px">
-          <input id="sel-all" type="checkbox"> Seleccionar todo
-        </label>
-        <button id="bulk-delete" class="btn btnDanger" disabled>Eliminar seleccionadas</button>
-        <span class="muted" id="sel-count" aria-live="polite"></span>
-        <div class="spacer"></div>
-      </div>
+      {% if is_owner %}
+        <div class="toolbar" id="muro-bulk-toolbar">
+          <label style="display:flex;align-items:center;gap:6px">
+            <input id="sel-all" type="checkbox"> Seleccionar todo
+          </label>
+          <button id="bulk-delete" class="btn btnDanger" disabled>Eliminar seleccionadas</button>
+          <span class="muted" id="sel-count" aria-live="polite"></span>
+          <div class="spacer"></div>
+        </div>
+      {% endif %}
 
       {% if songs %}
         <div id="songs-grid"
@@ -188,11 +222,16 @@
                      {% if s.genre %}data-genre="{{ s.genre|escape }}"{% endif %}
                      {% if s.audio_file %}data-audio-url="{{ s.audio_file.url }}"{% endif %}
                      {% if s.cover_image %}data-cover-url="{{ s.cover_image.url }}"{% endif %}>
-              <label class="select-wrap">
-                <input class="song-select" type="checkbox" value="{{ s.id }}"> Seleccionar
-              </label>
 
-              <div class="row">
+              {% if is_owner %}
+                <!-- Checkbox de selección -->
+                <label class="select-wrap">
+                  <input class="song-select" type="checkbox" value="{{ s.id }}"> Seleccionar
+                </label>
+              {% endif %}
+
+              <!-- Zona clickeable para reproducir -->
+              <div class="row js-song-main">
                 {% if s.cover_image %}
                   <img class="preview"
                        src="{{ s.cover_image.url }}"
@@ -202,7 +241,33 @@
                   <div class="preview" aria-hidden="true"></div>
                 {% endif %}
                 <div>
-                  <div style="font-weight:600">{{ s.title }}</div>
+                  <div class="song-title"
+                       style="font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <span class="song-title-text">{{ s.title }}</span>
+
+                    {% if session_user %}
+                     <button
+  type="button"
+  class="song-like-btn"
+  data-song-id="{{ s.id }}"
+  data-liked="{% if s.is_liked %}1{% else %}0{% endif %}"
+  onclick="toggleSongLikeFromMuro(event, '{{ s.id }}', this)"
+  aria-label="Añadir o quitar de tus Me gusta">
+  ♡
+</button>
+
+
+                      <button type="button"
+                              class="song-add-btn"
+                              data-song-id="{{ s.id }}"
+                              title="Añadir a playlist"
+                              onclick="openAddToPlaylistFromMuro(event, '{{ s.id }}')"
+                              aria-label="Añadir a playlist">
+                        ＋
+                      </button>
+                    {% endif %}
+                  </div>
+
                   <div class="muted">{{ s.artist_display_name }}</div>
                   <div class="muted">
                     Género:
@@ -212,14 +277,6 @@
                     Subida: {{ s.created_at|date:"Y-m-d H:i" }}
                   </div>
                 </div>
-              </div>
-
-              <div style="margin-top:8px">
-                {% if s.audio_file %}
-                  <audio controls preload="none" style="width:100%">
-                    <source src="{{ s.audio_file.url }}">
-                  </audio>
-                {% endif %}
               </div>
 
               {% if is_owner %}
@@ -245,33 +302,42 @@
     </section>
   </div>
 
-  <!-- Modal de confirmación para acciones de eliminación -->
-  <div id="confirm-modal" class="modal" aria-hidden="true">
-    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title" tabindex="-1">
-      <h4 class="title" id="confirm-title">Confirmar</h4>
-      <p id="confirm-text" class="muted" style="margin:0 0 8px">¿Eliminar este elemento?</p>
-      <div class="actions">
-        <button class="btn" id="confirm-cancel" type="button">Cancelar</button>
-        <button class="btn btnDanger" id="confirm-accept" type="button">Eliminar</button>
+  {# Modal de confirmación para eliminación (solo owner) #}
+  {% if is_owner %}
+    <div id="confirm-modal" class="modal" aria-hidden="true">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title" tabindex="-1">
+        <h4 class="title" id="confirm-title">Confirmar</h4>
+        <p id="confirm-text" class="muted" style="margin:0 0 8px">¿Eliminar este elemento?</p>
+        <div class="actions">
+          <button class="btn" id="confirm-cancel" type="button">Cancelar</button>
+          <button class="btn btnDanger" id="confirm-accept" type="button">Eliminar</button>
+        </div>
       </div>
     </div>
-  </div>
+  {% endif %}
 </main>
 
-<!-- Barra de progreso para subida desde el muro -->
-<div id="upload-bar" class="upload-bar" role="status" aria-live="polite" aria-label="Progreso de subida">
-  <div class="row">
-    <div class="progress"><i></i></div>
-    <div class="label"><span id="upload-pct">0%</span></div>
+{# Barra de progreso de subida (solo owner) #}
+{% if is_owner %}
+  <div id="upload-bar" class="upload-bar" role="status" aria-live="polite" aria-label="Progreso de subida">
+    <div class="row">
+      <div class="progress"><i></i></div>
+      <div class="label"><span id="upload-pct">0%</span></div>
+    </div>
   </div>
-</div>
+{% endif %}
 
 <script>window.MELODIFY_LOGOUT_URL = "{{ logout_url|default:'/logout/' }}";</script>
 
-<!-- Scripts en orden: reproductor, barra de reproducción y lógica del muro -->
-<script defer src="{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}"></script>
-<script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
+<!-- Contenedor de toast para likes / playlists -->
+<div id="like-toast" aria-live="polite"></div>
+
+<!-- Scripts del muro y barra de reproducción -->
 <script defer src="{% static 'muro/muro.js' %}?v={% now 'U' %}"></script>
+<script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
+
+</body>
+</html>
 
 </body>
 </html>

@@ -1,53 +1,241 @@
-{# gestion/admin_catalogo_songs.html — combinado main + multi-selección #}
-{% comment %} Fragmento para la pestaña “Catálogo” del admin {% endcomment %}
 {% if songs %}
-  <div id="catalogo-grid" class="grid" data-latest="{{ songs.0.created_at|date:'c'|default:'' }}">
-    {% for s in songs %}
-      <article class="song js-song-card"
-               data-song-id="{{ s.id }}"
-               data-created-at="{{ s.created_at|date:'c' }}">
+  <style>
+    #tab-catalogo #catalogo-grid.cat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 14px;
+    }
 
-        <!-- Checkbox de selección múltiple -->
-        <label class="sel" style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+    #tab-catalogo .cat-song.js-song-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: #1b1b1b;
+      border: 1px solid #2b2b2b;
+      border-radius: 10px;
+      padding: 12px;
+      transform: none !important;
+      left: auto !important;
+      right: auto !important;
+      top: auto !important;
+      bottom: auto !important;
+    }
+
+    #tab-catalogo .cat-song.js-song-card.is-playing {
+      border-color: var(--accent, #9ad);
+      box-shadow:
+        0 0 0 1px rgba(154, 173, 221, 0.45),
+        0 0 24px rgba(154, 173, 221, 0.40);
+      background:
+        radial-gradient(circle at 0 0, rgba(154, 173, 221, 0.22), transparent 55%),
+        #141414;
+      transform: none !important;
+    }
+
+    #tab-catalogo .cat-select {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      margin: -2px 0 6px;
+    }
+
+    #tab-catalogo .cat-select input {
+      margin: 0;
+    }
+
+    #tab-catalogo .cat-main {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    #tab-catalogo .cat-cover {
+      flex: 0 0 auto;
+    }
+
+    #tab-catalogo .cat-cover-img,
+    #tab-catalogo .cat-cover-placeholder {
+      width: 88px;
+      height: 88px;
+      border-radius: 8px;
+      background: #2a2a2a;
+      object-fit: cover;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, .2);
+      display: block;
+    }
+
+    #tab-catalogo .cat-meta {
+      min-width: 0;
+    }
+
+    #tab-catalogo .cat-title {
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    #tab-catalogo .cat-artist,
+    #tab-catalogo .cat-genre,
+    #tab-catalogo .cat-date {
+      font-size: 12px;
+      color: var(--muted, #9aa0a6);
+    }
+
+    #tab-catalogo .cat-artist span {
+      opacity: .6;
+    }
+
+    #tab-catalogo .cat-footer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+      position: static !important;
+      transform: none !important;
+    }
+
+    #tab-catalogo .cat-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      position: static !important;
+      transform: none !important;
+    }
+
+    #tab-catalogo .cat-extra {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
+      position: static !important;
+      transform: none !important;
+    }
+
+    #tab-catalogo .cat-like-btn,
+    #tab-catalogo .cat-add-btn {
+      min-width: 32px;
+      height: 32px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line, #333);
+      background: #181818;
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      outline: none;
+    }
+
+
+  </style>
+
+  <div
+    id="catalogo-grid"
+    class="cat-grid"
+    data-feed-list="songs"
+    data-latest="{{ songs.0.created_at|date:'c'|default:'' }}"
+    {% if artist_filter %}data-filter-artist="{{ artist_filter }}"{% endif %}
+    {% if q %}data-filter-q="{{ q }}"{% endif %}
+  >
+    {% for s in songs %}
+      <article
+        class="cat-song js-song-card"
+        data-song-id="{{ s.id }}"
+        data-created-at="{{ s.created_at|date:'c' }}"
+        data-title="{{ s.title|escape }}"
+        data-artist="{{ s.artist_display_name|default:s.owner_user|escape }}"
+        {% if s.genre %}data-genre="{{ s.genre|escape }}"{% endif %}
+        {% if s.audio_file %}data-audio-url="{{ s.audio_file.url }}"{% endif %}
+        {% if s.cover_image %}data-cover-url="{{ s.cover_image.url }}"{% endif %}
+      >
+        <label class="cat-select">
           <input type="checkbox" class="song-select" value="{{ s.id }}">
-          <span class="muted">Seleccionar</span>
+          Seleccionar
         </label>
 
-        <div class="row">
-          {% if s.cover_image %}
-            <img class="preview" src="{{ s.cover_image.url }}" alt="Portada de {{ s.title }}" loading="lazy">
-          {% else %}
-            <div class="preview" aria-hidden="true"></div>
-          {% endif %}
-          <div>
-            <div style="font-weight:600">{{ s.title }}</div>
-            <div class="muted">
-              {{ s.artist_display_name }} <span style="opacity:.6;">({{ s.owner_user }})</span>
+        <div class="cat-main js-song-main">
+          <div class="cat-cover">
+            {% if s.cover_image %}
+              <img
+                class="cat-cover-img"
+                src="{{ s.cover_image.url }}"
+                alt="Portada de {{ s.title }}"
+                loading="lazy"
+              >
+            {% else %}
+              <div class="cat-cover-placeholder" aria-hidden="true"></div>
+            {% endif %}
+          </div>
+
+          <div class="cat-meta">
+            <div class="cat-title">
+              <span class="song-title-text">{{ s.title }}</span>
             </div>
-            {% if s.genre %}<div class="muted">Género: {{ s.genre }}</div>{% endif %}
-            <div class="muted">Subida: {{ s.created_at|date:"Y-m-d H:i" }}</div>
+
+            <div class="cat-artist">
+              {{ s.artist_display_name }}
+              <span>({{ s.owner_user }})</span>
+            </div>
+
+            {% if s.genre %}
+              <div class="cat-genre">
+                Género: {{ s.genre }}
+              </div>
+            {% endif %}
+
+            <div class="cat-date">
+              Subida: {{ s.created_at|date:"Y-m-d H:i" }}
+            </div>
           </div>
         </div>
 
-        {% if s.audio_file %}
-          <div style="margin-top:8px">
-            <audio controls preload="none" style="width:100%">
-              <source src="{{ s.audio_file.url }}">
-            </audio>
-          </div>
-        {% endif %}
+        <div class="cat-footer">
+          <div class="cat-toolbar">
+            <a class="btn" href="{% url 'editar_cancion' s.id %}">Editar</a>
 
-        <div style="margin-top:8px">
-          <a class="btn" href="{% url 'editar_cancion' s.id %}">Editar</a>
-          <form method="post"
-                action="{% url 'eliminar_cancion' s.id %}"
-                style="display:inline"
-                class="js-delete-form"
-                data-title="{{ s.title }}"
-                data-song-id="{{ s.id }}">
-            {% csrf_token %}
-            <button class="btn" type="submit">Eliminar</button>
-          </form>
+            <form
+              method="post"
+              action="{% url 'eliminar_cancion' s.id %}"
+              style="display:inline"
+              class="js-delete-form"
+              data-title="{{ s.title }}"
+              data-song-id="{{ s.id }}"
+            >
+              {% csrf_token %}
+              <button class="btn btnDanger" type="submit">Eliminar</button>
+            </form>
+          </div>
+
+          <div class="cat-extra">
+           <button
+  type="button"
+  class="song-like-btn cat-like-btn"
+  data-song-id="{{ s.id }}"
+  data-liked="{% if s.is_liked %}1{% else %}0{% endif %}"
+  onclick="toggleSongLikeFromGestion(event, '{{ s.id }}', this)"
+>
+  ♡
+</button>
+
+
+<button
+  type="button"
+  class="song-add-btn cat-add-btn"
+  data-song-id="{{ s.id }}"
+  onclick="openAddToPlaylistFromGestion(event, '{{ s.id }}')"
+>
+  +
+</button>
+
+          </div>
         </div>
       </article>
     {% endfor %}

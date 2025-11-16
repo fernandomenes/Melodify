@@ -13,28 +13,21 @@
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
 
-  <!-- Reproductor (CSS) -->
+  <!-- Estilos del reproductor -->
   <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
 
   <script>
-    /*
-      Ruta del módulo JS del reproductor.
-      homeScript.js hará un import dinámico de esta URL (window.REPRODUCTOR_SRC)
-      para inicializar el reproductor central.
-    */
     window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
   </script>
 
-  <!-- UI de playlists (SPA de PlayList) -->
+  <!-- UI de playlists -->
   <script src="{% static 'inicio_sesion/playListScript.js' %}"></script>
   <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
 </head>
 
 <body class="page-home">
-  <!-- =========================================================
-       Header superior (buscador + usuario)
-       ========================================================= -->
+  <!-- Header superior (buscador y usuario) -->
   <div id="header">
     <!-- Buscador global -->
     <div id="search" class="search">
@@ -55,11 +48,11 @@
           required
         />
       </form>
-      <!-- Panel flotante de autosuggest (lo maneja searchHandler.js) -->
+      <!-- Panel flotante de resultados de búsqueda -->
       <div id="search-panel" class="search-panel" hidden></div>
     </div>
 
-    <!-- Información de usuario (avatar simple con inicial) -->
+    <!-- Información de usuario -->
     <div class="user-info" id="user-trigger">
       <div class="user-icon">
         {{ session_user|default:"U"|first }}
@@ -72,24 +65,22 @@
     </div>
   </div>
 
-  <!-- =========================================================
-       Menú lateral (SPA + vistas de servidor)
-       ========================================================= -->
+  <!-- Menú lateral -->
   <div id="menuLateral">
     <div class="logo" id="toggle-menu">
       <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
       <span class="logo-text">Melodify</span>
     </div>
 
-    <!-- Home (ruta real del backend, pero también vista principal de la SPA) -->
+    <!-- Home (ruta principal) -->
     <a class="menu-item" data-view="home" href="{% url 'home' %}">Home</a>
 
-    <!-- Vistas internas de la SPA (las renderiza homeScript.js dentro de #content) -->
+    <!-- Vistas internas de la SPA -->
     <div class="menu-item" data-view="playlist">PlayList</div>
     <div class="menu-item" data-view="reproductor">Reproductor</div>
     <div class="menu-item" data-view="perfil">Perfil</div>
 
-    <!-- Vistas servidas desde el backend (se navega cambiando URL) -->
+    <!-- Vistas servidas desde el backend -->
     {% if session_role|lower == "artista" %}
       <div class="menu-item" data-view="mi-muro">Muro del artista</div>
     {% endif %}
@@ -99,12 +90,10 @@
     {% endif %}
   </div>
 
-  <!-- =========================================================
-       Contenedor principal SPA
-       ========================================================= -->
+  <!-- Contenedor principal SPA -->
   <div
     id="main-content"
-    data-initial-view="home"
+    data-initial-view="{{ initial_view|default:'home' }}"
     data-username="{{ session_user }}"
     data-role="{{ session_role }}"
     data-avatar="{{ session_avatar_url }}"
@@ -114,13 +103,15 @@
     data-url-musica="/musica/"
     data-url-mi-muro="{% url 'mi_muro' %}"
     data-url-gestion="{% url 'gestion' %}"
+    data-url-mi-musica-json="{% url 'mi_musica_json' %}"
     data-url-mis-likes-json="{% url 'mis_likes_json' %}"
     data-url-all-songs-json="{% url 'all_songs_json' %}"
+    data-url-muro-publico-template="{% url 'muro_publico' 'ARTISTA_PLACEHOLDER' %}"
   >
     <!-- Botón hamburguesa (responsive) -->
     <button id="menu-toggle-btn">☰</button>
 
-    <!-- Botón back universal (SPA; se oculta en Home por CSS) -->
+    <!-- Botón back SPA -->
     <a
       id="back-btn"
       class="back"
@@ -129,29 +120,24 @@
       aria-label="Regresar"
     >←</a>
 
-    <!-- Aquí homeScript.js inyecta las vistas (home, playlist, reproductor, perfil, etc.) -->
     <div id="content"></div>
   </div>
 
-  <!-- =========================================================
-       Playlists iniciales para el reproductor
-       (inyectadas desde views.py: pantallaHome)
-       ========================================================= -->
+  <div id="like-toast" aria-live="polite"></div>
+
+  <!-- Playlists iniciales en JSON -->
   <script id="playlists-data-json" type="application/json">
     {{ playlists_json|default:"[]"|safe }}
   </script>
 
-  <!-- =========================================================
-       Scripts: barra del reproductor + SPA + búsqueda
-       ========================================================= -->
-
-  <!-- Barra flotante del reproductor (UI global) -->
+  <!-- Scripts principales -->
+  <!-- Barra flotante del reproductor -->
   <script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
 
-  <!-- SPA principal (router de vistas, carga del reproductor, etc.) -->
+  <!-- SPA principal -->
   <script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
 
-  <!-- Manejo de logout (POST con CSRF) y control de caché/navegación -->
+  <!-- Logout y control de navegación/caché -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       const logoutLink = document.getElementById('menu-logout');
@@ -181,7 +167,6 @@
         });
       }
 
-      // Si el usuario vuelve con el botón "atrás" después de logout, refrescar
       if (performance.navigation && performance.navigation.type === 2) {
         window.location.href = "{% url 'home' %}";
       }
@@ -191,14 +176,13 @@
         }
       };
 
-      // Evitar reenvío de formularios al refrescar
       if (window.history.replaceState) {
         window.history.replaceState(null, null, window.location.href);
       }
     });
   </script>
 
-  <!-- Script de autosuggest + navegación de búsqueda -->
+  <!-- Script de búsqueda y autosuggest -->
   <script src="{% static 'inicio_sesion/searchHandler.js' %}?v={% now 'U' %}"></script>
 </body>
 </html>

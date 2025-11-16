@@ -1,25 +1,24 @@
 // static/gestion/gestion.js
 // ============================================================================
 // Melodify – Panel de Gestión (administrador)
-// - Header: identidad del usuario + menú perfil/logout
-// - Sidebar: toggle de menú lateral
-// - Tabs: Usuarios / Catálogo (accesibles con teclado)
-// - Catálogo: selección múltiple, borrado con modal y deshacer
-// - Formularios: registrar artista/admin con barra de progreso
+// Header, menú lateral, pestañas, catálogo, formularios y gestión de likes/playlists.
 // ============================================================================
 
 (function () {
   "use strict";
 
-  // Marca global para que el fallback inline sepa que este script sí cargó
+  // Marca global de inicialización
   window.__gestion_loaded__ = true;
 
   // ---------------------------------------------------------------------------
-  // Utils básicos
+  // Utilidades básicas
   // ---------------------------------------------------------------------------
-  const $  = (s, r = document) => r.querySelector(s);
-  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const $  = (sel, ctx = document) => ctx.querySelector(sel);
+  const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
   const $all = $$;
+
+  // Cabecera común para peticiones AJAX
+  const H = { "X-Requested-With": "fetch" };
 
   function getCookie(name) {
     const m = document.cookie.match(new RegExp("(^|;)\\s*" + name + "=([^;]*)"));
@@ -33,6 +32,21 @@
     );
   }
 
+  function showLikeToast(liked) {
+    const el = document.getElementById("like-toast");
+    if (!el) return;
+
+    el.textContent = liked
+      ? "Añadido a tus Me gusta"
+      : "Quitado de tus Me gusta";
+
+    el.classList.add("show");
+    clearTimeout(el._hideTimer);
+    el._hideTimer = setTimeout(() => {
+      el.classList.remove("show");
+    }, 1400);
+  }
+
   function escapeHtml(s) {
     return String(s ?? "")
       .replace(/&/g, "&amp;")
@@ -40,6 +54,171 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
   }
+
+  // ---------------------------------------------------------------------------
+  // Núcleo mínimo de reproducción (MDFCore) para Gestión
+  // ---------------------------------------------------------------------------
+  (function setupGestionCore() {
+    // Si MDFCore ya existe, no se redefine
+    if (window.MDFCore) return;
+
+    const audio = new Audio();
+    audio.preload = "metadata";
+
+    let queue      = [];
+    let queueCards = [];
+    let index      = -1;
+
+    function dispatch(name, detail) {
+      document.dispatchEvent(new CustomEvent(name, { detail }));
+    }
+
+    function datasetToTrack(card) {
+      const ds = card.dataset || {};
+      return {
+        id:       ds.songId || null,
+        title:    ds.title  || "—",
+        author:   ds.artist || "—",
+        coverUrl: ds.coverUrl || "",
+        audioUrl: ds.audioUrl || "",
+        genre:    ds.genre || "",
+      };
+    }
+
+    function clearPlayingClass() {
+      if (!queueCards || !queueCards.length) return;
+      queueCards.forEach((c) => c.classList && c.classList.remove("is-playing"));
+    }
+
+    function markCurrentPlaying() {
+      if (!queueCards || !queueCards.length) return;
+      clearPlayingClass();
+      const card = queueCards[index];
+      if (card) card.classList.add("is-playing");
+    }
+
+    function buildQueueFromCard(card) {
+      const root =
+        card.closest("#catalogo-grid") ||
+        card.closest('[data-feed-list="songs"]') ||
+        document;
+
+      // Cola basada en elementos .js-song-card
+      queueCards = Array.from(root.querySelectorAll(".js-song-card"));
+      queue      = queueCards.map(datasetToTrack);
+      index      = Math.max(0, queueCards.indexOf(card));
+    }
+
+    function playIndex(i) {
+      if (!queue.length) {
+        clearPlayingClass();
+        return;
+      }
+      if (i < 0) i = queue.length - 1;
+      if (i >= queue.length) i = 0;
+      index = i;
+
+      const track = queue[index];
+      if (!track || !track.audioUrl) {
+        clearPlayingClass();
+        return;
+      }
+
+      markCurrentPlaying();
+
+      // Notifica metadatos al reproductor global
+      dispatch("melodify:trackmeta", {
+        title:  track.title,
+        artist: track.author,
+        cover:  track.coverUrl || "",
+        genre:  track.genre || "",
+      });
+      dispatch("melodify:trackchange", {
+        index,
+        total: queue.length,
+        id:    track.id || null,
+      });
+
+      if (audio.src !== track.audioUrl) {
+        audio.src = track.audioUrl;
+      }
+      audio.play().catch(() => {});
+    }
+
+    // Eventos del <audio> → barra de reproducción
+    audio.addEventListener("timeupdate", () => {
+      dispatch("melodify:time", {
+        currentTime: audio.currentTime || 0,
+        duration:    audio.duration || 0,
+      });
+    });
+
+    audio.addEventListener("loadedmetadata", () => {
+      dispatch("melodify:loaded", { duration: audio.duration || 0 });
+      dispatch("melodify:audioReady", { audio });
+    });
+
+    audio.addEventListener("play", () => {
+      dispatch("melodify:state", { playing: true });
+    });
+
+    audio.addEventListener("pause", () => {
+      dispatch("melodify:state", { playing: false });
+    });
+
+    audio.addEventListener("ended", () => {
+      if (queue.length > 0) playIndex(index + 1);
+    });
+
+    const core = {
+      __fromGestion: true,
+
+      getAudio() {
+        return audio;
+      },
+
+      playFromDomItem(card) {
+        if (!card) return;
+        buildQueueFromCard(card);
+        playIndex(index);
+      },
+
+      // Métodos usados por la barra global
+      prev() {
+        if (!queue.length) return;
+        playIndex(index - 1);
+      },
+
+      next() {
+        if (!queue.length) return;
+        playIndex(index + 1);
+      },
+
+      toggle() {
+        if (audio.paused) audio.play().catch(() => {});
+        else audio.pause();
+      },
+
+      seekPercent(p) {
+        const pct = Math.max(0, Math.min(1, Number(p) || 0));
+        if (audio.duration > 0 && Number.isFinite(audio.duration)) {
+          audio.currentTime = audio.duration * pct;
+        }
+      },
+
+      setVolume(v) {
+        const vol = Math.max(0, Math.min(1, Number(v) || 0));
+        audio.volume = vol;
+      },
+    };
+
+    window.MDFCore = core;
+
+    // Aviso global de audio listo y solicitud de mostrar la barra
+    dispatch("melodify:audioReady", { audio });
+    window.__MDF_FORMS_HIDE_BAR__ = false;
+    document.dispatchEvent(new CustomEvent("melodify:bar:shouldShow"));
+  })();
 
   // ---------------------------------------------------------------------------
   // Header: avatar / nombre y menú perfil / logout
@@ -86,7 +265,7 @@
       });
     }
 
-    // Ir al perfil (versión servidor, fuera de la SPA del home)
+    // Ir al perfil (versión servidor)
     if (perfil) {
       perfil.addEventListener("click", (e) => {
         e.preventDefault();
@@ -95,7 +274,7 @@
       });
     }
 
-    // Logout por POST con CSRF y fallback a GET si algo falla
+    // Logout por POST con CSRF y fallback a GET
     if (logout) {
       const logoutUrl =
         logout.getAttribute("href") || logout.dataset.logoutUrl || "/logout/";
@@ -104,8 +283,8 @@
         menu?.classList.remove("show");
         try {
           const res = await fetch(logoutUrl, {
-            method: "POST",
-            headers: { "X-CSRFToken": getCSRF() },
+            method:      "POST",
+            headers:     { "X-CSRFToken": getCSRF() },
             credentials: "same-origin",
           });
           if (res.redirected) {
@@ -117,7 +296,7 @@
             return;
           }
         } catch {
-          // Ignora y usa fallback
+          // Fallback a GET
         }
         location.href = logoutUrl;
       });
@@ -131,6 +310,7 @@
     const btn    = $("#menu-toggle-btn");
     const menu   = $("#menuLateral");
     const header = $("#header");
+
     btn?.addEventListener("click", () => {
       menu?.classList.toggle("collapsed");
       $("#main-content")?.classList.toggle("menuLateral-collapsed");
@@ -144,8 +324,8 @@
   function showInlineError(msg) {
     const box = $("#inline-msg");
     if (!box) return;
-    box.textContent = msg || "No se pudo completar la acción.";
-    box.className = "msg error";
+    box.textContent   = msg || "No se pudo completar la acción.";
+    box.className     = "msg error";
     box.style.display = "block";
   }
 
@@ -173,10 +353,13 @@
   // ---------------------------------------------------------------------------
   function replaceUsuariosTab(html) {
     if (!html) return;
+
     const wrap = document.createElement("div");
     wrap.innerHTML = html.trim();
+
     const fresh = wrap.querySelector("#tab-usuarios");
     const old   = $("#tab-usuarios");
+
     if (fresh && old) old.replaceWith(fresh);
 
     const tabBtn = $('.tab-btn[data-tab="usuarios"]');
@@ -189,6 +372,7 @@
 
     const wrap = document.createElement("div");
     wrap.innerHTML = html.trim();
+
     const fresh = wrap.querySelector("#catalogo-grid") || wrap.firstElementChild;
     const old   = cont.querySelector("#catalogo-grid");
 
@@ -198,8 +382,63 @@
     } else {
       cont.innerHTML = html;
     }
+
     resetSelection();
+
+    // Reenlaza las tarjetas del catálogo con el reproductor global
+    if (window.__melodify_admin_rebind_player) {
+      window.__melodify_admin_rebind_player();
+    }
   }
+
+  // ---------------------------------------------------------------------------
+  // Catálogo: integración con reproductor global (MDFCore + barra)
+  // ---------------------------------------------------------------------------
+  function bindCatalogSongCardsToGlobalPlayer(scopeRoot = document) {
+    const cards = scopeRoot.querySelectorAll(".js-song-card");
+    if (!cards.length) return;
+
+    cards.forEach((card) => {
+      // Evita registrar varias veces el mismo listener
+      if (card.dataset.playerBound === "1") return;
+      card.dataset.playerBound = "1";
+
+      card.addEventListener("click", (ev) => {
+        // No reproducir si el click fue en controles interactivos
+        if (ev.target.closest('input[type="checkbox"], button, a, form')) {
+          return;
+        }
+
+        const core = window.MDFCore;
+        if (!core || typeof core.playFromDomItem !== "function") {
+          console.warn("MDFCore.playFromDomItem no disponible en Gestión.");
+          return;
+        }
+
+        core.playFromDomItem(card);
+
+        // Solicita mostrar la barra de reproducción
+        window.__MDF_FORMS_HIDE_BAR__ = false;
+        document.dispatchEvent(new CustomEvent("melodify:bar:shouldShow"));
+      });
+    });
+  }
+
+  function bindCatalogToPlayer() {
+    const grid = document.getElementById("catalogo-grid");
+    if (grid) bindCatalogSongCardsToGlobalPlayer(grid);
+    else      bindCatalogSongCardsToGlobalPlayer(document);
+  }
+
+  // Función global para re-enlazar catálogo cuando cambie por AJAX
+  window.__melodify_admin_rebind_player = function () {
+    bindCatalogToPlayer();
+  };
+
+  // Enlaza catálogo cuando el módulo del reproductor está listo
+  window.addEventListener("melodify:player-module-ready", () => {
+    bindCatalogToPlayer();
+  });
 
   // ---------------------------------------------------------------------------
   // Tabs (Usuarios / Catálogo)
@@ -242,14 +481,19 @@
     // Navegación por teclado entre pestañas
     tablist.addEventListener("keydown", (e) => {
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+
       const btns = Array.from(tablist.querySelectorAll('.tab-btn[role="tab"]'));
       let i = btns.indexOf(document.activeElement);
-      if (i === -1) i = btns.findIndex((b) => b.getAttribute("aria-selected") === "true");
+      if (i === -1) {
+        i = btns.findIndex((b) => b.getAttribute("aria-selected") === "true");
+      }
       let j = i;
+
       if (e.key === "ArrowRight") j = (i + 1) % btns.length;
-      if (e.key === "ArrowLeft") j = (i - 1 + btns.length) % btns.length;
-      if (e.key === "Home") j = 0;
-      if (e.key === "End") j = btns.length - 1;
+      if (e.key === "ArrowLeft")  j = (i - 1 + btns.length) % btns.length;
+      if (e.key === "Home")       j = 0;
+      if (e.key === "End")        j = btns.length - 1;
+
       btns[j].focus();
       btns[j].click();
     });
@@ -263,8 +507,8 @@
   const modal = $("#confirm-modal");
   const txt   = $("#confirm-text");
 
-  let pendingForm    = null;   // HTMLFormElement en espera de confirmación
-  let pendingBulkIds = null;   // IDs seleccionadas para borrado múltiple
+  let pendingForm    = null; // HTMLFormElement pendiente de confirmación
+  let pendingBulkIds = null; // IDs para borrado múltiple
 
   function openModal(message) {
     if (!modal) return false;
@@ -310,7 +554,7 @@
     if (cancel) {
       e.preventDefault();
       e.stopPropagation();
-      pendingForm = null;
+      pendingForm    = null;
       pendingBulkIds = null;
       closeModal();
     }
@@ -325,9 +569,9 @@
       ids.forEach((id) => fd.append("ids[]", String(id)));
 
       const res = await fetch("/gestion/canciones/eliminar-multiples/", {
-        method: "POST",
-        body: fd,
-        headers: { "X-Requested-With": "fetch", "X-CSRFToken": getCSRF() },
+        method:      "POST",
+        body:        fd,
+        headers:     { ...H, "X-CSRFToken": getCSRF() },
         credentials: "same-origin",
       });
 
@@ -348,7 +592,9 @@
         replaceCatalogo(j.catalogo_html);
       } else {
         (j.removed_ids || []).forEach((id) => {
-          const card = document.querySelector(`.js-song-card[data-song-id="${id}"]`);
+          const card = document.querySelector(
+            `.js-song-card[data-song-id="${id}"]`
+          );
           if (card) card.remove();
         });
       }
@@ -366,10 +612,10 @@
     try {
       const fd  = new FormData(form);
       const res = await fetch(form.action, {
-        method: "POST",
-        body: fd,
-        headers: { "X-Requested-With": "fetch", "X-CSRFToken": getCSRF() },
-        redirect: "follow",
+        method:      "POST",
+        body:        fd,
+        headers:     { ...H, "X-CSRFToken": getCSRF() },
+        redirect:    "follow",
         credentials: "same-origin",
       });
 
@@ -386,7 +632,7 @@
         if (j.usuarios_html) replaceUsuariosTab(j.usuarios_html);
         if (j.catalogo_html) replaceCatalogo(j.catalogo_html);
 
-        // Fallback: si no hay HTML devuelto, elimina la fila/tarjeta asociada
+        // Si no hay HTML devuelto, elimina la fila/tarjeta asociada
         if (!j.usuarios_html && !j.catalogo_html) {
           const rowOrCard = form.closest(".js-song-card, tr, .song");
           if (rowOrCard) rowOrCard.remove();
@@ -394,7 +640,7 @@
         return;
       }
 
-      // Si no hay JSON, recarga como último recurso
+      // Si no hay JSON, recarga
       location.reload();
     } catch {
       location.reload();
@@ -413,20 +659,24 @@
     if (btn) btn.disabled = count === 0;
 
     const sc = $("#sel-count");
-    if (sc) sc.textContent = count
-      ? `${count} seleccionada${count !== 1 ? "s" : ""}`
-      : "";
+    if (sc) {
+      sc.textContent = count
+        ? `${count} seleccionada${count !== 1 ? "s" : ""}`
+        : "";
+    }
 
     const all = $("#sel-all");
     if (all) {
       const checks = $all("#catalogo-grid .song-select");
-      all.checked = checks.length > 0 && checks.every((ch) => ch.checked);
+      all.checked       = checks.length > 0 && checks.every((ch) => ch.checked);
       all.indeterminate = count > 0 && count < checks.length;
     }
   }
 
   function resetSelection() {
     selected.clear();
+    const checks = $all("#catalogo-grid .song-select");
+    checks.forEach((ch) => (ch.checked = false));
     updateBulkUI();
   }
 
@@ -459,7 +709,7 @@
     }
   });
 
-  // Botón "Eliminar seleccionadas" (abre modal)
+  // Botón "Eliminar seleccionadas"
   document.addEventListener("click", async (e) => {
     const btn = e.target.closest("#bulk-delete");
     if (!btn) return;
@@ -467,8 +717,8 @@
     e.preventDefault();
     if (selected.size === 0) return;
 
-    const n   = selected.size;
-    const ids = Array.from(selected);
+    const n    = selected.size;
+    const ids  = Array.from(selected);
     const noun = n === 1 ? "canción seleccionada" : "canciones seleccionadas";
 
     if (openModal(`¿Eliminar ${n} ${noun}?`)) {
@@ -476,7 +726,7 @@
       return;
     }
 
-    // Si no hay modal (fallback), usar confirm nativo
+    // Fallback con confirm nativo
     if (!window.confirm(`¿Eliminar ${n} ${noun}?`)) return;
     await doBulkDelete(ids);
   });
@@ -492,7 +742,7 @@
 
       const href = form.action || "";
 
-      // 1) Formularios de borrado con modal (usuarios/canciones)
+      // Formularios de borrado con modal (usuarios/canciones)
       if (form.classList.contains("js-delete-form")) {
         e.preventDefault();
         e.stopPropagation();
@@ -509,7 +759,7 @@
         return;
       }
 
-      // 2) Botón "Deshacer" (revertir_accion)
+      // Botón "Deshacer"
       const isUndo =
         href.includes("/revertir_accion") || href.endsWith("/gestion/undo/");
       if (isUndo) {
@@ -520,10 +770,10 @@
         try {
           const fd  = new FormData(form);
           const res = await fetch(href, {
-            method: "POST",
-            body: fd,
-            headers: { "X-Requested-With": "fetch", "X-CSRFToken": getCSRF() },
-            redirect: "follow",
+            method:      "POST",
+            body:        fd,
+            headers:     { ...H, "X-CSRFToken": getCSRF() },
+            redirect:    "follow",
             credentials: "same-origin",
           });
 
@@ -545,7 +795,7 @@
         return;
       }
 
-      // 3) Acciones administrables: eliminar, activar/desactivar, registrar
+      // Acciones administrables: eliminar, activar/desactivar, registrar
       const isEliminar =
         href.includes("/gestion/usuarios/eliminar/") ||
         href.includes("/gestion/canciones/eliminar/");
@@ -568,14 +818,14 @@
         return;
       }
 
-      // Eliminar / activar / desactivar con fetch estándar
+      // Eliminar / activar / desactivar con fetch
       try {
         const fd  = new FormData(form);
         const res = await fetch(href, {
-          method: "POST",
-          body: fd,
-          headers: { "X-Requested-With": "fetch", "X-CSRFToken": getCSRF() },
-          redirect: "follow",
+          method:      "POST",
+          body:        fd,
+          headers:     { ...H, "X-CSRFToken": getCSRF() },
+          redirect:    "follow",
           credentials: "same-origin",
         });
 
@@ -629,12 +879,12 @@
     };
 
     const hideBar = () => {
-      if (bar) bar.classList.remove("is-visible");
+      if (bar)  bar.classList.remove("is-visible");
       if (fill) fill.style.width = "0%";
       if (pctEl) pctEl.textContent = "0%";
     };
 
-    // Validaciones rápidas antes de enviar
+    // Validaciones básicas antes de enviar
     const u = form.querySelector('input[name="user"]')?.value?.trim() || "";
     const p = form.querySelector('input[name="password"]')?.value || "";
     if (!u || !p) {
@@ -659,7 +909,7 @@
 
     xhr.open("POST", form.action, true);
     if (csrf) xhr.setRequestHeader("X-CSRFToken", csrf);
-    // Para que el backend trate esta petición como "fetch" y devuelva JSON
+    // Indica al backend que debe responder en formato JSON
     xhr.setRequestHeader("X-Requested-With", "fetch");
 
     xhr.upload.onprogress = (ev) => {
@@ -691,7 +941,6 @@
               form.reset();
             }
           } else {
-            // Si el servidor no devolvió JSON, recarga como fallback
             location.reload();
             return;
           }
@@ -718,6 +967,231 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Toast global para avisos de likes y playlists
+  // ---------------------------------------------------------------------------
+  function showToast(message) {
+    const el = document.getElementById("like-toast");
+    if (!el) return;
+
+    el.textContent = message || "";
+    el.classList.add("show");
+
+    clearTimeout(el._hideTimer);
+    el._hideTimer = setTimeout(() => {
+      el.classList.remove("show");
+    }, 1400);
+  }
+
+  // Mensaje específico para likes de canciones
+  function showLikeToast(liked) {
+    showToast(
+      liked ? "Añadido a tus Me gusta" : "Quitado de tus Me gusta"
+    );
+  }
+
+  // Mensaje específico para playlists
+  function showPlaylistToast(added, playlistName) {
+    const nombre = (playlistName || "").trim();
+
+    if (added) {
+      showToast(
+        nombre
+          ? `Añadida a la playlist “${nombre}”`
+          : "Añadida a una playlist"
+      );
+    } else {
+      showToast(
+        nombre
+          ? `Quitada de la playlist “${nombre}”`
+          : "Quitada de la playlist"
+      );
+    }
+  }
+
+  // Helpers globales para reutilizar toasts desde otros módulos
+  window.__melodifyShowToast = showToast;
+  window.__melodifyShowPlaylistToast = showPlaylistToast;
+
+  // ---------------------------------------------------------------------------
+  // Likes y playlists desde Gestión (delegados al core global del reproductor)
+  // ---------------------------------------------------------------------------
+
+  // Actualiza botones de like de una canción sin cambiar su estilo visual
+  function _updateGestionLikeButtons(id, liked) {
+    const selector = [
+      `.song-like-btn[data-song-id="${id}"]`,
+      `.cat-like-btn[data-song-id="${id}"]`,
+      `.search-btn-like[data-song-id="${id}"]`,
+      `[data-like-song-id="${id}"]`,
+    ].join(", ");
+
+    document.querySelectorAll(selector).forEach((btn) => {
+      if (!btn) return;
+
+      // Estado lógico
+      btn.dataset.liked = liked ? "1" : "0";
+      btn.setAttribute("aria-pressed", liked ? "true" : "false");
+
+      // Icono original (se guarda una sola vez)
+      const originalIcon =
+        btn.dataset.iconOriginal ||
+        (btn.textContent || "").trim() ||
+        "♡";
+
+      btn.dataset.iconOriginal = originalIcon;
+
+      // Se mantiene el aspecto inicial
+      btn.textContent = originalIcon;
+      btn.classList.remove("is-liked", "active");
+    });
+  }
+
+  // Toggle de like desde Gestión (botones del catálogo)
+  window.toggleSongLikeFromGestion = function (evt, songId, btn) {
+    if (evt) {
+      evt.preventDefault();
+      evt.stopPropagation();
+      if (evt.stopImmediatePropagation) evt.stopImmediatePropagation();
+    }
+
+    if (!btn && evt && evt.target) {
+      btn = evt.target.closest(".song-like-btn[data-song-id]");
+    }
+
+    const rawId =
+      songId ||
+      (btn && (btn.dataset.songId || btn.getAttribute("data-song-id"))) ||
+      "";
+    const id = String(rawId || "").trim();
+    if (!id) return;
+
+    const csrftoken = getCSRF() || "";
+
+    fetch(`/api/like/song/${encodeURIComponent(id)}/`, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": csrftoken,
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      credentials: "same-origin",
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        const liked = !!data.liked;
+
+        // Actualiza todos los botones de esa canción
+        _updateGestionLikeButtons(id, liked);
+
+        // Feedback visual
+        showLikeToast(liked);
+
+        // Sincroniza con MDFCore si está disponible
+        if (
+          window.MDFCore &&
+          typeof window.MDFCore.syncLikeModelFromClient === "function"
+        ) {
+          let meta = null;
+          const row =
+            (btn && btn.closest && btn.closest(".js-song-card")) || null;
+          if (row) {
+            const ds = row.dataset || {};
+            meta = {
+              id,
+              title: ds.title || "",
+              artist: ds.artist || "",
+              audioUrl: ds.audioUrl || "",
+              coverUrl: ds.coverUrl || "",
+              genre: ds.genre || "",
+            };
+          }
+          try {
+            window.MDFCore.syncLikeModelFromClient(id, liked, meta);
+          } catch (err) {
+            console.warn(
+              "No se pudo sincronizar likes con MDFCore (Gestión):",
+              err
+            );
+          }
+        }
+
+      })
+      .catch((err) => {
+        console.error("Error al dar like desde Gestión:", err);
+      });
+  };
+
+  // Wrapper para HTML que use onclick="openAddToPlaylistFromGestion(...)"
+  window.openAddToPlaylistFromGestion = function (evt, songId) {
+    if (evt) {
+      evt.preventDefault();
+      evt.stopPropagation();
+    }
+
+    const id = String(songId || "").trim();
+    if (!id) return;
+
+    // UI overlay global si la expone el reproductor
+    if (typeof window.openAddToPlaylistForSong === "function") {
+      window.openAddToPlaylistForSong(id);
+      return;
+    }
+
+    // Helper expuesto por MDFCore
+    if (
+      window.MDFCore &&
+      typeof window.MDFCore.openAddToPlaylistDialog === "function"
+    ) {
+      window.MDFCore.openAddToPlaylistDialog(evt, id);
+      return;
+    }
+
+    // Fallback mínimo
+    alert("No se encontró la UI para agregar a playlist.");
+  };
+
+  // Delegación global de clicks para corazones y botón "+"
+  document.addEventListener("click", (e) => {
+    // Corazón (like)
+    const likeBtn = e.target.closest(".song-like-btn[data-song-id]");
+    if (likeBtn) {
+      const id =
+        likeBtn.dataset.songId || likeBtn.getAttribute("data-song-id") || "";
+      if (id) {
+        window.toggleSongLikeFromGestion(e, id, likeBtn);
+      }
+      return;
+    }
+
+    // Botón "+"
+    const addBtn = e.target.closest(".song-add-btn[data-song-id]");
+    if (addBtn) {
+      const id =
+        addBtn.dataset.songId || addBtn.getAttribute("data-song-id") || "";
+      if (id) {
+        window.openAddToPlaylistFromGestion(e, id);
+      }
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Hooks para playlists (eventos globales disparados desde otros módulos)
+  // ---------------------------------------------------------------------------
+
+  // Cuando se agrega una canción a una playlist
+  document.addEventListener("melodify:playlist:song-added", (ev) => {
+    const d = ev.detail || {};
+    const name = d.playlistName || d.playlist || d.name || "";
+    showPlaylistToast(true, name);
+  });
+
+  // Cuando se elimina una canción de una playlist
+  document.addEventListener("melodify:playlist:song-removed", (ev) => {
+    const d = ev.detail || {};
+    const name = d.playlistName || d.playlist || d.name || "";
+    showPlaylistToast(false, name);
+  });
+
+  // ---------------------------------------------------------------------------
   // Init global
   // ---------------------------------------------------------------------------
   document.addEventListener("DOMContentLoaded", () => {
@@ -726,5 +1200,10 @@
     initSideToggle();
     initTabs();
     resetSelection();
+
+    // Enlaza el catálogo inicial con el reproductor global
+    if (window.__melodify_admin_rebind_player) {
+      window.__melodify_admin_rebind_player();
+    }
   });
 })();

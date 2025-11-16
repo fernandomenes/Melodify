@@ -260,17 +260,14 @@ function _loadHistoryEntries(){
   return entries;
 }
 
-
 function _saveHistoryEntries(entries){
   _saveJSON(HISTORY_KEY(), Array.isArray(entries) ? entries : []);
 }
 
 function _historyRegisterPlay(song){
-  // Normaliza la canción recibida de la cola de reproducción
   let norm = normalizeSong(song);
   if (!norm) return;
 
-  // Si no tiene id, se intenta localizar en las playlists
   if (norm.id == null) {
     norm = _relinkHistorySongWithId(norm, null);
   }
@@ -280,20 +277,17 @@ function _historyRegisterPlay(song){
 
   let entries = _loadHistoryEntries();
 
-  // Evita duplicados por clave
   entries = entries.filter(e => e && e.key !== key);
 
   const ts = Date.now();
   entries.unshift({ key, ts, song: norm });
 
-  // Limita el tamaño del historial
   if (entries.length > 200) {
     entries = entries.slice(0, 200);
   }
 
   _saveHistoryEntries(entries);
 
-  // Mantiene la playlist 'pl:history' en window._playlists
   try {
     let pls = Array.isArray(window._playlists) ? window._playlists.slice() : [];
     const histSongs = entries
@@ -333,12 +327,10 @@ function _relinkHistorySongWithId(song, keyFromEntry) {
       if (!s) continue;
       if (s.id == null) continue;
 
-      // 1) Intenta vincular por clave (id:xxx / u:xxx)
       if (key && _songKey(s) === key) {
         return { ...song, id: s.id };
       }
 
-      // 2) Alternativa: misma URL absoluta
       const sUrl = _abs(ensureAbs(s.audioUrl || s.audio_url || s.audio || ""));
       if (songUrl && sUrl && songUrl === sUrl) {
         return { ...song, id: s.id };
@@ -950,6 +942,71 @@ function observeListChanges(){
   });
   _state.moList.observe(host,{childList:true,subtree:true,attributes:true,attributeFilter:["data-audio-url","data-id","data-title","data-author","data-genre","data-cover-url"]});
 }
+function playFromDomItem(card) {
+  if (!card || !(card instanceof HTMLElement)) return;
+
+  ensureAudio();
+
+  const audioUrl = ensureAbs(
+    card.dataset.audioUrl ||
+    card.getAttribute("data-audio-url") ||
+    ""
+  );
+  if (!audioUrl) return;
+
+  const targetHref = absHref(audioUrl);
+
+  collectQueueFromDOM({ retainIfEmpty: false });
+
+  let idx = -1;
+
+  if (Array.isArray(_state.queue) && _state.queue.length) {
+    idx = _state.queue.findIndex((s) =>
+      absHref(
+        ensureAbs(s.audioUrl || s.audio_url || s.audio || "")
+      ) === targetHref
+    );
+  }
+
+  if (idx === -1) {
+    const id = card.dataset.id || card.getAttribute("data-id") || null;
+    const title =
+      card.dataset.title ||
+      card.getAttribute("data-title") ||
+      card.querySelector(".song-title")?.textContent ||
+      "—";
+    const author =
+      card.dataset.author ||
+      card.getAttribute("data-author") ||
+      card.dataset.artist ||
+      card.getAttribute("data-artist") ||
+      card.querySelector(".song-author")?.textContent ||
+      "—";
+    const coverUrl = ensureAbs(
+      card.dataset.coverUrl ||
+      card.getAttribute("data-cover-url") ||
+      card.querySelector(".song-cover")?.getAttribute("src") ||
+      ""
+    );
+    const genre =
+      card.dataset.genre ||
+      card.getAttribute("data-genre") ||
+      "";
+
+    const track = { id, title, author, coverUrl, audioUrl, genre };
+
+    if (!Array.isArray(_state.queue)) {
+      _state.queue = [];
+    }
+    _state.queue.push(track);
+    idx = _state.queue.length - 1;
+
+    card.dataset._idx = String(idx);
+    card.classList.add("song-item");
+  }
+
+  load(idx, true);
+}
 
 // ---------------------------- Vistas / guards ------------------------------
 function hookViewGuard(){
@@ -1132,6 +1189,7 @@ window.MDFCore = {
   prev: () => prev(),
   next: () => next(),
   playExternalSong,
+  playFromDomItem: (card) => playFromDomItem(card),
   seekPercent: (p01) => {
     ensureAudio();
     const a = _state.audio;
@@ -1334,26 +1392,69 @@ export function attachSidebarHandlers(){
 // ---------------------------- Modelo de playlists --------------------------
 async function fetchAllPlaylistsWithSongs() {
   try {
-    const res = await fetch('/playlist/getAllList', { credentials: 'same-origin', cache: 'no-store' });
+    const res = await fetch('/playlist/getAllList', {
+      credentials: 'same-origin',
+      cache: 'no-store'
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const lists = await res.json();
-    if (!Array.isArray(lists) || !lists.length) return [];
+
+    const data = await res.json();
+
+    // Formatos soportados:
+    // [ {...}, {...} ]
+    // { playlists: [ ... ] }
+    // { results: [ ... ] }
+    const lists =
+      (Array.isArray(data) && data) ||
+      (Array.isArray(data?.playlists) && data.playlists) ||
+      (Array.isArray(data?.results) && data.results) ||
+      [];
+
+    if (!lists.length) return [];
 
     const byId = async (pl) => {
-      const r = await fetch(`/playlist/${pl.id}/songs/`, { credentials:'same-origin', cache:'no-store' });
-      if (!r.ok) return { id: `pl:${pl.id}`, name: pl.name || `Playlist ${pl.id}`, songs: [] };
-      const data  = await r.json();
-      const raw   = Array.isArray(data?.songs) ? data.songs : [];
-      const norm  = raw.map(normalizeSong).filter(Boolean);
-      return { id: `pl:${pl.id}`, name: pl.name || `Playlist ${pl.id}`, songs: norm };
+      // Soporta diferentes nombres de identificador
+      const pid = pl.id ?? pl.pk ?? pl.id_playlist ?? pl.playlist_id;
+      if (pid == null) {
+        console.warn('Playlist sin id conocido en getAllList:', pl);
+        return null;
+      }
+
+      const r = await fetch(`/playlist/${pid}/songs/`, {
+        credentials:'same-origin',
+        cache:'no-store'
+      });
+
+      if (!r.ok) {
+        return {
+          id: `pl:${pid}`,
+          name: pl.name || pl.nombre || `Playlist ${pid}`,
+          songs: []
+        };
+      }
+
+      const dataSongs = await r.json();
+      const raw = (Array.isArray(dataSongs?.songs) && dataSongs.songs) ||
+                  (Array.isArray(dataSongs?.results) && dataSongs.results) ||
+                  (Array.isArray(dataSongs?.playlist?.songs) && dataSongs.playlist.songs) ||
+                  [];
+      const norm = raw.map(normalizeSong).filter(Boolean);
+
+      return {
+        id: `pl:${pid}`,
+        name: pl.name || pl.nombre || `Playlist ${pid}`,
+        songs: norm
+      };
     };
 
-    return await Promise.all(lists.map(byId));
+    const detailed = await Promise.all(lists.map(byId));
+    return detailed.filter(Boolean);
   } catch (e) {
     console.warn('fetchAllPlaylistsWithSongs() falló:', e);
     return [];
   }
 }
+
 async function fetchMyMusic(URL_MI_MUSICA_JSON){
   try{
     if(!URL_MI_MUSICA_JSON) return [];
@@ -1374,10 +1475,20 @@ async function fetchMyLikes(URL_MIS_LIKES_JSON){
     if(!URL_MIS_LIKES_JSON) return [];
     const res = await fetch(URL_MIS_LIKES_JSON, { credentials:'same-origin', cache:'no-store' });
     if(!res.ok) return [];
+
     const data = await res.json();
-    const raw = (Array.isArray(data?.songs) && data.songs) || [];
+
+    const raw =
+      (Array.isArray(data?.songs) && data.songs) ||
+      (Array.isArray(data?.results) && data.results) ||
+      (Array.isArray(data?.playlist?.songs) && data.playlist.songs) ||
+      [];
+
     return raw.map(normalizeSong).filter(Boolean);
-  }catch(e){ console.warn('fetchMyLikes() falló:', e); return []; }
+  }catch(e){
+    console.warn('fetchMyLikes() falló:', e);
+    return [];
+  }
 }
 
 function buildPlaylistsModel({ allPlaylists, mySongs, myLikes, isArtist = false }) {
@@ -1405,7 +1516,7 @@ function buildPlaylistsModel({ allPlaylists, mySongs, myLikes, isArtist = false 
   const allUnique  = dedup(flattenAll, keyer);
   const allPlaylist = {
     id: 'pl:all',
-    name: 'Todas las canciones',
+    name: 'Todas tus canciones',
     songs: allUnique,
   };
 
@@ -1554,129 +1665,141 @@ function _toggleLikeFromReproductor(evt, idSongRaw) {
   const idSong = String(idSongRaw || '').trim();
   if (!idSong) return;
 
-  const csrftoken = getCookie('csrftoken');
+  const csrftoken = getCookie('csrftoken') || '';
 
   fetch(`/api/like/song/${encodeURIComponent(idSong)}/`, {
     method: 'POST',
     headers: {
-      'X-CSRFToken': csrftoken || '',
-      'X-Requested-With': 'XMLHttpRequest'
-    }
+      'X-CSRFToken': csrftoken,
+      'X-Requested-With': 'XMLHttpRequest',
+    },
   })
-    .then(res => res.json())
-    .then(data => {
+    .then((res) => res.json())
+    .then((data) => {
       const liked = !!data.liked;
 
-      const buttons = document.querySelectorAll(
-        `.song-like-btn[data-song-id="${CSS.escape(idSong)}"]`
-      );
-      buttons.forEach(b => {
-        b.classList.toggle('is-liked', liked);
-        b.textContent = liked ? '♥' : '♡';
+      const selector = [
+        `.song-like-btn[data-song-id="${CSS.escape(idSong)}"]`,
+        `.search-btn-like[data-song-id="${CSS.escape(idSong)}"]`,
+        `.cat-like-btn[data-song-id="${CSS.escape(idSong)}"]`,
+        `[data-like-song-id="${CSS.escape(idSong)}"]`,
+      ].join(', ');
+
+      const buttons = document.querySelectorAll(selector);
+      let rowForMeta = null;
+
+      buttons.forEach((btn) => {
+        const scope = btn.dataset.likeScope || '';
+
+        // Estado lógico común
+        btn.dataset.liked = liked ? '1' : '0';
+        btn.setAttribute('data-liked', liked ? '1' : '0');
+        btn.setAttribute('aria-pressed', liked ? 'true' : 'false');
+
+        if (scope === 'home') {
+          // 🔒 HOME: nada de rellenos ni clases especiales
+          // (dejamos siempre el corazón vacío)
+          const txt = (btn.textContent || '').trim();
+          if (txt === '♥' || txt === '♡' || txt === '') {
+            btn.textContent = '♡';
+          }
+          btn.classList.remove('is-liked', 'liked', 'active');
+        } else {
+          // 🎧 Reproductor / búsqueda / otras vistas:
+          // comportamiento normal con corazón relleno
+          btn.classList.toggle('is-liked', liked);
+
+          const txt = (btn.textContent || '').trim();
+          if (txt === '♥' || txt === '♡') {
+            btn.textContent = liked ? '♥' : '♡';
+          }
+        }
+
+        if (!rowForMeta) {
+          const cand = btn.closest(
+            '.song-item, .search-item-song, article.song, article.cat-song, .muro-song-row, .gestion-song-row'
+          );
+          if (cand) rowForMeta = cand;
+        }
       });
 
       let meta = null;
-      const row = buttons.length ? buttons[0].closest('.song-item') : null;
-      if (row) {
+      if (rowForMeta) {
         meta = {
-          title:   row.getAttribute('data-title') || '',
-          artist:  row.getAttribute('data-author') || '',
-          audioUrl: row.getAttribute('data-audio-url') || '',
-          coverUrl: row.querySelector('.song-cover')?.getAttribute('src') || '',
-          genre:   row.getAttribute('data-genre') || ''
+          title: rowForMeta.getAttribute('data-title') || '',
+          artist: rowForMeta.getAttribute('data-author') || '',
+          audioUrl: rowForMeta.getAttribute('data-audio-url') || '',
+          coverUrl:
+            rowForMeta.querySelector('.song-cover')?.getAttribute('src') || '',
+          genre: rowForMeta.getAttribute('data-genre') || '',
         };
       }
 
-      if (window.MDFCore && typeof window.MDFCore.syncLikeModelFromClient === 'function') {
+      if (
+        window.MDFCore &&
+        typeof window.MDFCore.syncLikeModelFromClient === 'function'
+      ) {
         window.MDFCore.syncLikeModelFromClient(idSong, liked, meta);
       }
     })
-    .catch(err => {
+    .catch((err) => {
       console.error('Error en like desde reproductor:', err);
     });
 }
 
+
 function _performAddSongToPlaylist(plId, idSong) {
   const backendId = String(plId || '').replace(/^pl:/, '').trim();
-  if (!backendId) {
-    alert('Playlist inválida.');
+  const songId    = String(idSong || '').trim();
+
+  if (!backendId || !songId) {
+    console.warn('Playlist o canción inválida en _performAddSongToPlaylist:', plId, idSong);
+    alert('No se pudo agregar la canción: playlist o canción inválida.');
     return;
   }
 
-  const csrftoken = getCookie('csrftoken');
+  if (typeof window.addSongToPlaylistFromSearch === 'function') {
+    console.log(
+      '[MDFCore] delegando a addSongToPlaylistFromSearch. Canción:',
+      songId,
+      'Playlist:',
+      backendId
+    );
 
-  fetch(`/playlist/${encodeURIComponent(backendId)}/add-song/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': csrftoken || '',
-      'X-Requested-With': 'XMLHttpRequest',
-    },
-    body: JSON.stringify({ song_id: idSong }),
-  })
-    .then((res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json().catch(() => ({}));
-    })
-    .then((_data) => {
-      try {
-        const pls = Array.isArray(window._playlists) ? window._playlists.slice() : [];
-        const idxPl = pls.findIndex((p) => String(p.id) === String(plId));
-        if (idxPl >= 0) {
-          const pl = pls[idxPl];
-          let songs = Array.isArray(pl.songs) ? pl.songs.slice() : [];
+    try {
+      window.addSongToPlaylistFromSearch(Number(songId) || songId,
+                                         Number(backendId) || backendId);
+    } catch (e) {
+      console.error('addSongToPlaylistFromSearch lanzó error:', e);
+      alert('Ocurrió un error al agregar la canción a la playlist.');
+    }
+    return;
+  }
 
-          const exists = songs.some(
-            (s) => s.id != null && String(s.id) === String(idSong)
-          );
+  if (typeof window.addSongToPlaylist === 'function') {
+    console.log(
+      '[MDFCore] delegando a addSongToPlaylist. Playlist:',
+      backendId,
+      'Canción:',
+      songId
+    );
 
-          if (!exists) {
-            let baseSong = null;
-            outer: {
-              for (const p of pls) {
-                const arr = Array.isArray(p.songs) ? p.songs : [];
-                for (const s of arr) {
-                  if (s.id != null && String(s.id) === String(idSong)) {
-                    baseSong = s;
-                    break outer;
-                  }
-                }
-              }
-            }
-            if (!baseSong) {
-              const row = document.querySelector(
-                `.song-item[data-id="${CSS.escape(idSong)}"]`
-              );
-              if (row) {
-                baseSong = {
-                  id: idSong,
-                  title: row.getAttribute('data-title') || '',
-                  author: row.getAttribute('data-author') || '',
-                  audioUrl: row.getAttribute('data-audio-url') || '',
-                  coverUrl:
-                    row.querySelector('.song-cover')?.getAttribute('src') || '',
-                  genre: row.getAttribute('data-genre') || '',
-                };
-              }
-            }
+    try {
+      window.addSongToPlaylist(Number(backendId) || backendId,
+                               Number(songId)    || songId);
+    } catch (e) {
+      console.error('addSongToPlaylist lanzó error:', e);
+      alert('Ocurrió un error al agregar la canción a la playlist.');
+    }
+    return;
+  }
 
-            if (baseSong) {
-              songs.push(baseSong);
-              pls[idxPl] = { ...pl, songs };
-              window._playlists = pls;
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('No se pudo refrescar playlist local después de agregar canción', e);
-      }
-
-      alert('Canción agregada a la playlist.');
-    })
-    .catch((err) => {
-      console.error('No se pudo agregar la canción a la playlist:', err);
-      alert('No se pudo agregar la canción en el servidor.');
-    });
+  console.error(
+    'No se encontró addSongToPlaylistFromSearch ni addSongToPlaylist en esta página.'
+  );
+  alert(
+    'No se pudo agregar la canción porque la lógica de playlists (playListScript.js) no está disponible en esta vista.'
+  );
 }
 
 // ---------------------------- UI overlay "Agregar a playlist" --------------
@@ -1817,45 +1940,75 @@ window.openAddToPlaylistForSong = function(idSongRaw) {
   const idSong = String(idSongRaw || '').trim();
   if (!idSong) return;
 
-  const pls = Array.isArray(window._playlists) ? window._playlists : [];
-  const candidates = pls.filter((p) => {
-    const pid = String(p.id || '').trim();
-    if (!pid || _ADD_TO_PLAYLIST_FORBIDDEN.has(pid)) return false;
-    return true;
-  });
+  (async () => {
+    try {
+      const getCandidates = (list) => {
+        const arr = Array.isArray(list) ? list : [];
+        return arr.filter((p) => {
+          const pid = String(p.id || '').trim();
+          if (!pid || _ADD_TO_PLAYLIST_FORBIDDEN.has(pid)) return false;
+          return true;
+        });
+      };
 
-  if (!candidates.length) {
-    alert('No tienes playlists personales disponibles. Crea una primero en la sección de playlists.');
-    return;
-  }
+      let pls = Array.isArray(window._playlists) ? window._playlists.slice() : [];
+      let candidates = getCandidates(pls);
 
-  const overlay = _ensureAddToPlaylistOverlay();
-  const listEl = overlay.querySelector('.atp-list');
-  if (!listEl) return;
+      if (!candidates.length) {
+        const serverPlaylists = await fetchAllPlaylistsWithSongs().catch(() => []);
+        const merged = pls.slice();
+        const seen = new Set(merged.map((p) => String(p.id || '')));
 
-  listEl.innerHTML = '';
-  candidates.forEach((pl, idx) => {
-    const li = document.createElement('li');
-    li.className = 'atp-item';
+        for (const pl of serverPlaylists || []) {
+          if (!pl || pl.id == null) continue;
+          const pid = String(pl.id);
+          if (seen.has(pid)) continue;
+          seen.add(pid);
+          merged.push(pl);
+        }
 
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'atp-btn';
-    btn.textContent = pl.name || `Playlist ${idx + 1}`;
-    btn.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      overlay.classList.remove('is-open');
-      overlay.setAttribute('aria-hidden', 'true');
-      _performAddSongToPlaylist(pl.id, idSong);
-    });
+        window._playlists = merged;
+        pls = merged;
+        candidates = getCandidates(pls);
+      }
 
-    li.appendChild(btn);
-    listEl.appendChild(li);
-  });
+      if (!candidates.length) {
+        alert('No tienes playlists personales disponibles. Crea una primero en la sección de playlists.');
+        return;
+      }
 
-  overlay.classList.add('is-open');
-  overlay.setAttribute('aria-hidden', 'false');
+      const overlay = _ensureAddToPlaylistOverlay();
+      const listEl = overlay.querySelector('.atp-list');
+      if (!listEl) return;
+
+      listEl.innerHTML = '';
+      candidates.forEach((pl, idx) => {
+        const li = document.createElement('li');
+        li.className = 'atp-item';
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'atp-btn';
+        btn.textContent = pl.name || `Playlist ${idx + 1}`;
+        btn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          overlay.classList.remove('is-open');
+          overlay.setAttribute('aria-hidden', 'true');
+          _performAddSongToPlaylist(pl.id, idSong);
+        });
+
+        li.appendChild(btn);
+        listEl.appendChild(li);
+      });
+
+      overlay.classList.add('is-open');
+      overlay.setAttribute('aria-hidden', 'false');
+    } catch (e) {
+      console.error('openAddToPlaylistForSong falló:', e);
+      alert('No se pudieron cargar tus playlists. Intenta de nuevo.');
+    }
+  })();
 };
 
 function _openAddToPlaylistDialog(evt, idSongRaw) {

@@ -1,4 +1,12 @@
-// Módulo de búsqueda: barra superior y panel de resultados dinámicos
+/* ==========================================================================
+   Melodify — Búsqueda global
+   Módulo de búsqueda: barra superior y panel de resultados dinámicos.
+   - Deep-link desde URLs (abrir playlist / reproductor con canción).
+   - Búsqueda con Enter (redirección a /buscar/).
+   - Autocompletado ligero en panel flotante (#search-panel).
+   - Like de canciones desde resultados de búsqueda (sin cambiar icono/estilo).
+   - Agregar canción a playlist desde el buscador.
+   ========================================================================== */
 
 document.addEventListener('DOMContentLoaded', function () {
     const searchInput = document.getElementById('search-input');
@@ -11,7 +19,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const playlistIdFromURL = params.get('playlist');
     const songFromURL       = params.get('song');
 
-    // Restaurar vista de playlist desde parámetros de URL
+    // -----------------------------------------------------------------------
+    // Deep-link #1: desde /home/?view=playlist&playlist=<id>
+    //   - Cambia la vista inicial a "playlist" dentro de la SPA.
+    //   - Si viene playlist=<id>, abre directamente sus canciones.
+    // -----------------------------------------------------------------------
     if (initialView === 'home' && viewParam === 'playlist') {
         setTimeout(() => {
             const mainEl = document.getElementById('main-content');
@@ -27,9 +39,11 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 const username = mainEl.dataset.username || '';
 
+                // Inicializa la sección de playlists en la SPA
                 if (typeof initPlayList === 'function') {
                     initPlayList(username);
                 }
+                // Si hay playlist en la URL, cargar su detalle
                 if (playlistIdFromURL && typeof verSongs === 'function') {
                     setTimeout(() => verSongs(playlistIdFromURL), 150);
                 }
@@ -39,7 +53,11 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 0);
     }
 
-    // Restaurar vista de reproductor desde parámetros de URL
+    // -----------------------------------------------------------------------
+    // Deep-link #2: desde /home/?view=reproductor&song=<url>&title=...&artist=...
+    //   - Activa la vista "reproductor" en el menú lateral (SPA).
+    //   - Si viene song=<url>, intenta reproducirla vía MDFCore.playExternalSong.
+    // -----------------------------------------------------------------------
     if (initialView === 'home' && viewParam === 'reproductor') {
         setTimeout(() => {
             const repItem = document.querySelector('#menuLateral .menu-item[data-view="reproductor"]');
@@ -64,7 +82,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 0);
     }
 
-    // Envío de búsqueda (enter o submit)
+    // -----------------------------------------------------------------------
+    // Envío de búsqueda:
+    //   - Enter sobre el input.
+    //   - Submit del formulario.
+    //   -> Redirige a /buscar/?q=...
+    // -----------------------------------------------------------------------
     if (searchInput && searchForm) {
         searchInput.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') {
@@ -79,6 +102,10 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    /**
+     * Lanza la búsqueda "completa" redirigiendo a /buscar/?q=...
+     * (página tradicional de resultados).
+     */
     function performSearch() {
         const input = document.getElementById('search-input');
         const query = input ? input.value.trim() : '';
@@ -90,7 +117,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Búsqueda incremental en el panel flotante
+    // -----------------------------------------------------------------------
+    // Autocompletado ligero en panel: retraso (debounce) y fetch a /api/buscar
+    // -----------------------------------------------------------------------
     let searchTimeout;
 
     if (searchInput) {
@@ -108,6 +137,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    /**
+     * Hace una búsqueda rápida vía API para rellenar el panel flotante.
+     *
+     * @param {string} query - Texto introducido por el usuario.
+     */
     function fetchSearchResults(query) {
         fetch(`/api/buscar/?q=${encodeURIComponent(query)}`)
             .then(response => response.json())
@@ -120,15 +154,27 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
+    /**
+     * Renderiza el panel flotante de resultados (#search-panel).
+     *
+     * Estructura esperada:
+     *  - results.canciones: [{ id, title, artist, audioUrl, coverUrl, is_liked }]
+     *  - results.artistas:  [{ username }]
+     *  - results.playlists: [{ id, name }]
+     *
+     * @param {object} results - JSON devuelto por /api/buscar/.
+     */
     function displaySearchPanel(results) {
         const panel = document.getElementById('search-panel');
         if (!panel) return;
 
         let html = '';
 
+        // Likes actuales (para marcar lógica de is_liked, sin cambiar iconos)
         const likesArr = Array.isArray(window._likes) ? window._likes : [];
         const likeIds = new Set(likesArr.map(s => String(s.id || '')));
 
+        // -------------------- Canciones --------------------
         if (results.canciones && results.canciones.length > 0) {
             html += '<div class="search-section"><h4>Canciones</h4>';
             results.canciones.forEach(cancion => {
@@ -156,11 +202,11 @@ document.addEventListener('DOMContentLoaded', function () {
                       <div class="search-item-actions">
                         <button
                           type="button"
-                          class="search-btn search-btn-like ${liked ? 'is-liked' : ''}"
+                          class="search-btn search-btn-like song-like-btn"
                           data-song-id="${cancion.id}"
                           data-liked="${liked ? '1' : '0'}"
-                          onclick="toggleSongLikeFromSearch(event, ${cancion.id}, this)">
-                          ${liked ? '♥' : '♡'}
+                          onclick="toggleSongLikeFromSearch(event, '${cancion.id}', this)">
+                          ♡
                         </button>
                         <button
                           type="button"
@@ -175,6 +221,7 @@ document.addEventListener('DOMContentLoaded', function () {
             html += '</div>';
         }
 
+        // -------------------- Artistas --------------------
         if (results.artistas && results.artistas.length > 0) {
             html += '<div class="search-section"><h4>Artistas</h4>';
             results.artistas.forEach(artista => {
@@ -188,6 +235,7 @@ document.addEventListener('DOMContentLoaded', function () {
             html += '</div>';
         }
 
+        // -------------------- Playlists --------------------
         if (results.playlists && results.playlists.length > 0) {
             html += '<div class="search-section"><h4>Playlists</h4>';
             results.playlists.forEach(playlist => {
@@ -208,7 +256,7 @@ document.addEventListener('DOMContentLoaded', function () {
         panel.hidden = false;
     }
 
-    // Cierre del panel al hacer clic fuera del área de búsqueda
+    // Cierra el panel si se hace click fuera del contenedor #search
     document.addEventListener('click', function (e) {
         const panel  = document.getElementById('search-panel');
         const search = document.getElementById('search');
@@ -219,6 +267,17 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
+/**
+ * Reproduce una canción desde los resultados de búsqueda.
+ *
+ * 1) Si existe MDFCore.playSong, delega en el reproductor global.
+ * 2) Si no, construye una URL hacia /home/?view=reproductor&song=...
+ *
+ * @param {string} audioUrl - URL del archivo de audio.
+ * @param {string} title    - Título de la canción.
+ * @param {string} artist   - Artista.
+ * @param {string} coverUrl - Portada (opcional).
+ */
 function playSearchResult(audioUrl, title, artist, coverUrl = '') {
     hideSearchPanel();
 
@@ -240,52 +299,138 @@ function playSearchResult(audioUrl, title, artist, coverUrl = '') {
     window.location.href = url.toString();
 }
 
+/**
+ * Da / quita like a una canción desde el panel de búsqueda.
+ *
+ * 🔒 IMPORTANTE: por acuerdo de diseño en HOME/search:
+ *   - No se cambia el icono del botón (ni color, ni relleno).
+ *   - Solo se actualiza el estado lógico (data-liked) + toast + MDFCore.
+ *
+ * @param {Event}         evt    - Evento click.
+ * @param {number|string} songId - ID de la canción.
+ * @param {HTMLElement}   btn    - Botón pulsado (opcional, se recalcula si falta).
+ */
 function toggleSongLikeFromSearch(evt, songId, btn) {
-    if (evt) evt.stopPropagation();
-    if (!btn) return;
+    if (evt) {
+        evt.preventDefault();
+        evt.stopPropagation();
+    }
 
-    const csrftoken = getCookie('csrftoken');
+    if (!btn && evt && evt.target) {
+        btn = evt.target.closest('.search-btn-like, .song-like-btn');
+    }
 
-    fetch(`/api/like/song/${songId}/`, {
+    const id = String(
+        songId ||
+        (btn && (btn.dataset.songId || btn.getAttribute('data-song-id'))) ||
+        ''
+    ).trim();
+
+    if (!id) return;
+
+    const csrftoken = getCookie('csrftoken') || '';
+
+    fetch(`/api/like/song/${encodeURIComponent(id)}/`, {
         method: 'POST',
         headers: {
             'X-CSRFToken': csrftoken,
             'X-Requested-With': 'XMLHttpRequest'
-        }
+        },
+        credentials: 'same-origin'
     })
     .then(res => res.json())
     .then(data => {
         const liked = !!data.liked;
 
+        // Sincronizamos estado lógico en TODOS los botones de esa canción,
+        // pero sin cambiar icono ni colores.
         const allButtons = document.querySelectorAll(
-            `.search-btn-like[data-song-id="${songId}"]`
+            `.search-btn-like[data-song-id="${id}"], ` +
+            `.song-like-btn[data-song-id="${id}"]`
         );
+
         allButtons.forEach(b => {
             b.dataset.liked = liked ? '1' : '0';
-            b.classList.toggle('is-liked', liked);
-            b.textContent = liked ? '♥' : '♡';
+
+            // Guardar icono original solo la primera vez
+            const originalIcon =
+                b.dataset.iconOriginal ||
+                (b.textContent || '').trim() ||
+                '♡';
+
+            b.dataset.iconOriginal = originalIcon;
+
+            // 🔒 UI: NO cambiamos el icono ni dejamos estilos de "seleccionado"
+            b.textContent = originalIcon;
+            b.classList.remove('is-liked', 'active');
         });
 
+        // Sincronizar con el reproductor si existe
         if (window.MDFCore && typeof window.MDFCore.syncLikeModelFromClient === 'function') {
             let meta = null;
-            const row = btn.closest('.search-item-song');
+            const row = btn && btn.closest ? btn.closest('.search-item-song') : null;
             if (row) {
                 meta = {
-                    title:    row.dataset.title  || '',
-                    artist:   row.dataset.artist || '',
-                    audioUrl: row.dataset.audioUrl || '',
-                    coverUrl: row.dataset.coverUrl || '',
-                    genre:    row.dataset.genre || ''
+                    id,
+                    title:    row.dataset.title     || '',
+                    artist:   row.dataset.artist    || row.dataset.author || '',
+                    audioUrl: row.dataset.audioUrl  || '',
+                    coverUrl: row.dataset.coverUrl  || '',
+                    genre:    row.dataset.genre     || ''
                 };
             }
-            window.MDFCore.syncLikeModelFromClient(songId, liked, meta);
+            try {
+                window.MDFCore.syncLikeModelFromClient(id, liked, meta);
+            } catch (err) {
+                console.warn('No se pudo sincronizar likes con MDFCore (search):', err);
+            }
         }
+
+        showLikeToast(liked ? 'Añadido a tus Me gusta' : 'Quitado de tus Me gusta');
     })
     .catch(err => {
-        console.error('Error al dar like a la canción:', err);
+        console.error('Error al dar like a la canción desde search:', err);
     });
 }
 
+/**
+ * Muestra un toast de "Me gusta" reutilizando el helper global de Home
+ * si existe, o creando/actualizando el #like-toast como fallback.
+ *
+ * @param {string} message - Texto a mostrar en el toast.
+ */
+function showLikeToast(message) {
+    if (window.__melodifyShowLikeToast && typeof window.__melodifyShowLikeToast === 'function') {
+        window.__melodifyShowLikeToast(message);
+        return;
+    }
+
+    var toast = document.getElementById('like-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'like-toast';
+        toast.setAttribute('aria-live', 'polite');
+        document.body.appendChild(toast);
+    }
+
+    toast.textContent = message;
+    toast.classList.add('show');
+
+    clearTimeout(showLikeToast._t);
+    showLikeToast._t = setTimeout(function () {
+        toast.classList.remove('show');
+    }, 1500);
+}
+
+/**
+ * Entry-point para "Agregar a playlist" desde el panel de búsqueda.
+ *
+ *  - Cierra el panel de búsqueda.
+ *  - Si existe window.openAddToPlaylistForSong, delega en ese popup.
+ *
+ * @param {Event}         evt    - Evento click.
+ * @param {number|string} songId - ID de la canción.
+ */
 function openAddToPlaylistFromSearch(evt, songId) {
     if (evt) evt.stopPropagation();
 
@@ -299,11 +444,23 @@ function openAddToPlaylistFromSearch(evt, songId) {
     alert('No se encontró la función para agregar a playlist.');
 }
 
+/**
+ * Navega a la página pública de un artista.
+ *
+ * @param {string} username - Nombre de usuario del artista.
+ */
 function viewArtist(username) {
     hideSearchPanel();
     window.location.href = `/artista/${encodeURIComponent(username)}/`;
 }
 
+/**
+ * Abre HOME en la vista de playlists y selecciona una playlist concreta.
+ *
+ * Redirige a /home/?view=playlist&playlist=<id>
+ *
+ * @param {number|string} playlistId - ID de la playlist.
+ */
 function viewPlaylist(playlistId) {
     hideSearchPanel();
 
@@ -317,6 +474,9 @@ function viewPlaylist(playlistId) {
     window.location.href = url.toString();
 }
 
+/**
+ * Oculta el panel flotante de resultados de búsqueda.
+ */
 function hideSearchPanel() {
     const panel = document.getElementById('search-panel');
     if (panel) {
@@ -324,6 +484,14 @@ function hideSearchPanel() {
     }
 }
 
+/**
+ * Obtiene el valor de una cookie por nombre.
+ *
+ * (Versión local a este módulo, reutilizada para likes en búsqueda).
+ *
+ * @param {string} name - Nombre de la cookie.
+ * @returns {string|null} Valor de la cookie o null si no existe.
+ */
 function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
