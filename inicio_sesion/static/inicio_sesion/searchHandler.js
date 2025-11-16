@@ -350,9 +350,9 @@ const PLAYLISTS_CANDIDATES = [
   '/static/inicio_sesion/playListScript.js',  // p-L-S
 
   // Variantes tolerantes por si el FS difiere:
-  '/static/inicio_sesion/PlayListScript.js',  // P-L-S
+  '/static/inicio_sesion/playListScript.js',  // P-L-S
   '/static/inicio_sesion/playlistScript.js',  // p-l-S
-  '/static/inicio_sesion/PlaylistScript.js'   // P-l-S
+  '/static/inicio_sesion/playlistScript.js'   // P-l-S
 ].filter(Boolean);
 
 
@@ -399,7 +399,7 @@ async function openAddToPlaylistFromSearch(evt, songId) {
     return;
   }
   // Fallback ultra simple
-  alert('No se pudo cargar el módulo de playlists. Verifica que exista /static/inicio_sesion/PlayListScript.js');
+  alert('No se pudo cargar el módulo de playlists. Verifica que exista /static/inicio_sesion/playListScript.js');
 }
 
 // -------------------- Navegación auxiliar --------------------

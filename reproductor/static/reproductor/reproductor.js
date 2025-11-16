@@ -1798,7 +1798,7 @@ function _performAddSongToPlaylist(plId, idSong) {
     'No se encontró addSongToPlaylistFromSearch ni addSongToPlaylist en esta página.'
   );
   alert(
-    'No se pudo agregar la canción porque la lógica de playlists (PlayListScript.js) no está disponible en esta vista.'
+    'No se pudo agregar la canción porque la lógica de playlists (playListScript.js) no está disponible en esta vista.'
   );
 }
 
