@@ -3,7 +3,7 @@ Configuración de Django para Melodify (Local / PythonAnywhere / Koyeb).
 
 - Local:            DEBUG=1
 - PythonAnywhere:   DEBUG=0/1
-- Koyeb:            DEBUG=0, WhiteNoise para /static; media/DB en volumen /data
+- Koyeb:            DEBUG=0, WhiteNoise para /static; DB externa (Neon) opcional
 """
 from pathlib import Path
 import os
@@ -25,9 +25,9 @@ _DEFAULT_HOSTS = [
     "127.0.0.1",
     "localhost",
     "testserver",
-    "faenand.pythonanywhere.com",                      # PythonAnywhere
-    "delicate-jemima-faenand-49a4a9ec.koyeb.app",     # tu URL en Koyeb
-    ".koyeb.app",                                     # subdominios Koyeb
+    "faenand.pythonanywhere.com",                 # PythonAnywhere
+    "delicate-jemima-faenand-49a4a9ec.koyeb.app", # tu URL exacta en Koyeb
+    ".koyeb.app",                                 # subdominios Koyeb
 ]
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", _DEFAULT_HOSTS)
 
@@ -47,8 +47,12 @@ if not DEBUG:
 
 # -------------------------------- Apps -----------------------------------
 INSTALLED_APPS = [
-    "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
-    "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
     # Apps del proyecto (sin duplicados)
     "inicio_sesion.apps.InicioSesionConfig",
     "reproductor",
@@ -60,7 +64,7 @@ INSTALLED_APPS = [
 # ------------------------------ Middleware -------------------------------
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # sirve /static
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # sirve /static sin servidor externo
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -93,7 +97,7 @@ TEMPLATES = [
 ]
 
 # ---------------------------- Base de datos ------------------------------
-# Usa /data en Koyeb para mantener la DB fuera de la imagen (con Volumen).
+# SQLite por defecto. Si defines DATABASE_URL (Neon), se usa Postgres.
 DB_PATH = os.environ.get("DJANGO_DB_PATH", str(BASE_DIR / "melodifyDB.sqlite3"))
 DATABASES = {
     "default": {
@@ -103,6 +107,7 @@ DATABASES = {
 }
 
 if os.environ.get("DATABASE_URL"):
+    # Requiere dj-database-url en requirements.txt
     import dj_database_url
     DATABASES["default"] = dj_database_url.parse(
         os.environ["DATABASE_URL"],
@@ -126,17 +131,25 @@ if (BASE_DIR / "static").exists():
 if (BASE_DIR / "feed" / "static").exists():
     STATICFILES_DIRS.append(BASE_DIR / "feed" / "static")
 
-# WhiteNoise: hashes + compresión
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+# Django 4.2: forma recomendada (equivalente a STATICFILES_STORAGE de WhiteNoise)
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 # En DEBUG permite servir desde finders aunque falte collectstatic:
 WHITENOISE_USE_FINDERS = DEBUG
 
 # -------------------------------- Media ----------------------------------
-# En Koyeb apunta a /data (persistente) vía DJANGO_MEDIA_ROOT
+# Local por defecto; en Koyeb Free no es persistente. Usa S3/R2 si quieres
+# persistencia de subidas entre despliegues (ver bloque USE_S3).
 MEDIA_ROOT = Path(os.environ.get("DJANGO_MEDIA_ROOT", BASE_DIR / "uploaded_media"))
 MEDIA_URL = "/uploaded_media/"
 
-# S3/R2 opcional
+# S3/R2 opcional (requiere django-storages[boto3] en requirements.txt)
 USE_S3 = os.environ.get("USE_S3", "0") == "1"
 if USE_S3:
     INSTALLED_APPS.append("storages")  # type: ignore
@@ -144,7 +157,7 @@ if USE_S3:
     AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"]
     AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
     AWS_STORAGE_BUCKET_NAME = os.environ["AWS_STORAGE_BUCKET_NAME"]
-    AWS_S3_ENDPOINT_URL = os.environ.get("AWS_S3_ENDPOINT_URL")
+    AWS_S3_ENDPOINT_URL = os.environ.get("AWS_S3_ENDPOINT_URL")  # opcional (R2)
     AWS_S3_REGION_NAME = os.environ.get("AWS_S3_REGION_NAME", "auto")
     AWS_S3_ADDRESSING_STYLE = "virtual"
     AWS_S3_SIGNATURE_VERSION = "s3v4"
