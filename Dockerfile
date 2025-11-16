@@ -5,16 +5,19 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# Dependencias
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Código
 COPY . .
 
-# Asegura permisos de entrypoint
-RUN chmod +x /app/entrypoint.sh
+# Estáticos (WhiteNoise usará el manifest en runtime)
+RUN python manage.py collectstatic --noinput
 
+# Puerto
 ENV PORT=8000
 EXPOSE 8000
 
-# Ejecuta collectstatic + migrate en runtime (con env vars)
-CMD ["sh","-c","python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn melodify.wsgi:application --bind 0.0.0.0:8000 --workers 2 --threads 8 --timeout 120"]
+# Entrypoint (migraciones + gunicorn)
+CMD ["./entrypoint.sh"]
