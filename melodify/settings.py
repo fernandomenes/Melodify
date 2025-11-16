@@ -26,21 +26,21 @@ _default_hosts = [
     "faenand.pythonanywhere.com",
     ".koyeb.app",  # cualquier subdominio *.koyeb.app
 ]
-ALLOWED_HOSTS = (
-    [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
-    or _default_hosts
-)
+ALLOWED_HOSTS = [
+    "127.0.0.1", "localhost", "testserver",
+    "faenand.pythonanywhere.com",  # PA
+    ".koyeb.app",                  # Koyeb
+]
 
 # CSRF (puedes extender con DJANGO_CSRF_TRUSTED="https://a.com,https://b.com")
 _default_csrf = [
     "https://faenand.pythonanywhere.com",
     "https://*.koyeb.app",
 ]
-CSRF_TRUSTED_ORIGINS = (
-    [o.strip() for o in os.environ.get("DJANGO_CSRF_TRUSTED", "").split(",") if o.strip()]
-    or _default_csrf
-)
-
+CSRF_TRUSTED_ORIGINS = [
+    "https://faenand.pythonanywhere.com",
+    "https://*.koyeb.app",
+]
 # HTTPS detrás de proxy (Koyeb)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
@@ -52,13 +52,10 @@ if not DEBUG:
 # Apps
 # ---------------------------------------------------------------------------
 INSTALLED_APPS = [
-    # Django
-    "django.contrib.admin",
-    "django.contrib.auth",
-    "django.contrib.contenttypes",
-    "django.contrib.sessions",
-    "django.contrib.messages",
-    "django.contrib.staticfiles",
+    "django.contrib.admin","django.contrib.auth","django.contrib.contenttypes",
+    "django.contrib.sessions","django.contrib.messages","django.contrib.staticfiles",
+    "inicio_sesion.apps.InicioSesionConfig","reproductor","muro","gestion","feed",
+
 
     # Proyecto
     "inicio_sesion.apps.InicioSesionConfig",
@@ -74,43 +71,34 @@ INSTALLED_APPS = [
 # ---------------------------------------------------------------------------
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # <-- IMPORTANTE p/ Koyeb
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # ← AÑADIR AQUÍ
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
-
-    # Silencia mensajes en AJAX de /mi-muro y /gestion
     "inicio_sesion.middleware.AjaxMessageSilencerMiddleware",
-
-    # Evita caché con sesión
     "inicio_sesion.middleware.NoCacheMiddleware",
-
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
-
 ROOT_URLCONF = "melodify.urls"
 WSGI_APPLICATION = "melodify.wsgi.application"
 
 # ---------------------------------------------------------------------------
 # Plantillas
 # ---------------------------------------------------------------------------
-TEMPLATES = [
-    {
-        "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
-        "APP_DIRS": True,
-        "OPTIONS": {
-            "context_processors": [
-                "django.template.context_processors.debug",
-                "django.template.context_processors.request",
-                "django.contrib.auth.context_processors.auth",
-                "django.contrib.messages.context_processors.messages",
-            ],
-        },
-    },
-]
+TEMPLATES = [{
+    "BACKEND": "django.template.backends.django.DjangoTemplates",
+    "DIRS": [],
+    "APP_DIRS": True,
+    "OPTIONS": {"context_processors": [
+        "django.template.context_processors.debug",
+        "django.template.context_processors.request",
+        "django.contrib.auth.context_processors.auth",
+        "django.contrib.messages.context_processors.messages",
+    ]},
+}]
+
 
 # ---------------------------------------------------------------------------
 # Base de datos
@@ -118,11 +106,9 @@ TEMPLATES = [
 #    puedes leer DATABASE_URL aquí y parsearlo (dj-database-url), pero no es
 #    obligatorio para arrancar.
 # ---------------------------------------------------------------------------
+
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "melodifyDB.sqlite3",
-    }
+    "default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "melodifyDB.sqlite3"}
 }
 
 # ---------------------------------------------------------------------------
@@ -181,3 +167,4 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 0
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/home/"
 LOGOUT_REDIRECT_URL = "/login/"
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
