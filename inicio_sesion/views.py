@@ -287,55 +287,71 @@ def pantallaLogin(request):
 
 def playlist_getAll(request):
     """
-    Devuelve todas las playlists con información de likes.
+    Devuelve las playlists DEL USUARIO EN SESIÓN con información de likes.
 
-    Respuesta: lista JSON de playlists con campos:
-        - id
-        - idUser
-        - name
-        - portada
-        - isprivate
-        - created_at
-        - likes_count: número total de likes
-        - liked: si el usuario actual le ha dado like
+    Si el usuario no tiene playlists, regresa [] en lugar de 500.
+    Estructura:
+        [
+            {
+                "id": ...,
+                "idUser": ...,
+                "name": "...",
+                "portada": "...",
+                "isprivate": bool,
+                "created_at": "...",
+                "likes_count": int,
+                "liked": bool
+            },
+            ...
+        ]
     """
     user = _get_session_user_obj(request)
-
-    base = list(
-        PlayList.objects.values(
-            "id", "idUser", "name", "portada", "isprivate", "created_at"
-        )
-    )
-    if not base:
+    if not user:
+        # Si por alguna razón no hay usuario en sesión, devolvemos lista vacía
         return JsonResponse([], safe=False)
 
-    playlist_ids = [p["id"] for p in base]
+    try:
+        # Solo playlists del usuario en sesión
+        base = list(
+            PlayList.objects.filter(idUser=user.id).values(
+                "id", "idUser", "name", "portada", "isprivate", "created_at"
+            )
+        )
 
-    ct = ContentType.objects.get_for_model(PlayList)
-    likes_qs = LikeMedia.objects.filter(
-        content_type=ct,
-        object_id__in=playlist_ids,
-    )
+        # Si no tiene ninguna playlist, devolvemos [] sin intentar leer likes
+        if not base:
+            return JsonResponse([], safe=False)
 
-    # Conteo de likes por playlist
-    counts = {}
-    for l in likes_qs:
-        counts[l.object_id] = counts.get(l.object_id, 0) + 1
+        playlist_ids = [p["id"] for p in base]
 
-    # Conjunto de playlists que el usuario actual ha likeado
-    user_liked_ids = set()
-    if user:
+        ct = ContentType.objects.get_for_model(PlayList)
+        likes_qs = LikeMedia.objects.filter(
+            content_type=ct,
+            object_id__in=playlist_ids,
+        )
+
+        # Conteo de likes por playlist
+        counts = {}
+        for l in likes_qs:
+            counts[l.object_id] = counts.get(l.object_id, 0) + 1
+
+        # Conjunto de playlists que el usuario actual ha likeado
         user_liked_ids = set(
             likes_qs.filter(user=user).values_list("object_id", flat=True)
         )
 
-    # Inyectar metadata en la lista base
-    for p in base:
-        pid = p["id"]
-        p["likes_count"] = counts.get(pid, 0)
-        p["liked"] = pid in user_liked_ids
+        # Inyectar metadata de likes
+        for p in base:
+            pid = p["id"]
+            p["likes_count"] = counts.get(pid, 0)
+            p["liked"] = pid in user_liked_ids
 
-    return JsonResponse(base, safe=False)
+        return JsonResponse(base, safe=False)
+
+    except Exception as e:
+        logger.exception("Error en playlist_getAll")
+        return JsonResponse({"error": str(e)}, status=500)
+
 
 
 @csrf_exempt

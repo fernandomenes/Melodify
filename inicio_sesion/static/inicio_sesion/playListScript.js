@@ -319,111 +319,149 @@ function eliminarPlaylist(playlistId) {
 function showPlaylists() {
     currentViewPlaylist = "allPlayList";
 
-    fetch('/playlist/getAllList')
-        .then(r => r.json())
-        .then(data => {
-            if (!content) return;
+    if (!content) {
+        content = document.getElementById('content');
+    }
+    if (!content) {
+        console.error('No se encontró #content para playlists');
+        return;
+    }
 
-            if (!Array.isArray(data) || data.length === 0) {
-                content.innerHTML = '<li>No hay playlists.</li>';
+    function renderPlaylists(data, messageIfEmpty) {
+        content.innerHTML = '';
+
+        const headerContainer = document.createElement('div');
+        headerContainer.style.display         = 'flex';
+        headerContainer.style.justifyContent  = 'center';
+        headerContainer.style.alignItems      = 'center';
+        headerContainer.style.gap             = '20px';
+        headerContainer.style.margin          = '20px 0 50px 0';
+
+        const title = document.createElement('h2');
+        title.textContent    = 'Play List';
+        title.style.fontSize = '25px';
+        title.style.margin   = '0';
+
+        const btn = document.createElement('button');
+        btn.className   = 'btnAddPlaylist';
+        btn.textContent = '+';
+        btn.addEventListener('click', function () {
+            const rect = btn.getBoundingClientRect();
+            showAlertNewPlaylist(btn, rect, "new", null);
+        });
+
+        headerContainer.appendChild(title);
+        headerContainer.appendChild(btn);
+        content.appendChild(headerContainer);
+
+        if (!Array.isArray(data) || data.length === 0) {
+            const p = document.createElement('p');
+            p.textContent = messageIfEmpty ||
+                'No tienes playlists personales disponibles. Crea una con el botón (+).';
+            p.style.color = '#b3b3b3';
+            p.style.marginTop = '8px';
+            content.appendChild(p);
+            return;
+        }
+
+        data.forEach(p => {
+            const li = document.createElement('li');
+            li.style.display       = 'flex';
+            li.style.alignItems    = 'flex-start';
+            li.style.marginBottom  = '20px';
+            li.style.position      = 'relative';
+            li.style.flexDirection = 'column';
+
+            const nameDiv = document.createElement('div');
+            nameDiv.innerHTML          = `<strong>${p.name}</strong>`;
+            nameDiv.style.marginBottom = '8px';
+            li.appendChild(nameDiv);
+
+            const mediaContainer = document.createElement('div');
+            mediaContainer.style.display       = 'flex';
+            mediaContainer.style.alignItems    = 'flex-start';
+
+            const img = document.createElement('img');
+            img.src   = '/static/inicio_sesion/img_playlist.png';
+            img.width = 307;
+            img.height = 222;
+            img.alt   = 'portada';
+            img.style.cursor = 'pointer';
+            img.addEventListener('click', () => verSongs(p.id, p.name));
+
+            mediaContainer.appendChild(img);
+
+            const buttonsDiv = document.createElement('div');
+            buttonsDiv.style.display        = 'flex';
+            buttonsDiv.style.flexDirection  = 'column';
+            buttonsDiv.style.marginLeft     = '10px';
+            buttonsDiv.style.justifyContent = 'flex-start';
+            buttonsDiv.style.gap            = '8px';
+
+            const likeBtn = document.createElement('button');
+            likeBtn.className   = 'btnRoundPlaylist';
+            likeBtn.id          = `like-playlist-btn-${p.id}`;
+            likeBtn.textContent = p.liked
+                ? `Liked (${p.likes_count || 0})`
+                : `Like (${p.likes_count || 0})`;
+            likeBtn.addEventListener('click', () => likePlaylist(p.id));
+
+            const editBtn = document.createElement('button');
+            editBtn.textContent = 'Editar';
+            editBtn.className   = 'btnRoundPlaylist';
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = 'Eliminar';
+            deleteBtn.className   = 'btnRoundPlaylist';
+            deleteBtn.addEventListener('click', () => eliminarPlaylist(p.id));
+
+            buttonsDiv.appendChild(likeBtn);
+            buttonsDiv.appendChild(editBtn);
+            buttonsDiv.appendChild(deleteBtn);
+
+            mediaContainer.appendChild(buttonsDiv);
+            li.appendChild(mediaContainer);
+            content.appendChild(li);
+
+            const rect = editBtn.getBoundingClientRect();
+            editBtn.addEventListener('click', () =>
+                showAlertNewPlaylist(editBtn, rect, "update", p.id)
+            );
+        });
+    }
+
+    // ----------------- Fetch con manejo de errores robusto -----------------
+    fetch('/playlist/getAllList', {
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+        .then(async (r) => {
+            let data = null;
+
+            try {
+                data = await r.json();
+            } catch (err) {
+                const text = await r.text().catch(() => '');
+                console.error('Respuesta no JSON al cargar playlists:', err, text.slice(0, 200));
+                renderPlaylists([], 'No se pudieron cargar tus playlists (respuesta no válida del servidor).');
                 return;
             }
 
-            content.innerHTML = '';
+            if (!r.ok) {
+                console.warn('HTTP error al cargar playlists:', r.status, data);
+                renderPlaylists([], 'Ocurrió un error al cargar tus playlists. Intenta de nuevo más tarde.');
+                return;
+            }
 
-            // Encabezado: título y botón para nueva playlist
-            const headerContainer = document.createElement('div');
-            headerContainer.style.display         = 'flex';
-            headerContainer.style.justifyContent  = 'center';
-            headerContainer.style.alignItems      = 'center';
-            headerContainer.style.gap             = '20px';
-            headerContainer.style.margin          = '20px 0 50px 0';
-
-            const title = document.createElement('h2');
-            title.textContent   = 'Play List';
-            title.style.fontSize = '25px';
-            title.style.margin   = '0';
-
-            const btn = document.createElement('button');
-            btn.className   = 'btnAddPlaylist';
-            btn.textContent = '+';
-            btn.addEventListener('click', function () {
-                const rect = btn.getBoundingClientRect();
-                showAlertNewPlaylist(btn, rect, "new", null);
-            });
-
-            headerContainer.appendChild(title);
-            headerContainer.appendChild(btn);
-            content.appendChild(headerContainer);
-
-            // Tarjetas de playlist
-            data.forEach(p => {
-                const li = document.createElement('li');
-                li.style.display       = 'flex';
-                li.style.alignItems    = 'flex-start';
-                li.style.marginBottom  = '20px';
-                li.style.position      = 'relative';
-                li.style.flexDirection = 'column';
-
-                const nameDiv = document.createElement('div');
-                nameDiv.innerHTML       = `<strong>${p.name}</strong>`;
-                nameDiv.style.marginBottom = '8px';
-                li.appendChild(nameDiv);
-
-                const mediaContainer = document.createElement('div');
-                mediaContainer.style.display       = 'flex';
-                mediaContainer.style.alignItems    = 'flex-start';
-
-                const img = document.createElement('img');
-                img.src   = '/static/inicio_sesion/img_playlist.png';
-                img.width = 307;
-                img.height = 222;
-                img.alt   = 'portada';
-                img.style.cursor = 'pointer';
-                img.addEventListener('click', () => verSongs(p.id, p.name));
-
-                mediaContainer.appendChild(img);
-
-                const buttonsDiv = document.createElement('div');
-                buttonsDiv.style.display        = 'flex';
-                buttonsDiv.style.flexDirection  = 'column';
-                buttonsDiv.style.marginLeft     = '10px';
-                buttonsDiv.style.justifyContent = 'flex-start';
-                buttonsDiv.style.gap            = '8px';
-
-                const likeBtn = document.createElement('button');
-                likeBtn.className = 'btnRoundPlaylist';
-                likeBtn.id        = `like-playlist-btn-${p.id}`;
-                likeBtn.textContent = p.liked
-                    ? `Liked (${p.likes_count || 0})`
-                    : `Like (${p.likes_count || 0})`;
-                likeBtn.addEventListener('click', () => likePlaylist(p.id));
-
-                const editBtn = document.createElement('button');
-                editBtn.textContent = 'Editar';
-                editBtn.className   = 'btnRoundPlaylist';
-
-                const deleteBtn = document.createElement('button');
-                deleteBtn.textContent = 'Eliminar';
-                deleteBtn.className   = 'btnRoundPlaylist';
-                deleteBtn.addEventListener('click', () => eliminarPlaylist(p.id));
-
-                buttonsDiv.appendChild(likeBtn);
-                buttonsDiv.appendChild(editBtn);
-                buttonsDiv.appendChild(deleteBtn);
-
-                mediaContainer.appendChild(buttonsDiv);
-                li.appendChild(mediaContainer);
-                content.appendChild(li);
-
-                const rect = editBtn.getBoundingClientRect();
-                editBtn.addEventListener('click', () =>
-                    showAlertNewPlaylist(editBtn, rect, "update", p.id)
-                );
-            });
+            renderPlaylists(data, null);
         })
-        .catch(err => console.error('Error al cargar playlists:', err));
+        .catch(error => {
+            console.error('Error al cargar playlists:', error);
+            popup.innerHTML =
+                '<div style="color:red;">Error al cargar playlists.</div>';
+        });
 }
+
 
 
 // ===========================================================================
