@@ -27,7 +27,7 @@ init-dirs:
 # makemigrations:
 # Genera migraciones pendientes para la app (idempotente si no hay cambios).
 makemigrations:
-	$(PY) manage.py makemigrations inicio_sesion
+	$(PY) manage.py makemigrations 
 
 # migrate:
 # Aplica todas las migraciones contra la BD local (SQLite).
