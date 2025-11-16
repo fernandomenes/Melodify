@@ -33,37 +33,36 @@ _DEFAULT_HOSTS = [
     "127.0.0.1",
     "localhost",
     "testserver",
-    "faenand.pythonanywhere.com",  # PA
-    ".koyeb.app",                  # cualquier subdominio *.koyeb.app
+    "faenand.pythonanywhere.com",                 # PythonAnywhere
+    ".koyeb.app",                                 # comodín subdominios Koyeb
+    "delicate-jemima-faenand-49a4a9ec.koyeb.app", # tu host exacto en Koyeb
 ]
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", _DEFAULT_HOSTS)
 
-# Orígenes CSRF confiables (debe llevar esquema https:// y no acepta comodines)
+# Orígenes CSRF confiables (esquema https y sin slash final)
 _DEFAULT_CSRF = [
     "https://faenand.pythonanywhere.com",
-    # Para Koyeb añade tu URL exacta cuando la tengas, ej:
-    # "https://melodify-personal-xxxxx.koyeb.app",
+    "https://delicate-jemima-faenand-49a4a9ec.koyeb.app",
 ]
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED", _DEFAULT_CSRF)
 
 # HTTPS detrás de proxy/reverse-proxy (Koyeb/PA)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
 if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    # Si en algún momento fuerzas HTTPS total, descomenta:
+    # SECURE_SSL_REDIRECT = True
 
 # ---------------------------------------------------------------------------
 # Apps
 # ---------------------------------------------------------------------------
 INSTALLED_APPS = [
-    "django.contrib.admin",
-    "django.contrib.auth",
-    "django.contrib.contenttypes",
-    "django.contrib.sessions",
-    "django.contrib.messages",
-    "django.contrib.staticfiles",
-    # Apps del proyecto (usar SOLO el nombre del paquete; no mezclar con AppConfig)
-    "inicio_sesion",
+    "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
+    "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
+    # Apps del proyecto (SIN duplicados)
+    "inicio_sesion.apps.InicioSesionConfig",
     "reproductor",
     "muro",
     "gestion",
@@ -75,7 +74,7 @@ INSTALLED_APPS = [
 # ---------------------------------------------------------------------------
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # servir /static en build simple
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # servir /static sin servidor externo
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",

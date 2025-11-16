@@ -1,4 +1,4 @@
 Django==4.2.*
 Pillow>=10,<11
-gunicorn
+gunicorn==23.*
 whitenoise>=6.7
