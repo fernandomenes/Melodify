@@ -1,10 +1,3 @@
-"""
-Configuración de Django para Melodify (Local / PythonAnywhere / Koyeb).
-
-- Local:            DEBUG=1
-- PythonAnywhere:   DEBUG=0/1
-- Koyeb:            DEBUG=0, WhiteNoise para /static; DB externa (Neon) opcional
-"""
 from pathlib import Path
 import os
 
@@ -42,7 +35,6 @@ USE_X_FORWARDED_HOST = True
 if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    # SECURE_SSL_REDIRECT = True  # opcional
 
 # -------------------------------- Apps -----------------------------------
 INSTALLED_APPS = [
@@ -101,13 +93,10 @@ DATABASES = {
         "NAME": DB_PATH,
     }
 }
-
 if os.environ.get("DATABASE_URL"):
     import dj_database_url
     DATABASES["default"] = dj_database_url.parse(
-        os.environ["DATABASE_URL"],
-        conn_max_age=600,
-        ssl_require=True,
+        os.environ["DATABASE_URL"], conn_max_age=600, ssl_require=True
     )
 
 # -------------------------------- Locale ---------------------------------
@@ -127,64 +116,14 @@ if (BASE_DIR / "feed" / "static").exists():
     STATICFILES_DIRS.append(BASE_DIR / "feed" / "static")
 
 STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
 WHITENOISE_USE_FINDERS = DEBUG
 
 # -------------------------------- Media ----------------------------------
 MEDIA_ROOT = Path(os.environ.get("DJANGO_MEDIA_ROOT", BASE_DIR / "uploaded_media"))
-MEDIA_URL = "/uploaded_media/"
-
-USE_S3 = os.environ.get("USE_S3", "0") == "1"
-if USE_S3:
-    INSTALLED_APPS += ["storages"]  # type: ignore
-    STORAGES["default"] = {"BACKEND": "storages.backends.s3boto3.S3Boto3Storage"}
-
-    AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"]
-    AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
-    AWS_STORAGE_BUCKET_NAME = os.environ["AWS_STORAGE_BUCKET_NAME"]
-    AWS_S3_ENDPOINT_URL = os.environ.get("AWS_S3_ENDPOINT_URL")
-    AWS_S3_REGION_NAME = os.environ.get("AWS_S3_REGION_NAME", "auto")
-    AWS_S3_ADDRESSING_STYLE = "virtual"
-    AWS_S3_SIGNATURE_VERSION = "s3v4"
-    AWS_QUERYSTRING_AUTH = False
-    AWS_DEFAULT_ACL = None
-    AWS_S3_FILE_OVERWRITE = False
-    AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=31536000, public"}
-
-    AWS_S3_CUSTOM_DOMAIN = os.environ.get("AWS_S3_CUSTOM_DOMAIN")
-    if AWS_S3_CUSTOM_DOMAIN:
-        MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/"
-    elif AWS_S3_ENDPOINT_URL:
-        MEDIA_URL = f"{AWS_S3_ENDPOINT_URL.rstrip('/')}/{AWS_STORAGE_BUCKET_NAME}/"
-
-MEDIA_URL = os.environ.get("DJANGO_MEDIA_URL", MEDIA_URL)
-
-# ---- Cloudinary (media) ----
-USE_CLOUDINARY = os.environ.get("USE_CLOUDINARY", "0") == "1"
-if USE_CLOUDINARY:
-    INSTALLED_APPS += ["cloudinary", "cloudinary_storage"]  # type: ignore
-
-    # Django 4.2: mueve el storage por defecto a Cloudinary aquí
-    STORAGES["default"] = {
-        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage"
-    }
-
-    # Opciones para public_id determinístico y sobreescritura
-    CLOUDINARY_STORAGE = {
-        "RESOURCE_TYPE": "auto",        # image / video (mp3) / raw según el archivo
-        "FOLDER": "uploaded_media",     # prefijo único de tu app
-        "OVERWRITE": True,              # re-subir mismo nombre => nueva versión v2, v3...
-        "UNIQUE_FILENAME": False,       # NO agregues sufijos aleatorios
-    }
-
-    # No fuerces MEDIA_URL con Cloudinary. Deja que el storage devuelva URLs absolutas.
-    # Si tenías DJANGO_MEDIA_URL en env, elimínala o déjala vacía.
+MEDIA_URL = os.environ.get("DJANGO_MEDIA_URL", "/uploaded_media/")
 
 # -------------------------------- Varios ---------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -198,11 +137,6 @@ LOGOUT_REDIRECT_URL = "/login/"
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {
-        "console": {"class": "logging.StreamHandler"},
-    },
-    "root": {
-        "handlers": ["console"],
-        "level": "INFO" if not DEBUG else "DEBUG",
-    },
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "root": {"handlers": ["console"], "level": "INFO" if not DEBUG else "DEBUG"},
 }
