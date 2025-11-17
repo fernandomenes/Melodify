@@ -2,11 +2,12 @@
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Tasks = @('dev'))
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-# Fuerza DEBUG en local para servir /static/ sin collectstatic
+
+# Fuerza DEBUG local para servir /static sin collectstatic
 $env:DJANGO_DEBUG = '1'
 $env:PYTHONUTF8   = '1'
 
-# ---------------- Helpers ----------------
+# ============================ Helpers ============================
 function Get-HostPython {
   # Devuelve una lista [exe, args...] p.ej. @('py','-3.11') o @('python')
   $candidates = @(
@@ -45,7 +46,8 @@ function Ensure-Venv {
 function Ensure-Dirs {
   $dirs = @(
     "uploaded_media",
-    "uploaded_media\audio\artist",
+    "uploaded_media\uploaded_songs",
+    "uploaded_media\uploaded_covers",
     "uploaded_media\uploaded_avatars",
     "static"
   )
@@ -60,7 +62,7 @@ function Invoke-Py {
   & $VenvPython @Args
 }
 
-# ---------------- Tareas núcleo ----------------
+# ========================= Tareas núcleo =========================
 function Setup {
   Ensure-Venv
   Write-Host "Instalando dependencias..."
@@ -69,7 +71,8 @@ function Setup {
 
 function MakeMigrations {
   Ensure-Venv
-  Invoke-Py @("manage.py", "makemigrations", "inicio_sesion")
+  # General (todas las apps); evita limitar a una sola
+  Invoke-Py @("manage.py", "makemigrations")
 }
 
 function Migrate {
@@ -79,32 +82,31 @@ function Migrate {
 
 function Merge-Migrations {
   Ensure-Venv
-  Write-Host "Unificando migraciones si hay ramas en conflicto (makemigrations --merge)..."
-  "y" | & $VenvPython "manage.py" "makemigrations" "--merge" "inicio_sesion"
+  Write-Host "Unificando migraciones si hay ramas en conflicto (makemigrations --merge)…"
+  "y" | & $VenvPython "manage.py" "makemigrations" "--merge"
 }
 
 function ShowMigrations {
   Ensure-Venv
-  Invoke-Py @("manage.py", "showmigrations", "inicio_sesion")
+  Invoke-Py @("manage.py", "showmigrations")
+}
+
+# ====== Seed (usuarios base + demo) ======
+function Ensure-Users {
+  Ensure-Venv
+  Invoke-Py @("manage.py", "ensure_initial_users")
+}
+
+function Seed-Demo {
+  Ensure-Venv
+  $root = "seeds\artists"   # ajusta si tu carpeta difiere
+  $pass = "demo123"
+  Invoke-Py @("manage.py", "seed_demo", "--root", $root, "--default-pass", $pass)
 }
 
 function Seed {
-  Ensure-Venv
-  $code = @"
-from inicio_sesion.models import Users
-seed=[
-  {'user':'admin','password':'admin123','type':'Administrador','is_superadmin':True},
-  {'user':'artist','password':'artist123','type':'Artista','is_superadmin':False},
-  {'user':'viewer','password':'viewer123','type':'Usuario','is_superadmin':False},
-]
-for u in seed:
-    Users.objects.update_or_create(
-        user=u['user'],
-        defaults={'password':u['password'],'type':u['type'],'is_superadmin':u['is_superadmin']}
-    )
-print('OK: usuarios creados/actualizados')
-"@
-  Invoke-Py @("manage.py", "shell", "-c", $code)
+  Ensure-Users
+  Seed-Demo
 }
 
 function Run {
@@ -121,7 +123,7 @@ function RunNet {
   Invoke-Py @("manage.py", "runserver", "0.0.0.0:$port")
 }
 
-# ---------------- Limpieza ----------------
+# =========================== Limpieza ============================
 function Clean-Pyc {
   Write-Host "Borrando caches de Python..."
   Get-ChildItem -Path $PSScriptRoot -Recurse -Include *.pyc,*.pyo -File -ErrorAction SilentlyContinue | Remove-Item -Force
@@ -138,7 +140,8 @@ function Clean-Build {
 function Clean-Media {
   Write-Host "Limpiando uploaded_media..."
   Ensure-Dirs
-  Get-ChildItem "$PSScriptRoot\uploaded_media\audio\artist" -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+  Get-ChildItem "$PSScriptRoot\uploaded_media\uploaded_songs"   -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+  Get-ChildItem "$PSScriptRoot\uploaded_media\uploaded_covers"  -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
   Get-ChildItem "$PSScriptRoot\uploaded_media\uploaded_avatars" -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
   Get-ChildItem "$PSScriptRoot\uploaded_media" -File -Force -ErrorAction SilentlyContinue | Remove-Item -Force
   Write-Host "Media limpia."
@@ -169,11 +172,11 @@ function SuperClean {
   Write-Host "Superclean completo."
 }
 
-# ---------------- Tests / Coverage ----------------
+# ======================= Tests / Coverage =======================
 function Test-Unit {
   Ensure-Venv
-  # Coincide Makefile (inicio_sesion/tests/test_*.py)
-  Invoke-Py @("manage.py","test","-v","2")}
+  Invoke-Py @("manage.py","test","-v","2")
+}
 
 function Coverage {
   Ensure-Venv
@@ -187,9 +190,9 @@ function Coverage {
   }
 }
 
-# ---------------- Mapa de tareas ----------------
+# ======================== Mapa de tareas ========================
 $TaskMap = @{
-  'help'             = { Write-Host "Tareas: dev, setup, init-dirs, makemigrations, merge-migrations, migrate, seed, run, runnet, clean, clean-media, clean-db, reset-db, superclean, test, coverage, showmigrations" }
+  'help'             = { Write-Host "Tareas: dev, setup, init-dirs, makemigrations, merge-migrations, migrate, ensure-users, seed-demo, seed, run, runnet, clean, clean-media, clean-db, reset-db, superclean, test, coverage, showmigrations" }
   'dev'              = { Setup; Ensure-Dirs; Merge-Migrations; MakeMigrations; Migrate; Seed; Run }
   'setup'            = { Setup }
   'init-dirs'        = { Ensure-Dirs }
@@ -197,6 +200,8 @@ $TaskMap = @{
   'merge-migrations' = { Merge-Migrations }
   'migrate'          = { Migrate }
   'showmigrations'   = { ShowMigrations }
+  'ensure-users'     = { Ensure-Users }
+  'seed-demo'        = { Seed-Demo }
   'seed'             = { Seed }
   'run'              = { Run }
   'runnet'           = { RunNet }
@@ -208,7 +213,6 @@ $TaskMap = @{
   'test'             = { Test-Unit }
   'coverage'         = { Coverage }
 }
-
 
 foreach ($t in $Tasks) {
   if ($TaskMap.ContainsKey($t)) {
