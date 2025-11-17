@@ -1,18 +1,31 @@
-(.venv) PS C:\Users\faena\Desktop\Melodify> git status
-On branch Fernando
-Your branch is up to date with 'origin/Fernando'.
+@"
+* text=auto
 
-Changes not staged for commit:
-  (use "git add <file>..." to update what will be committed)
-  (use "git restore <file>..." to discard changes in working directory)
-        modified:   Makefile
-        modified:   dev.ps1
-        modified:   entrypoint.sh
+# Fuerza LF en scripts/código (Linux-friendly)
+*.sh   text eol=lf
+*.py   text eol=lf
+*.js   text eol=lf
+*.ts   text eol=lf
+*.css  text eol=lf
+*.html text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.svg  text eol=lf
 
-Untracked files:
-  (use "git add <file>..." to include in what will be committed)
-        inicio_sesion/management/commands/seed_demo.py
-        seeds/
+# PowerShell en Windows (CRLF ok)
+*.ps1  text eol=crlf
 
-no changes added to commit (use "git add" and/or "git commit -a")
-(.venv) PS C:\Users\faena\Desktop\Melodify>
+# Binario: no tocar finales de línea
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.gif  binary
+*.mp3  binary
+*.wav  binary
+*.ogg  binary
+*.m4a  binary
+*.flac binary
+"@ | Set-Content -Encoding ascii .gitattributes
