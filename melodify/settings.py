@@ -169,18 +169,17 @@ USE_CLOUDINARY = os.environ.get("USE_CLOUDINARY", "0") == "1"
 if USE_CLOUDINARY:
     INSTALLED_APPS += ["cloudinary", "cloudinary_storage"]  # type: ignore
 
-    # Al usar DEFAULT_FILE_STORAGE, todas tus ImageField/FileField van a Cloudinary
-    DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
-
-    # Recursos auto: sube imágenes, audio (Cloudinary trata mp3 como 'video'), etc.
-    CLOUDINARY_STORAGE = {
-        "RESOURCE_TYPE": "auto",
-        "FOLDER": "uploaded_media",  # conserva estructura relativa
-        # "OVERWRITE": True,         # opcional: permite re-subir mismo public_id
-        # "UNIQUE_FILENAME": False,  # opcional: respeta nombre de archivo
+    STORAGES["default"] = {
+        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage"
     }
 
-    # Opcional: si definiste DJANGO_MEDIA_URL en env, úsalo; si no, Cloudinary genera las URLs
+    CLOUDINARY_STORAGE = {
+        "RESOURCE_TYPE": "auto",
+        "FOLDER": "uploaded_media",  
+        # "OVERWRITE": True,
+        # "UNIQUE_FILENAME": False,
+    }
+
     MEDIA_URL = os.environ.get("DJANGO_MEDIA_URL", MEDIA_URL)
 
 # -------------------------------- Varios ---------------------------------
