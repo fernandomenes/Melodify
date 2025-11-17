@@ -27,7 +27,7 @@ init-dirs:
 # makemigrations:
 # Genera migraciones pendientes para la app (idempotente si no hay cambios).
 makemigrations:
-	$(PY) manage.py makemigrations inicio_sesion
+	$(PY) manage.py makemigrations 
 
 # migrate:
 # Aplica todas las migraciones contra la BD local (SQLite).
@@ -111,11 +111,10 @@ superclean: clean clean-media clean-db
 
 # ============ OPERACIÓN PELIGROSA: MIGRACIONES ============  [NEW]
 # Elimina TODAS las migraciones del app (excepto __init__.py).
-# ÚSALO SOLO si vas a reconstruir migraciones desde cero.
 # Requiere confirmación: make clean-migrations confirm=YES
 clean-migrations:
 	@if [ "$(confirm)" != "YES" ]; then \
-	  echo "⚠️  Esto borrará TODAS las migraciones de inicio_sesion (excepto __init__.py)."; \
+	  echo "    Esto borrará TODAS las migraciones de inicio_sesion (excepto __init__.py)."; \
 	  echo "    Ejecuta: make clean-migrations confirm=YES"; \
 	  exit 1; \
 	fi

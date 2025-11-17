@@ -1,0 +1,8 @@
+.git
+.venv/
+__pycache__/
+*.pyc
+uploaded_media/
+melodifyDB.sqlite3
+# El directorio staticfiles lo crea el build; no hace falta enviarlo desde el host
+staticfiles/

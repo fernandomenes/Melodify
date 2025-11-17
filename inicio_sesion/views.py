@@ -2,30 +2,27 @@ import json
 import logging
 
 from django.contrib import messages
-from django.db.models import Q
 from django.contrib.auth import logout as django_logout
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import Q
 from django.http import JsonResponse
-from django.shortcuts import redirect, render, get_object_or_404
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.http import require_http_methods, require_POST
-from django.contrib.contenttypes.models import ContentType
 
-from .models import ArtistProfile, PlayList, PlayListSong, Song, Users, LikeMedia
+from .models import ArtistProfile, LikeMedia, PlayList, PlayListSong, Song, Users
 
 logger = logging.getLogger(__name__)
 
 
-def pantallaPrincipal(request):
-    """Renderiza la pantalla pública principal."""
-    return render(request, "inicio_sesion/principal.html")
+# ============================================================================
+# Helpers genéricos
+# ============================================================================
 
 
 def _safe_file_url(f):
     """
-    Devuelve una URL segura para un FileField/ImageField.
-
-    Si el archivo no tiene nombre o no es accesible, retorna una cadena vacía
-    para evitar excepciones en plantillas o serialización.
+    Devuelve una URL segura para un FileField/ImageField o cadena vacía si no es usable.
     """
     if not f:
         return ""
@@ -38,13 +35,51 @@ def _safe_file_url(f):
             return ""
 
 
+def _song_audio_url(song):
+    """
+    Devuelve la URL de audio de una Song o cadena vacía.
+    """
+    return _safe_file_url(getattr(song, "audio_file", None)) or ""
+
+
+def _song_cover_url(song):
+    """
+    Devuelve la URL de portada de una Song o None.
+    """
+    cover = _safe_file_url(getattr(song, "cover_image", None))
+    return cover or None
+
+
+def _get_session_user_obj(request):
+    """
+    Devuelve la instancia Users asociada a request.session['user'], o None.
+    """
+    username = request.session.get("user")
+    if not username:
+        return None
+    try:
+        return Users.objects.get(user=username)
+    except Users.DoesNotExist:
+        return None
+
+
+# ============================================================================
+# Pantallas básicas (pública / autenticación / home)
+# ============================================================================
+
+
+def pantallaPrincipal(request):
+    """Pantalla pública principal."""
+    return render(request, "inicio_sesion/principal.html")
+
+
 def pantallaHome(request):
     """
-    Renderiza la pantalla principal autenticada.
+    Pantalla principal autenticada (Home SPA).
 
-    Incluye:
-    - Información de sesión del usuario (avatar, fecha de creación, descripción).
-    - Para usuarios con rol de artista, una playlist virtual “Mi música” con sus canciones públicas.
+    Contexto:
+    - Datos de sesión (usuario, rol, avatar, fecha de creación, descripción).
+    - Para artistas, playlist virtual “Mi música” con sus canciones públicas (playlists_json).
     """
     if "user" not in request.session:
         messages.error(request, "Debes iniciar sesión para acceder a esta página.")
@@ -58,38 +93,60 @@ def pantallaHome(request):
     artist_description = ""
     created_at_str = ""
 
+    # Datos del usuario en sesión (avatar, fecha, descripción de artista)
     try:
         u = Users.objects.get(user=session_user)
+
         if getattr(u, "avatar", None):
             avatar_url = _safe_file_url(u.avatar)
+
         if getattr(u, "created_at", None):
             created_at_str = u.created_at.strftime("%Y-%m-%d %H:%M")
+
         if role_lower == "artista":
             try:
                 artist_description = (u.artist_profile.description or "").strip()
             except ArtistProfile.DoesNotExist:
                 artist_description = ""
     except Users.DoesNotExist:
+        # Usuario en sesión inconsistente: se dejan campos vacíos
         pass
 
+    # Playlist virtual “Mi música” (solo para rol artista)
     playlists = []
     if role_lower == "artista":
         qs = (
             Song.objects.filter(owner_user=session_user, visibility="public")
-            .only("id", "title", "artist_display_name", "audio_file", "cover_image", "genre")
+            .only(
+                "id",
+                "title",
+                "artist_display_name",
+                "audio_file",
+                "cover_image",
+                "genre",
+            )
         )
+
         songs = [
             {
                 "id": s.id,
                 "title": s.title,
                 "author": s.artist_display_name,
-                "audioUrl": _safe_file_url(s.audio_file),
-                "coverUrl": _safe_file_url(s.cover_image) or None,
+                "audioUrl": _song_audio_url(s),
+                "coverUrl": _song_cover_url(s),
                 "genre": getattr(s, "genre", "") or "",
             }
             for s in qs
+            if _song_audio_url(s)
         ]
-        playlists.append({"id": 1, "name": "Mi música", "songs": songs})
+
+        playlists.append(
+            {
+                "id": 1,
+                "name": "Mi música",
+                "songs": songs,
+            }
+        )
 
     ctx = {
         "session_user": session_user,
@@ -103,13 +160,19 @@ def pantallaHome(request):
 
 
 def pantallaRegistro(request):
-    """Formulario de registro de usuarios."""
+    """
+    Pantalla de registro de usuarios (modelo Users).
+
+    Actualmente almacena la contraseña en texto plano
+    (no se usa el sistema de autenticación de Django).
+    """
     if request.method == "POST":
         username = request.POST.get("username", "")
         password = request.POST.get("password", "")
         confirm_password = request.POST.get("confirm_password", "")
 
         errors = []
+
         if password != confirm_password:
             errors.append("Las contraseñas no coinciden.")
         if Users.objects.filter(user=username).exists():
@@ -128,9 +191,12 @@ def pantallaRegistro(request):
                     is_superadmin=False,
                     is_active=True,
                 )
-                messages.success(request, "¡Registro exitoso! Ahora puedes iniciar sesión.")
+                messages.success(
+                    request, "¡Registro exitoso! Ahora puedes iniciar sesión."
+                )
                 return redirect("login")
             except Exception as e:
+                logger.exception("Error al crear usuario en pantallaRegistro")
                 errors.append(f"Error al crear el usuario: {str(e)}")
 
         for error in errors:
@@ -143,8 +209,7 @@ def pantallaRegistro(request):
 @csrf_protect
 def pantallaLogout(request):
     """
-    Cierra la sesión del usuario, limpia la información de sesión
-    y deshabilita el caché del navegador para la página anterior.
+    Cierra sesión, limpia la sesión y deshabilita caché de la página anterior.
     """
     request.session.flush()
     django_logout(request)
@@ -164,14 +229,16 @@ def pantallaLogin(request):
 
     Al autenticar correctamente:
     - Regenera la clave de sesión.
-    - Limpia claves de estado temporal (operaciones de deshacer).
+    - Limpia claves de estado temporal (undo).
     - Almacena usuario y rol en la sesión.
     """
     if request.method == "POST":
         user = request.POST.get("user")
         password = request.POST.get("password")
+
         try:
             usuario_db = Users.objects.get(user=user, password=password)
+
             request.session.cycle_key()
             for k in [
                 "gestion_undo",
@@ -184,69 +251,94 @@ def pantallaLogin(request):
                 "song_undo_artist_label",
             ]:
                 request.session.pop(k, None)
+
             request.session["user"] = usuario_db.user
             request.session["role"] = usuario_db.type or ""
+
             return redirect("home")
+
         except Users.DoesNotExist:
             return render(
                 request,
                 "inicio_sesion/login.html",
                 {"error": "Usuario o contraseña incorrectos"},
             )
+
     return render(request, "inicio_sesion/login.html")
 
 
-# ---------- Playlists (API JSON) ----------
+# ============================================================================
+# Playlists (API JSON usada por la SPA y buscador)
+# ============================================================================
 
 
 def playlist_getAll(request):
     """
-    Devuelve todas las playlists junto con info de likes:
+    Devuelve las playlists del usuario en sesión con información de likes.
 
-    - likes_count: número total de likes
-    - liked: si el usuario actual le ha dado like o no
+    Forma de cada elemento:
+    {
+        "id": ...,
+        "idUser": ...,
+        "name": "...",
+        "portada": "...",
+        "isprivate": bool,
+        "created_at": "...",
+        "likes_count": int,
+        "liked": bool
+    }
     """
     user = _get_session_user_obj(request)
-
-    base = list(
-        PlayList.objects.values(
-            "id", "idUser", "name", "portada", "isprivate", "created_at"
-        )
-    )
-
-    if not base:
+    if not user:
         return JsonResponse([], safe=False)
 
-    playlist_ids = [p["id"] for p in base]
+    try:
+        base = list(
+            PlayList.objects.filter(idUser=user.id).values(
+                "id", "idUser", "name", "portada", "isprivate", "created_at"
+            )
+        )
 
-    ct = ContentType.objects.get_for_model(PlayList)
+        if not base:
+            return JsonResponse([], safe=False)
 
-    likes_qs = LikeMedia.objects.filter(
-        content_type=ct,
-        object_id__in=playlist_ids,
-    )
+        playlist_ids = [p["id"] for p in base]
 
-    counts = {}
-    for l in likes_qs:
-        counts[l.object_id] = counts.get(l.object_id, 0) + 1
+        ct = ContentType.objects.get_for_model(PlayList)
+        likes_qs = LikeMedia.objects.filter(
+            content_type=ct,
+            object_id__in=playlist_ids,
+        )
 
-    user_liked_ids = set()
-    if user:
+        counts = {}
+        for l in likes_qs:
+            counts[l.object_id] = counts.get(l.object_id, 0) + 1
+
         user_liked_ids = set(
             likes_qs.filter(user=user).values_list("object_id", flat=True)
         )
 
-    for p in base:
-        pid = p["id"]
-        p["likes_count"] = counts.get(pid, 0)
-        p["liked"] = pid in user_liked_ids
+        for p in base:
+            pid = p["id"]
+            p["likes_count"] = counts.get(pid, 0)
+            p["liked"] = pid in user_liked_ids
 
-    return JsonResponse(base, safe=False)
+        return JsonResponse(base, safe=False)
+
+    except Exception as e:
+        logger.exception("Error en playlist_getAll")
+        return JsonResponse({"error": str(e)}, status=500)
+
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def create_playlist(request):
-    """Crea una playlist asociada a un usuario a partir de un cuerpo JSON."""
+    """
+    Crea una playlist asociada a un usuario a partir de un cuerpo JSON.
+
+    Espera JSON:
+    { "user": "<username>", "name": "<nombre de la playlist>" }
+    """
     try:
         data = json.loads(request.body)
         username = data.get("user")
@@ -269,61 +361,53 @@ def create_playlist(request):
         new_playlist.save()
 
         return JsonResponse(
-            {"message": "Playlist creada exitosamente", "playlist_id": new_playlist.id},
+            {
+                "message": "Playlist creada exitosamente",
+                "playlist_id": new_playlist.id,
+            },
             status=201,
         )
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "JSON inválido"}, status=400)
     except Exception as e:
+        logger.exception("Error en create_playlist")
         return JsonResponse({"error": str(e)}, status=500)
 
 
 @require_http_methods(["GET"])
 def get_songs_by_playlist(request, playlist_id):
     """
-    Devuelve las canciones asociadas a una playlist en el orden definido
-    en la tabla intermedia.
-
-    Formato por canción:
-    - id
-    - title
-    - artist_display_name
-    - genre
-    - audioUrl
-    - coverUrl
-    - likes_count
-    - liked
+    Devuelve las canciones de una playlist en el orden definido en PlayListSong.
     """
     try:
-        logger.info(f"Buscando canciones para playlist_id: {playlist_id}")
+        logger.info("Buscando canciones para playlist_id=%s", playlist_id)
 
         playlist_songs = PlayListSong.objects.filter(
             playlist_id=playlist_id
         ).order_by("position")
 
         if not playlist_songs.exists():
-            logger.warning(f"No se encontraron canciones para playlist_id={playlist_id}")
+            logger.warning("No se encontraron canciones para playlist_id=%s", playlist_id)
             return JsonResponse({"songs": []})
 
         song_ids = [ps.song_id for ps in playlist_songs]
-        logger.info(f"song_ids encontrados: {song_ids}")
+        logger.info("song_ids encontrados: %s", song_ids)
 
         qs = Song.objects.filter(id__in=song_ids).only(
-            "id", "title", "artist_display_name", "genre", "audio_file", "cover_image"
+            "id",
+            "title",
+            "artist_display_name",
+            "genre",
+            "audio_file",
+            "cover_image",
         )
 
-        def _audio_url(s):
-            return _safe_file_url(getattr(s, "audio_file", None)) or ""
-
-        def _cover_url(s):
-            cu = _safe_file_url(getattr(s, "cover_image", None))
-            return cu or None
-
-        # --- Calcular likes totales y qué canciones le gustan al usuario ---
         ct_song = ContentType.objects.get_for_model(Song)
-
-        likes_qs = LikeMedia.objects.filter(content_type=ct_song, object_id__in=song_ids)
+        likes_qs = LikeMedia.objects.filter(
+            content_type=ct_song,
+            object_id__in=song_ids,
+        )
 
         counts = {}
         for l in likes_qs:
@@ -336,69 +420,96 @@ def get_songs_by_playlist(request, playlist_id):
                 likes_qs.filter(user=user).values_list("object_id", flat=True)
             )
 
-        # --- Construir mapa de canciones con campos extras ---
         songs_map = {}
         for s in qs:
+            au = _song_audio_url(s)
+            cu = _song_cover_url(s)
             songs_map[s.id] = {
                 "id": s.id,
                 "title": s.title,
                 "artist_display_name": getattr(s, "artist_display_name", "") or "",
                 "genre": getattr(s, "genre", "") or "",
-                "audioUrl": _audio_url(s),
-                "coverUrl": _cover_url(s),
+                "audioUrl": au,
+                "coverUrl": cu,
                 "likes_count": counts.get(s.id, 0),
-                "liked": (s.id in user_liked_set),
+                "liked": s.id in user_liked_set,
             }
 
         ordered = []
         for sid in song_ids:
             data = songs_map.get(sid)
             if not data:
-                logger.warning(f"Canción con id {sid} no existe en tabla Song")
+                logger.warning("Canción con id %s no existe en tabla Song", sid)
                 continue
             if not data["audioUrl"]:
-                logger.warning(f"Canción id {sid} sin audioUrl; no será reproducible")
+                logger.warning(
+                    "Canción id %s sin audioUrl; no será reproducible", sid
+                )
                 continue
             ordered.append(data)
 
         return JsonResponse({"songs": ordered})
 
     except Exception as e:
-        logger.error(f"Error en get_songs_by_playlist: {str(e)}", exc_info=True)
+        logger.error("Error en get_songs_by_playlist: %s", str(e), exc_info=True)
         return JsonResponse({"error": str(e)}, status=500)
 
 
 @csrf_exempt
 @require_http_methods(["DELETE"])
 def delete_playlist(request, playlist_id):
-    """Elimina una playlist por identificador."""
+    """
+    Elimina una playlist por identificador.
+    """
     try:
         playlist = PlayList.objects.get(id=playlist_id)
         playlist.delete()
-        return JsonResponse({"message": "Playlist eliminada correctamente"}, status=200)
+        return JsonResponse(
+            {"message": "Playlist eliminada correctamente"},
+            status=200,
+        )
+
     except PlayList.DoesNotExist:
         return JsonResponse({"error": "Playlist no encontrada"}, status=404)
     except Exception as e:
+        logger.exception("Error en delete_playlist")
         return JsonResponse({"error": str(e)}, status=500)
 
 
 @csrf_exempt
 @require_http_methods(["PUT"])
 def update_playlist(request, playlist_id):
-    """Actualiza el nombre de una playlist a partir de un cuerpo JSON."""
+    """
+    Actualiza nombre y/o privacidad de una playlist.
+
+    JSON esperado:
+    { "name": "<nuevo nombre>", "isprivate": true|false }
+    """
     try:
-        playlist = PlayList.objects.get(id=playlist_id)
-        data = json.loads(request.body)
-        new_name = (data.get("name") or "").strip()
+        pl = PlayList.objects.get(id=playlist_id)
+        data = json.loads(request.body or "{}")
 
-        if not new_name:
-            return JsonResponse({"error": "El nombre no puede estar vacío"}, status=400)
+        new_name = data.get("name", None)
+        if new_name is not None:
+            new_name = (new_name or "").strip()
+            if not new_name:
+                return JsonResponse(
+                    {"error": "El nombre no puede estar vacío"},
+                    status=400,
+                )
+            pl.name = new_name
 
-        playlist.name = new_name
-        playlist.save()
+        if "isprivate" in data:
+            ispriv = bool(data.get("isprivate"))
+            pl.isprivate = ispriv
 
+        pl.save()
         return JsonResponse(
-            {"message": "Playlist actualizada correctamente", "name": playlist.name},
+            {
+                "message": "Playlist actualizada",
+                "name": pl.name,
+                "isprivate": pl.isprivate,
+            },
             status=200,
         )
 
@@ -407,46 +518,77 @@ def update_playlist(request, playlist_id):
     except json.JSONDecodeError:
         return JsonResponse({"error": "JSON inválido"}, status=400)
     except Exception as e:
+        logger.exception("Error en update_playlist")
         return JsonResponse({"error": str(e)}, status=500)
 
 
 @require_http_methods(["GET"])
 def get_all_songs(request):
-    """Devuelve un listado básico de canciones públicas (id, título, artista)."""
+    """
+    Devuelve canciones públicas para Home / reproductor.
+    """
     try:
-        songs = Song.objects.filter(visibility="public").values(
-            "id", "title", "artist_display_name"
+        qs = (
+            Song.objects.filter(visibility="public")
+            .only(
+                "id",
+                "title",
+                "artist_display_name",
+                "genre",
+                "audio_file",
+                "cover_image",
+                "created_at",
+            )
+            .order_by("-created_at")
         )
-        return JsonResponse(list(songs), safe=False)
+
+        songs = []
+        for s in qs:
+            au = _song_audio_url(s)
+            if not au:
+                continue
+
+            songs.append(
+                {
+                    "id": s.id,
+                    "title": s.title,
+                    "artist_display_name": getattr(
+                        s, "artist_display_name", ""
+                    )
+                    or "",
+                    "genre": getattr(s, "genre", "") or "",
+                    "audioUrl": au,
+                    "coverUrl": _song_cover_url(s),
+                }
+            )
+
+        return JsonResponse(songs, safe=False)
+
     except Exception as e:
+        logger.exception("Error en get_all_songs")
         return JsonResponse({"error": str(e)}, status=500)
-
-
-def _get_session_user_obj(request):
-    """Devuelve la instancia Users asociada a request.session['user'], o None si no existe."""
-    username = request.session.get("user")
-    if not username:
-        return None
-    try:
-        return Users.objects.get(user=username)
-    except Users.DoesNotExist:
-        return None
 
 
 @require_http_methods(["GET"])
 def mis_likes_json(request):
     """
-    Devuelve las canciones marcadas con "like" por el usuario autenticado,
-    en el formato esperado por el reproductor.
+    Devuelve las canciones marcadas con "like" por el usuario autenticado.
+
+    Formato:
+    {
+        "id": "pl:likes",
+        "name": "Mis likes",
+        "songs": [...]
+    }
     """
     user = _get_session_user_obj(request)
     if not user:
         return JsonResponse({"error": "login_required"}, status=401)
 
     ct_song = ContentType.objects.get_for_model(Song)
-    like_qs = LikeMedia.objects.filter(user=user, content_type=ct_song).values_list(
-        "object_id", flat=True
-    )
+    like_qs = LikeMedia.objects.filter(
+        user=user, content_type=ct_song
+    ).values_list("object_id", flat=True)
 
     songs_qs = (
         Song.objects.filter(id__in=list(like_qs), visibility="public")
@@ -454,26 +596,22 @@ def mis_likes_json(request):
         .order_by("-created_at")
     )
 
-    def _audio_url(s):
-        return _safe_file_url(getattr(s, "audio_file", None)) or ""
-
-    def _cover_url(s):
-        cu = _safe_file_url(getattr(s, "cover_image", None))
-        return cu or None
-
     songs = []
     for s in songs_qs:
-        au = _audio_url(s)
+        au = _song_audio_url(s)
         if not au:
             continue
         songs.append(
             {
                 "id": s.id,
                 "title": s.title,
-                "artist_display_name": getattr(s, "artist_display_name", "") or "",
+                "artist_display_name": getattr(
+                    s, "artist_display_name", ""
+                )
+                or "",
                 "genre": getattr(s, "genre", "") or "",
                 "audioUrl": au,
-                "coverUrl": _cover_url(s),
+                "coverUrl": _song_cover_url(s),
             }
         )
 
@@ -483,7 +621,16 @@ def mis_likes_json(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def add_song_to_playlist(request):
-    """Agrega una canción a una playlist a partir de un cuerpo JSON."""
+    """
+    Agrega una canción a una playlist a partir de un cuerpo JSON.
+
+    JSON esperado:
+    {
+        "song_id": <id canción>,
+        "playlist_id": <id playlist>,
+        "position": <posición entera>
+    }
+    """
     try:
         data = json.loads(request.body)
         song_id = data.get("song_id")
@@ -510,13 +657,22 @@ def add_song_to_playlist(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "JSON inválido"}, status=400)
     except Exception as e:
+        logger.exception("Error en add_song_to_playlist")
         return JsonResponse({"error": str(e)}, status=500)
 
 
 @csrf_exempt
 @require_http_methods(["DELETE"])
 def remove_song_from_playlist(request):
-    """Elimina una canción de una playlist a partir de un cuerpo JSON."""
+    """
+    Elimina una canción de una playlist a partir de un cuerpo JSON.
+
+    JSON esperado:
+    {
+        "playlist_id": <id playlist>,
+        "song_id": <id canción>
+    }
+    """
     try:
         data = json.loads(request.body)
         playlist_id = data.get("playlist_id")
@@ -534,21 +690,28 @@ def remove_song_from_playlist(request):
         if deleted_count == 0:
             return JsonResponse({"error": "Registro no encontrado"}, status=404)
 
-        return JsonResponse({"message": "Canción eliminada de la playlist"}, status=200)
+        return JsonResponse(
+            {"message": "Canción eliminada de la playlist"},
+            status=200,
+        )
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "JSON inválido"}, status=400)
     except Exception as e:
+        logger.exception("Error en remove_song_from_playlist")
         return JsonResponse({"error": str(e)}, status=500)
 
 
-# ---------- Búsqueda ----------
+# ============================================================================
+# Búsqueda (HTML + API JSON)
+# ============================================================================
 
 
 def buscar(request):
     """
-    Búsqueda de canciones públicas, artistas y playlists públicas (vista HTML).
+    Vista HTML de búsqueda (/buscar/).
 
+    Busca en canciones públicas, artistas (Users type='artista') y playlists públicas.
     Requiere que el usuario haya iniciado sesión.
     """
     if "user" not in request.session:
@@ -575,7 +738,9 @@ def buscar(request):
         )
 
         resultados["artistas"] = (
-            Users.objects.filter(Q(user__icontains=query) & Q(type__iexact="artista"))
+            Users.objects.filter(
+                Q(user__icontains=query) & Q(type__iexact="artista")
+            )
             .only("id", "user", "avatar", "created_at")[:20]
         )
 
@@ -608,7 +773,7 @@ def buscar(request):
 
 def api_buscar(request):
     """
-    API JSON para búsqueda en tiempo real (autosuggest).
+    API JSON para autosuggest de búsqueda.
 
     Devuelve hasta 5 coincidencias por tipo: canciones, artistas y playlists públicas.
     """
@@ -620,7 +785,6 @@ def api_buscar(request):
     results = {"canciones": [], "artistas": [], "playlists": []}
 
     try:
-        # Canciones
         canciones = Song.objects.filter(
             Q(title__icontains=query) | Q(artist_display_name__icontains=query),
             visibility="public",
@@ -631,12 +795,11 @@ def api_buscar(request):
                     "id": c.id,
                     "title": c.title,
                     "artist": c.artist_display_name,
-                    "audioUrl": _safe_file_url(c.audio_file),
-                    "coverUrl": _safe_file_url(c.cover_image),
+                    "audioUrl": _song_audio_url(c),
+                    "coverUrl": _song_cover_url(c),
                 }
             )
 
-        # Artistas
         artistas = Users.objects.filter(
             Q(user__icontains=query) & Q(type__iexact="artista")
         )[:5]
@@ -649,7 +812,6 @@ def api_buscar(request):
                 }
             )
 
-        # Playlists públicas
         playlists = PlayList.objects.filter(
             Q(name__icontains=query) & Q(isprivate=False)
         )[:5]
@@ -663,18 +825,23 @@ def api_buscar(request):
             )
 
     except Exception as e:
-        logger.error(f"Error en api_buscar: {str(e)}")
+        logger.error("Error en api_buscar: %s", str(e))
 
     return JsonResponse(results)
+
+
+# ============================================================================
+# Likes (canciones / playlists)
+# ============================================================================
 
 
 @require_POST
 def like_song(request, song_id):
     """
-    Alterna el estado de "like" para una canción.
+    Alterna el estado de like para una canción.
 
     Respuesta JSON:
-        { "liked": bool, "total": int }
+    { "liked": bool, "total": int }
     """
     user = _get_session_user_obj(request)
     if not user:
@@ -682,6 +849,7 @@ def like_song(request, song_id):
 
     song = get_object_or_404(Song, id=song_id)
     ct = ContentType.objects.get_for_model(Song)
+
     qs = LikeMedia.objects.filter(user=user, content_type=ct, object_id=song.id)
     if qs.exists():
         qs.delete()
@@ -697,10 +865,10 @@ def like_song(request, song_id):
 @require_POST
 def like_playlist(request, playlist_id):
     """
-    Alterna el estado de "like" para una playlist.
+    Alterna el estado de like para una playlist.
 
     Respuesta JSON:
-        { "liked": bool, "total": int }
+    { "liked": bool, "total": int }
     """
     user = _get_session_user_obj(request)
     if not user:
@@ -708,6 +876,7 @@ def like_playlist(request, playlist_id):
 
     playlist = get_object_or_404(PlayList, id=playlist_id)
     ct = ContentType.objects.get_for_model(PlayList)
+
     qs = LikeMedia.objects.filter(user=user, content_type=ct, object_id=playlist.id)
     if qs.exists():
         qs.delete()

@@ -1,0 +1,59 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Artista no registrado • Melodify</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <!-- Fuentes -->
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
+</head>
+<body class="page-muro">
+
+<header id="header">
+  <div class="user-info" id="user-trigger">
+    <div class="user-icon">
+      {{ session_user|default:"U"|first }}
+    </div>
+    <span id="username">{{ session_user|default:"Usuario" }}</span>
+  </div>
+</header>
+
+<aside id="menuLateral">
+  <div class="logo" id="toggle-menu">
+    <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
+    <span class="logo-text">Melodify</span>
+  </div>
+  <nav class="menu-scroll">
+    <a class="menu-item" href="{% url 'home' %}?view=home" data-external="true">Home</a>
+  </nav>
+</aside>
+
+<main id="main-content" data-view="error">
+  <button id="menu-toggle-btn" type="button">☰</button>
+  <a id="back-btn" class="back" href="{% url 'home' %}" aria-label="Regresar">←</a>
+
+  <div class="page" style="max-width:640px;margin:0 auto;">
+    <h1 style="margin-bottom:12px;">Artista no registrado</h1>
+    <p class="muted" style="margin-bottom:18px;">
+      El artista
+      <strong>{{ requested_username }}</strong>
+      no está registrado en Melodify
+      o aún no tiene un perfil de artista válido.
+    </p>
+
+    <p class="muted" style="margin-bottom:18px;">
+      Es posible que la canción haya sido cargada directamente en la base de datos
+      sin vincularla a un usuario creador.
+    </p>
+
+    <a class="btn" href="{% url 'home' %}">Volver al Home</a>
+  </div>
+</main>
+
+</body>
+</html>

@@ -71,7 +71,7 @@ body{
   gap: 0;
 }
 
-/* Logo apila bien en móvil */
+/* Logo apila en móvil */
 .logo-container{
   flex-wrap: wrap;
   gap: .75rem 1rem;
@@ -133,9 +133,8 @@ body{
   overflow:auto;
 }
 
-/* Off-canvas en <=1024px: no ocupa columna, se muestra sobrepuesto */
 @media (max-width:1024px){
-  .layout{ grid-template-columns: 1fr; } /* oculta columna de sidebar */
+  .layout{ grid-template-columns: 1fr; } 
   .sidebar{
     position: fixed;
     left: 0; top: 0; bottom: 0;
@@ -163,3 +162,8 @@ body{
 .only-lg{ display:none !important; }
 @media (min-width:1024px){ .only-lg{ display:initial !important; } }
 
+
+    #like-toast.show{
+      opacity:1;
+      transform:translateX(-50%) translateY(0);
+    }

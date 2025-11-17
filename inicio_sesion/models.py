@@ -134,45 +134,31 @@ class Song(models.Model):
 # ======================================================================
 
 class PlayList(models.Model):
-    """
-    Playlist almacenada en tabla externa.
-
-    Nota: `managed = False`, Django no crea ni altera la tabla.
-    """
-    id = models.AutoField(primary_key=True)
-    # ID de la tabla Users (entero, no FK real)
-    idUser = models.IntegerField()
-    name = models.CharField(max_length=200)
-    # En la práctica se usa muchas veces como cadena vacía, se marca blank=True.
-    portada = models.URLField(blank=True)
-    isprivate = models.BooleanField(default=False)
+    id         = models.AutoField(primary_key=True)
+    idUser     = models.IntegerField()
+    name       = models.CharField(max_length=200)
+    portada    = models.CharField(max_length=200, blank=True, default="")
+    isprivate  = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "PlayList"
-        managed = False  # Django no gestiona esta tabla con migraciones
+        db_table = "inicio_sesion_playlist"
+        managed  = False
 
-    def __str__(self) -> str:
-        return f"Playlist {self.name} (user_id={self.idUser})"
+    def __str__(self): return f"Playlist {self.name} (user_id={self.idUser})"
 
 
 class PlayListSong(models.Model):
-    """
-    Relación canción–playlist (tabla intermedia externa).
-
-    Se utiliza `playlist_id` y `song_id` como enteros, sin FKs reales.
-    """
     playlist_id = models.IntegerField()
-    song_id = models.IntegerField()
-    position = models.IntegerField()
+    song_id     = models.IntegerField()
+    position    = models.IntegerField()
 
     class Meta:
-        db_table = "PlayListSongs"
-        managed = False  # Django no gestiona esta tabla con migraciones
-        # unique_together = ('playlist_id', 'song_id')
-        # ordering = ['position']
+        db_table = "PlayListSong"
+        managed  = False
+        unique_together = (("playlist_id", "song_id"),)
 
-    def __str__(self) -> str:
+    def __str__(self):
         return f"PlaylistSong pl={self.playlist_id} song={self.song_id} pos={self.position}"
 
 

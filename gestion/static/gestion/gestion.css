@@ -1,90 +1,70 @@
 /* ==========================================================================
    Melodify — Gestión (admin)
-   Acciones destructivas (danger) + barra de progreso en registro
-   - Botones “Eliminar” (Usuarios/Catálogo) y acción de modal
-   - Variante .btnDanger reutilizable
-   - Barra de progreso + spinner en registro Artista/Admin
+   Estilos para botones de peligro, barra de progreso y tarjetas de catálogo
    ========================================================================== */
 
-/* 1) Paleta de colores para acciones de peligro ---------------------------- */
+/* Paleta de colores para acciones de peligro */
 :root {
-  --danger-border:     #743d3d;
-  --danger-bg:         #592626;
-  --danger-bg-hover:   #6a2d2d;
+  --danger-border:   #743d3d;
+  --danger-bg:       #592626;
+  --danger-bg-hover: #6a2d2d;
 }
 
-/* 2) Botón base en Gestión (contexto Catálogo) ----------------------------- */
+/* Botón base en Gestión (catálogo, usuarios, modal) */
 #tab-catalogo .btn,
-#catalogo-grid .js-delete-form button {
+#catalogo-grid .js-delete-form button,
+#tab-usuarios .js-delete-form button,
+#confirm-accept {
   padding: 10px 14px;
   border-radius: 8px;
   border: 1px solid #3a3a3a;
   background: #2a2a2a;
   color: #eee;
   cursor: pointer;
+  font-size: 0.95rem;
 }
 
-/* 3) Variante genérica .btnDanger (reutilizable) --------------------------- */
-.btnDanger {
+/* Variante de botón de peligro (eliminación / acciones destructivas) */
+.btnDanger,
+.btnPeligro,
+#tab-catalogo #bulk-delete,
+#catalogo-grid .js-delete-form button,
+#tab-usuarios .js-delete-form button,
+#confirm-accept {
   border-color: var(--danger-border) !important;
-  background: var(--danger-bg) !important;
-  color: #eee !important;
+  background:   var(--danger-bg) !important;
+  color:        #eee !important;
 }
-.btnDanger:hover {
+
+.btnDanger:hover,
+.btnPeligro:hover,
+#tab-catalogo #bulk-delete:hover,
+#catalogo-grid .js-delete-form button:hover,
+#tab-usuarios .js-delete-form button:hover,
+#confirm-accept:hover {
   background: var(--danger-bg-hover) !important;
 }
 
-/* 4) Botones de eliminación en Catálogo ----------------------------------- */
-#tab-catalogo #bulk-delete,
-#catalogo-grid .js-delete-form button {
-  border-color: var(--danger-border);
-  background: var(--danger-bg);
-}
-#tab-catalogo #bulk-delete:hover,
-#catalogo-grid .js-delete-form button:hover {
-  background: var(--danger-bg-hover);
-}
-
-/* 5) Botones de eliminación en pestaña Usuarios --------------------------- */
-#tab-usuarios .js-delete-form button {
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--danger-border);
-  background: var(--danger-bg);
-  color: #eee;
-  cursor: pointer;
-}
-#tab-usuarios .js-delete-form button:hover {
-  background: var(--danger-bg-hover);
-}
-
-/* 6) Botón de aceptar en el modal de confirmación ------------------------- */
-#confirm-accept {
-  border: 1px solid var(--danger-border);
-  background: var(--danger-bg);
-  color: #eee;
-}
-#confirm-accept:hover {
-  background: var(--danger-bg-hover);
-}
-
-/* 7) Accesibilidad y estados ---------------------------------------------- */
-#tab-catalogo #bulk-delete:disabled {
+/* Estados deshabilitados y accesibilidad */
+#tab-catalogo #bulk-delete:disabled,
+.btnDanger:disabled,
+.btnPeligro:disabled {
   opacity: .6;
   cursor: not-allowed;
 }
 
-/* Enfoque visible para acciones “danger” */
+/* Enfoque visible para acciones de peligro (uso con teclado) */
 #tab-catalogo #bulk-delete:focus-visible,
 #catalogo-grid .js-delete-form button:focus-visible,
 #tab-usuarios .js-delete-form button:focus-visible,
 #confirm-accept:focus-visible,
-.btnDanger:focus-visible {
+.btnDanger:focus-visible,
+.btnPeligro:focus-visible {
   outline: 2px solid #ff4d4d;
   outline-offset: 1px;
 }
 
-/* 8) Barra de progreso en registro (alta admin/artista) ------------------- */
+/* Barra de progreso en registro de administrador/artista */
 .upload-bar {
   position: fixed;
   left: 50%;
@@ -99,14 +79,17 @@
   z-index: 1100;
   display: none;
 }
+
 .upload-bar.is-visible {
   display: block;
 }
+
 .upload-bar .row {
   display: flex;
   align-items: center;
   gap: 10px;
 }
+
 .upload-bar .progress {
   flex: 1;
   height: 8px;
@@ -114,6 +97,7 @@
   border-radius: 999px;
   overflow: hidden;
 }
+
 .upload-bar .progress > i {
   display: block;
   height: 100%;
@@ -121,6 +105,7 @@
   background: linear-gradient(90deg, #7a3cff, #8b5dff);
   transition: width .08s linear;
 }
+
 .upload-bar .label {
   font-size: 12px;
   color: #bbb;
@@ -128,12 +113,13 @@
   text-align: right;
 }
 
-/* 9) Estado ocupado en botón (spinner ligero) ----------------------------- */
+/* Estado ocupado en botón (spinner) */
 .btn[aria-busy="true"] {
   position: relative;
   opacity: .75;
   pointer-events: none;
 }
+
 .btn[aria-busy="true"]::after {
   content: "";
   position: absolute;
@@ -150,4 +136,71 @@
 
 @keyframes spin {
   to { transform: translateY(-50%) rotate(360deg); }
+}
+
+/* Catálogo: distribución en cuadrícula de tarjetas de canción */
+#tab-catalogo .grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+#tab-catalogo .song {
+  background: #1b1b1b;
+  border: 1px solid #2b2b2b;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+/* Checkbox de selección dentro de la tarjeta */
+#tab-catalogo .song .select-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  margin: -2px 0 8px;
+}
+
+#tab-catalogo .song .select-wrap input {
+  margin: 0;
+}
+
+/* Fila principal de la tarjeta: portada y metadatos */
+#tab-catalogo .row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+#tab-catalogo .preview {
+  width: 88px;
+  height: 88px;
+  border-radius: 8px;
+  background: #2a2a2a;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .2);
+}
+
+#tab-catalogo .song-title {
+  font-weight: 600;
+}
+
+/* Barra de acciones dentro de la tarjeta (editar / eliminar / etc.) */
+#tab-catalogo .toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Estado visual de canción en reproducción */
+#tab-catalogo .song.is-playing {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px rgba(154, 173, 221, 0.45),
+    0 0 24px rgba(154, 173, 221, 0.40);
+  background:
+    radial-gradient(circle at 0 0, rgba(154, 173, 221, 0.22), transparent 55%),
+    #141414;
 }

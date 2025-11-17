@@ -1,6 +1,8 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="es">
+  <meta name="username" content="{{ session_user }}">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -13,42 +15,51 @@
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
 
-  <!-- Reproductor (CSS): reproductor primero, barra UI al final para sobrescribir -->
+  <!-- Estilos del reproductor -->
   <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
 
   <script>
-    /* Ruta del módulo JS del reproductor — el homeScript usa import dinámico */
     window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
   </script>
 
-  <!-- (Opcional) playlists UI propia -->
+  <!-- UI de playlists -->
   <script src="{% static 'inicio_sesion/playListScript.js' %}"></script>
   <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
 </head>
 
 <body class="page-home">
-  <!-- Header -->
+  <!-- Header superior (buscador y usuario) -->
   <div id="header">
-    <!-- Buscador centrado -->
+    <!-- Buscador global -->
     <div id="search" class="search">
-      <form id="search-form" role="search" aria-label="Buscar" method="get" action="{% url 'buscar' %}">
+      <form
+        id="search-form"
+        role="search"
+        aria-label="Buscar"
+        method="get"
+        action="{% url 'buscar' %}"
+      >
         <input
-            id="search-input"
-            name="q"
-            type="search"
-            placeholder="Buscar canciones, artistas o playlists…"
-            autocomplete="off"
-            aria-controls="search-panel"
-            required />
+          id="search-input"
+          name="q"
+          type="search"
+          placeholder="Buscar canciones, artistas o playlists…"
+          autocomplete="off"
+          aria-controls="search-panel"
+          required
+        />
       </form>
+      <!-- Panel flotante de resultados de búsqueda -->
       <div id="search-panel" class="search-panel" hidden></div>
     </div>
 
-    <!-- Usuario -->
+    <!-- Información de usuario -->
     <div class="user-info" id="user-trigger">
-      <div class="user-icon">U</div>
-      <span id="username">Usuario</span>
+      <div class="user-icon">
+        {{ session_user|default:"U"|first }}
+      </div>
+      <span id="username">{{ session_user|default:"Usuario" }}</span>
       <div id="user-menu">
         <a href="#" id="menu-perfil">Perfil</a>
         <a href="#" id="menu-logout" data-logout-url="{% url 'logout' %}">Cerrar sesión</a>
@@ -63,58 +74,81 @@
       <span class="logo-text">Melodify</span>
     </div>
 
-    <!-- Home (ruta real) -->
+    <!-- Home (ruta principal) -->
     <a class="menu-item" data-view="home" href="{% url 'home' %}">Home</a>
 
-    <!-- Vistas internas del SPA (las renderiza homeScript.js) -->
+    <!-- Vistas internas de la SPA -->
     <div class="menu-item" data-view="playlist">PlayList</div>
     <div class="menu-item" data-view="reproductor">Reproductor</div>
     <div class="menu-item" data-view="perfil">Perfil</div>
 
-    <!-- Vistas de servidor (navegación) -->
-    <div class="menu-item" data-view="mi-muro">Muro del artista</div>
-    <div class="menu-item" data-view="gestion">Gestión</div>
+    <!-- Vistas servidas desde el backend -->
+    {% if session_role|lower == "artista" %}
+      <div class="menu-item" data-view="mi-muro">Muro del artista</div>
+    {% endif %}
+
+    {% if session_role|lower == "administrador" %}
+      <div class="menu-item" data-view="gestion">Gestión</div>
+    {% endif %}
   </div>
 
-  <!-- Contenido -->
-  <div id="main-content"
-       data-initial-view="home"
-       data-username="{{ session_user }}"
-       data-role="{{ session_role }}"
-       data-avatar="{{ session_avatar_url }}"
-       data-description="{{ session_description }}"
-       data-created-at="{{ session_created_at }}"
-       data-url-home="{% url 'home' %}"
-       data-url-musica="/musica/"
-       data-url-mi-muro="{% url 'mi_muro' %}"
-       data-url-gestion="{% url 'gestion' %}"
-       data-url-mi-musica-json="{% url 'mi_musica_json' %}">
-
+  <!-- Contenedor principal SPA -->
+  <div
+    id="main-content"
+    data-initial-view="{{ initial_view|default:'home' }}"
+    data-username="{{ session_user }}"
+    data-role="{{ session_role }}"
+    data-avatar="{{ session_avatar_url }}"
+    data-description="{{ session_description }}"
+    data-created-at="{{ session_created_at }}"
+    data-url-home="{% url 'home' %}"
+    data-url-musica="/musica/"
+    data-url-mi-muro="{% url 'mi_muro' %}"
+    data-url-gestion="{% url 'gestion' %}"
+    data-url-mi-musica-json="{% url 'mi_musica_json' %}"
+    data-url-mis-likes-json="{% url 'mis_likes_json' %}"
+    data-url-all-songs-json="{% url 'all_songs_json' %}"
+    data-url-muro-publico-template="{% url 'muro_publico' 'ARTISTA_PLACEHOLDER' %}"
+  >
+    <!-- Botón hamburguesa (responsive) -->
     <button id="menu-toggle-btn">☰</button>
 
-    <!-- Botón Back universal (lo maneja la SPA; oculto en Home por CSS) -->
-    <a id="back-btn" class="back" href="{% url 'home' %}" title="Volver a inicio" aria-label="Regresar">←</a>
+    <!-- Botón back SPA -->
+    <a
+      id="back-btn"
+      class="back"
+      href="{% url 'home' %}"
+      title="Volver a inicio"
+      aria-label="Regresar"
+    >←</a>
 
     <div id="content"></div>
   </div>
 
-  <!-- Playlists para el reproductor (inyectadas desde views.py cuando aplique) -->
+  <div id="like-toast" aria-live="polite"></div>
+
+  <!-- Playlists iniciales en JSON -->
   <script id="playlists-data-json" type="application/json">
     {{ playlists_json|default:"[]"|safe }}
   </script>
 
-  <!-- Scripts (en orden): barra UI → SPA -->
+  <!-- Scripts principales -->
+  <!-- Barra flotante del reproductor -->
   <script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
+
+  <!-- SPA principal -->
   <script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
 
-  <!-- Logout (POST con CSRF) + anti-cache -->
+  <!-- Logout y control de navegación/caché -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       const logoutLink = document.getElementById('menu-logout');
       const logoutUrl  = "{% url 'logout' %}";
+
       if (logoutLink) {
         logoutLink.addEventListener('click', function(e) {
           e.preventDefault();
+
           if (confirm('¿Seguro que deseas cerrar sesión?')) {
             const form  = document.createElement('form');
             form.method = 'POST';
@@ -129,25 +163,28 @@
             document.body.appendChild(form);
             form.submit();
           }
+
           const userMenu = document.getElementById('user-menu');
           if (userMenu) userMenu.classList.remove('show');
         });
       }
 
-      // Prevenir navegación hacia atrás en cache tras logout
       if (performance.navigation && performance.navigation.type === 2) {
         window.location.href = "{% url 'home' %}";
       }
-      window.onpageshow = function(ev){ if (ev.persisted) window.location.reload(); };
+      window.onpageshow = function(ev) {
+        if (ev.persisted) {
+          window.location.reload();
+        }
+      };
 
-      // Evitar re-envío de formularios al refrescar
       if (window.history.replaceState) {
         window.history.replaceState(null, null, window.location.href);
       }
     });
   </script>
 
-  <!-- Script para manejo de búsqueda -->
+  <!-- Script de búsqueda y autosuggest -->
   <script src="{% static 'inicio_sesion/searchHandler.js' %}?v={% now 'U' %}"></script>
 </body>
 </html>

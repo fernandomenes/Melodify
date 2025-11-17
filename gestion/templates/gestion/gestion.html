@@ -1,285 +1,649 @@
 {% load static %}
 <!doctype html>
 <html lang="es">
-  <!--
-    gestion/gestion.html
-    Panel de administración para usuarios con rol "Administrador":
-
-      • Cabecera con usuario actual + menú de cuenta
-      • Sidebar mínimo (Home / Perfil, siempre fuera de la SPA)
-      • Formulario para alta de artistas
-      • Formulario para alta de administradores
-      • Pestañas:
-          - Usuarios  → administración de cuentas (activar, desactivar, editar, eliminar)
-          - Catálogo → catálogo de canciones públicas con filtro + borrado múltiple
-      • Soporte de “Deshacer” (undo) integrando el endpoint revertir_accion
-      • Incluye gestion.js (lógica rica) + pequeño fallback en caso de que no cargue
-  -->
-
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
 <head>
   <meta charset="utf-8">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Gestión (Administrador) | Melodify</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, viewport-fit=cover">
 
-  <!-- Desactiva la SPA del Home en esta carga (vista completamente de servidor) -->
+  {# Desactiva la SPA del Home en esta carga (vista completamente de servidor) #}
   <script>window.__DISABLE_HOME_SCRIPT__ = true;</script>
 
-  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
-  <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
-  <link rel="stylesheet" href="{% static 'gestion/gestion.css' %}?v={% now 'U' %}">
+  {# Fuentes y estilos base del layout principal (header + sidebar) #}
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap"
+        rel="stylesheet">
+  <link rel="stylesheet"
+        href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet"
+        href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
+
+  {# Reproductor global + barra inferior #}
+  <link rel="stylesheet"
+        href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet"
+        href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
+  <link rel="stylesheet"
+        href="{% static 'inicio_sesion/PlayListStyles.css' %}?v={% now 'U' %}">
+
+  <script>
+    window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
+    window.PLAYLISTS_SRC  = "{% static 'inicio_sesion/playListScript.js' %}?v={% now 'U' %}";
+
+  </script>
+
+  {# Carga del módulo del reproductor (ESM) solo una vez en Gestión #}
+  <script type="module">
+    (async () => {
+      try {
+        const src = window.REPRODUCTOR_SRC;
+        if (!src) return;
+        const mod = await import(src);
+
+        // Lo guardamos global para scripts clásicos (MDFCore + barra)
+        window.__REPRODUCTOR_MODULE__ = mod;
+
+        // Señal de que el módulo ya está listo
+        window.dispatchEvent(
+          new CustomEvent("melodify:player-module-ready", { detail: { mod } })
+        );
+      } catch (err) {
+        console.warn("No se pudo importar el módulo del reproductor en Gestión:", err);
+      }
+    })();
+  </script>
+
+  {# Estilos específicos de Gestión #}
+  <link rel="stylesheet"
+        href="{% static 'gestion/gestion.css' %}?v={% now 'U' %}">
 
   <style>
-    :root{--bg:#121212;--card:#1e1e1e;--line:#2b2b2b;--muted:#9aa0a6;--btn:#2a2a2a;--btnb:#3a3a3a;--accent:#9ad}
-    *{box-sizing:border-box}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:#eee;margin:0}
-    .page{padding:16px 24px;max-width:1800px;margin:0 auto}
-    header.page-hd{display:flex;align-items:center;gap:12px;margin:0 0 16px}
-    .back{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:999px;border:1px solid var(--line);background:#181818;color:#fff;text-decoration:none;font-weight:700;font-size:18px}
-    .back:hover{background:#222}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:16px 0}
-    label{display:block;margin:10px 0 6px;font-size:14px;color:#bbb}
-    input[type="text"],input[type="password"],input[type="file"],textarea,select{
-      width:100%;max-width:520px;padding:10px;border-radius:8px;border:1px solid #333;background:#191919;color:#eee;appearance:none;outline:none}
-    textarea{resize:vertical;min-height:72px}
-    .btn{padding:10px 14px;border-radius:8px;border:1px solid var(--btnb);background:var(--btn);color:#eee;cursor:pointer;text-decoration:none;display:inline-block}
-    .btn:hover{background:#333}
-    .grid2{display:grid;grid-template-columns:1fr;gap:16px}
-    @media(min-width:1024px){.grid2{grid-template-columns:1fr 1fr}}
-    .tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin:8px 0 0}
-    .tab-btn{appearance:none;border:1px solid var(--line);border-bottom:none;background:#181818;color:#ddd;padding:10px 14px;border-top-left-radius:10px;border-top-right-radius:10px;cursor:pointer}
-    .tab-btn[aria-selected="true"], .tab-btn.active{background:#232323;color:#fff}
-    .tab{display:none;background:#232323;border:1px solid var(--line);border-radius:0 12px 12px 12px;padding:16px}
-    .tab.active{display:block}
-    table{width:100%;border-collapse:collapse}
-    th,td{padding:10px;border-bottom:1px solid #2b2b2b;text-align:left;vertical-align:middle;font-size:14px}
-    .muted{color:var(--muted);font-size:12px}
-    .avatar{width:32px;height:32px;border-radius:50%;object-fit:cover;background:#2b2b2b;display:inline-block}
-    .status{padding:2px 8px;border-radius:999px;border:1px solid #3a3a3a;font-size:12px}
-    .ok{color:#9fdfa7}.off{color:#f1b5b5}
-    .row-actions{white-space:nowrap}
-    .row-actions form{display:inline;margin:0 4px}
-    .row-actions a{margin:0 4px;color:var(--accent)}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-    .song{background:#1b1b1b;border:1px solid #2b2b2b;border-radius:10px;padding:12px}
-    .row{display:flex;gap:12px;align-items:center}
-    .preview{width:88px;height:88px;border-radius:8px;background:#2a2a2a;object-fit:cover;box-shadow:0 0 0 1px rgba(0,0,0,.2)}
-    .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
-    .undo-bar{display:flex;align-items:center;gap:10px;background:#202020;border:1px solid #2c2c2c;padding:10px;border-radius:10px;margin:12px 0}
-    .undo-bar .undo-label{color:#bbb;font-size:14px}
-    .msg{background:#202020;border:1px solid #333;color:#eee;border-radius:8px;padding:8px 10px;margin:10px 0;display:none}
-    .msg.error{border-color:#743d3d;background:#2a1818}
-    .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999;opacity:0;pointer-events:none;transition:opacity .15s}
-    .modal.show{opacity:1;pointer-events:auto}
-    .modal .dialog{background:#1f1f1f;border:1px solid #2b2b2b;border-radius:12px;padding:16px;max-width:420px;width:92%}
-    .modal .title{margin:0 0 8px;font-weight:600}
-    .modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+    :root{
+      --bg:#121212;
+      --card:#1e1e1e;
+      --line:#2b2b2b;
+      --muted:#9aa0a6;
+      --btn:#2a2a2a;
+      --btnb:#3a3a3a;
+      --accent:#9ad;
+    }
+
+    *{ box-sizing:border-box; }
+
+    body{
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+      background:var(--bg);
+      color:#eee;
+      margin:0;
+    }
+
+    .page{
+      padding:16px 24px;
+      max-width:1800px;
+      margin:0 auto;
+    }
+
+    header.page-hd{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      margin:0 0 16px;
+    }
+
+    .back{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:40px;
+      height:40px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background:#181818;
+      color:#fff;
+      text-decoration:none;
+      font-weight:700;
+      font-size:18px;
+    }
+    .back:hover{ background:#222; }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:16px;
+      margin:16px 0;
+    }
+
+    label{
+      display:block;
+      margin:10px 0 6px;
+      font-size:14px;
+      color:#bbb;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    input[type="file"],
+    textarea,
+    select{
+      width:100%;
+      max-width:520px;
+      padding:10px;
+      border-radius:8px;
+      border:1px solid #333;
+      background:#191919;
+      color:#eee;
+      appearance:none;
+      outline:none;
+    }
+
+    textarea{
+      resize:vertical;
+      min-height:72px;
+    }
+
+    .btn{
+      padding:10px 14px;
+      border-radius:8px;
+      border:1px solid var(--btnb);
+      background:var(--btn);
+      color:#eee;
+      cursor:pointer;
+      text-decoration:none;
+      display:inline-block;
+    }
+    .btn:hover{ background:#333; }
+
+    .grid2{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:16px;
+    }
+    @media(min-width:1024px){
+      .grid2{ grid-template-columns:1fr 1fr; }
+    }
+
+    .tabs{
+      display:flex;
+      gap:8px;
+      border-bottom:1px solid var(--line);
+      margin:8px 0 0;
+    }
+
+    .tab-btn{
+      appearance:none;
+      border:1px solid var(--line);
+      border-bottom:none;
+      background:#181818;
+      color:#ddd;
+      padding:10px 14px;
+      border-top-left-radius:10px;
+      border-top-right-radius:10px;
+      cursor:pointer;
+    }
+    .tab-btn[aria-selected="true"],
+    .tab-btn.active{
+      background:#232323;
+      color:#fff;
+    }
+
+    .tab{
+      display:none;
+      background:#232323;
+      border:1px solid var(--line);
+      border-radius:0 12px 12px 12px;
+      padding:16px;
+    }
+    .tab.active{ display:block; }
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+    }
+    th,td{
+      padding:10px;
+      border-bottom:1px solid #2b2b2b;
+      text-align:left;
+      vertical-align:middle;
+      font-size:14px;
+    }
+
+    .muted{
+      color:var(--muted);
+      font-size:12px;
+    }
+
+    .avatar{
+      width:32px;
+      height:32px;
+      border-radius:50%;
+      object-fit:cover;
+      background:#2b2b2b;
+      display:inline-block;
+    }
+
+    .status{
+      padding:2px 8px;
+      border-radius:999px;
+      border:1px solid #3a3a3a;
+      font-size:12px;
+    }
+    .ok{ color:#9fdfa7; }
+    .off{ color:#f1b5b5; }
+
+    .row-actions{ white-space:nowrap; }
+    .row-actions form{ display:inline; margin:0 4px; }
+    .row-actions a{ margin:0 4px; color:var(--accent); }
+
+    .undo-bar{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      background:#202020;
+      border:1px solid #2c2c2c;
+      padding:10px;
+      border-radius:10px;
+      margin:12px 0;
+    }
+    .undo-bar .undo-label{
+      color:#bbb;
+      font-size:14px;
+    }
+
+    .msg{
+      background:#202020;
+      border:1px solid #333;
+      color:#eee;
+      border-radius:8px;
+      padding:8px 10px;
+      margin:10px 0;
+      display:none;
+    }
+    .msg.error{
+      border-color:#743d3d;
+      background:#2a1818;
+    }
+
+    .upload-bar{
+      display:none;
+      margin:10px 0 16px;
+    }
+    .upload-bar.is-visible{ display:block; }
+
+    .upload-bar .row{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .upload-bar .progress{
+      flex:1;
+      height:6px;
+      border-radius:999px;
+      background:#1d1d1d;
+      overflow:hidden;
+    }
+    .upload-bar .progress > i{
+      display:block;
+      width:0%;
+      height:100%;
+      background:linear-gradient(90deg,#ff0066,#9c6bff);
+      transition:width .15s ease-out;
+    }
+    .upload-bar .label{
+      min-width:40px;
+      text-align:right;
+      font-size:12px;
+      color:#ccc;
+    }
+
+    .modal{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.5);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:999;
+      opacity:0;
+      pointer-events:none;
+      transition:opacity .15s;
+    }
+    .modal.show{
+      opacity:1;
+      pointer-events:auto;
+    }
+    .modal .dialog{
+      background:#1f1f1f;
+      border:1px solid #2b2b2b;
+      border-radius:12px;
+      padding:16px;
+      max-width:420px;
+      width:92%;
+    }
+    .modal .title{
+      margin:0 0 8px;
+      font-weight:600;
+    }
+    .modal .actions{
+      display:flex;
+      gap:8px;
+      justify-content:flex-end;
+      margin-top:14px;
+    }
+
+    /* Toast global reutilizado por MDFCore (likes, etc.) */
+    #like-toast{
+      position:fixed;
+      left:50%;
+      bottom:80px; /* arriba de la barra de reproducción */
+      transform:translateX(-50%) translateY(10px);
+      background:rgba(0,0,0,.85);
+      color:#fff;
+      padding:8px 14px;
+      border-radius:999px;
+      font-size:13px;
+      z-index:9999;
+      opacity:0;
+      pointer-events:none;
+      transition:opacity .18s ease-out, transform .18s ease-out;
+    }
+    #like-toast.show{
+      opacity:1;
+      transform:translateX(-50%) translateY(0);
+    }
   </style>
 </head>
-<body data-role="{{ role|lower }}">
+<body data-role="{{ role|default:'administrador'|lower }}">
 
-<!-- Cabecera superior: usuario logueado + menú de cuenta -->
-<div id="header">
-  <div class="user-info" id="user-trigger">
-    <div class="user-icon">
-      {{ username|default:"Usuario"|first|upper }}
-    </div>
-    <span id="username">{{ username|default:"Usuario" }}</span>
-    <div id="user-menu">
-      <a href="#" id="menu-perfil">Perfil</a>
-      <a href="{% url 'logout' %}" id="menu-logout">Cerrar sesión</a>
+  {# Cabecera superior: usuario logueado + menú de cuenta #}
+  <div id="header">
+    <div class="user-info" id="user-trigger">
+      <div class="user-icon">
+        {{ username|default:"Usuario"|first|upper }}
+      </div>
+      <span id="username">{{ username|default:"Usuario" }}</span>
+      <div id="user-menu">
+        <a href="#" id="menu-perfil">Perfil</a>
+        <a href="{% url 'logout' %}" id="menu-logout">Cerrar sesión</a>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- Sidebar mínimo: navegación fuera de la SPA (Home / Perfil) -->
-<div id="menuLateral">
-  <div class="logo" id="toggle-menu">
-    <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
-    <span class="logo-text">Melodify</span>
-  </div>
+  {# Sidebar mínimo: navegación clásica (sin SPA) #}
+  <div id="menuLateral">
+    <div class="logo">
+      <img src="{% static 'inicio_sesion/logo.png' %}"
+           alt="Melodify Logo"
+           class="logo-image">
+      <span class="logo-text">Melodify</span>
+    </div>
 
-  <a class="menu-item" data-view="home" href="{% url 'home' %}?no_spa=1">Home</a>
-  <div class="menu-item" data-view="perfil">
-    <a href="{% url 'home' %}?view=perfil&no_spa=1" style="display:block;color:inherit;text-decoration:none">
-      Perfil
+    <a class="menu-item"
+       data-view="home"
+       href="{% url 'home' %}?no_spa=1">
+      Home
     </a>
-  </div>
-</div>
 
-<!-- Contenedor principal: datos de contexto + endpoints usados por gestion.js -->
-<div id="main-content"
-     data-initial-view="gestion"
-     data-username="{{ username }}"
-     data-role="{{ role|lower }}"
-     data-avatar="{{ avatar_url }}"
-     data-description="{{ artist_description }}"
-     data-created-at="{{ created_at }}"
-     data-url-mi-muro="{% url 'mi_muro' %}"
-     data-url-gestion="{% url 'gestion' %}"
-     data-url-revertir="{% url 'revertir_accion' %}"
-     data-url-mi-musica-json="{% url 'mi_musica_json' %}"
-     data-url-catalogo-json="{% url 'catalogo_admin_json' %}"
-     data-url-catalogo-fragment="{% url 'catalogo_admin_fragment' %}"
-     data-live="0"
-     data-feed-scope="catalogo-admin">
-
-  <!-- Botón hamburguesa para colapsar/expandir sidebar -->
-  <button id="menu-toggle-btn">☰</button>
-
-  <!-- Botón de regreso al Home (vista de servidor, sin SPA) -->
-  <a id="back-btn" class="back" href="{% url 'home' %}?no_spa=1" title="Volver a inicio" aria-label="Regresar">←</a>
-
-  <div id="content">
-    <div class="page">
-      <header class="page-hd">
-        <h1 style="margin:0">Gestión (Administrador)</h1>
-      </header>
-
-      <!-- Barra de progreso: registro de usuarios (admin) -->
-      <div id="upload-bar" class="upload-bar" role="status" aria-live="polite" aria-label="Progreso de registro">
-        <div class="row">
-          <div class="progress"><i></i></div>
-          <div class="label"><span id="upload-pct">0%</span></div>
-        </div>
-      </div>
-
-      <!-- Mensajes flash/inline controlados por gestion.js -->
-      <div id="inline-msg" class="msg" style="display:none"></div>
-
-      <!-- Barra de “Deshacer” (undo) ligada a revertir_accion -->
-      {% if undo_data %}
-      <div id="undo-bar" class="undo-bar" style="display:flex">
-        <form id="undo-form" method="post" action="{% url 'revertir_accion' %}">{% csrf_token %}
-          <button class="btn" type="submit">Deshacer</button>
-        </form>
-        <div id="undo-label">{{ undo_label }}</div>
-      </div>
-      {% else %}
-      <div id="undo-bar" class="undo-bar" style="display:none">
-        <form id="undo-form" method="post" action="{% url 'revertir_accion' %}">{% csrf_token %}
-          <button class="btn" type="submit">Deshacer</button>
-        </form>
-        <div id="undo-label"></div>
-      </div>
-      {% endif %}
-
-      <!-- Formularios de alta rápida: artista y administrador -->
-      <div class="grid2">
-        <div class="card">
-          <h3 style="margin:0 0 12px">Registrar Artista</h3>
-          <form method="post" action="{% url 'registrar_artista' %}" enctype="multipart/form-data">
-            {% csrf_token %}
-            <label>Usuario (ID)</label>
-            <input name="user" type="text" required>
-            <label>Contraseña</label>
-            <input name="password" type="password" required>
-            <label>Descripción (máx. 200)</label>
-            <textarea name="description" maxlength="200" required></textarea>
-            <label>Avatar (opcional)</label>
-            <input name="avatar" type="file" accept="image/*">
-            <div style="margin-top:10px"><button class="btn" type="submit">Agregar artista</button></div>
-          </form>
-        </div>
-
-        <div class="card">
-          <h3 style="margin:0 0 12px">Registrar Administrador</h3>
-          <form method="post" action="{% url 'registrar_admin' %}" enctype="multipart/form-data">
-            {% csrf_token %}
-            <label>Usuario (ID)</label>
-            <input name="user" type="text" required>
-            <label>Contraseña</label>
-            <input name="password" type="password" required>
-            <label>Avatar (opcional)</label>
-            <input name="avatar" type="file" accept="image/*">
-            <div style="margin-top:10px"><button class="btn" type="submit">Agregar administrador</button></div>
-          </form>
-        </div>
-      </div>
-
-      <!-- Pestañas de administración: Usuarios / Catálogo -->
-      <div class="tabs" role="tablist" aria-label="Secciones de administración">
-        <button class="tab-btn" data-tab="usuarios" role="tab" aria-controls="tab-usuarios" aria-selected="true">Usuarios</button>
-        <button class="tab-btn" data-tab="catalogo" role="tab" aria-controls="tab-catalogo" aria-selected="false">Catálogo</button>
-      </div>
-
-      {# Pestaña «Usuarios»: lista y acciones (contenido parcial en _usuarios_tab.html) #}
-      {% include "gestion/_usuarios_tab.html" %}
-
-      <!-- Pestaña «Catálogo»: canciones, filtros y borrado múltiple -->
-      <section id="tab-catalogo" class="tab" role="region" aria-label="Catálogo" hidden>
-        <div class="filters">
-          <select id="f-artist">
-            <option value="">Todos los artistas</option>
-            {% for a in artists %}<option value="{{ a.user }}">{{ a.user }}</option>{% endfor %}
-          </select>
-          <input id="f-q" type="text" placeholder="Buscar por título o intérprete">
-          <button class="btn" id="f-apply">Aplicar</button>
-        </div>
-
-        <div class="filters" id="bulk-bar">
-          <label style="display:flex;align-items:center;gap:8px">
-            <input type="checkbox" id="sel-all"> Seleccionar todo
-          </label>
-          <button class="btn" id="bulk-delete" disabled>Eliminar seleccionadas</button>
-          <span id="sel-count" class="muted"></span>
-        </div>
-
-        <div id="catalogo-songs" class="card" style="margin:0">
-          {% include "gestion/admin_catalogo_songs.html" with songs=songs %}
-        </div>
-      </section>
-    </div>
-
-    <!-- Modal de confirmación genérico (borrado, acciones destructivas) -->
-    <div id="confirm-modal" class="modal" aria-hidden="true">
-      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-        <h4 class="title" id="confirm-title">Confirmar</h4>
-        <p id="confirm-text" class="muted" style="margin:0 0 8px">¿Eliminar este elemento?</p>
-        <div class="actions">
-          <button class="btn" id="confirm-cancel" type="button">Cancelar</button>
-          <button class="btn" id="confirm-accept" type="button">Eliminar</button>
-        </div>
-      </div>
+    <div class="menu-item" data-view="perfil">
+      <a href="{% url 'home' %}?view=perfil&no_spa=1"
+         style="display:block;color:inherit;text-decoration:none">
+        Perfil
+      </a>
     </div>
   </div>
-</div>
 
-<!-- Enlace base para volver al Home desde scripts -->
-<script>window.MELODIFY_HOME_URL = "{% url 'home' %}";</script>
-<script src="{% static 'inicio_sesion/backToHome.js' %}?v={% now 'U' %}"></script>
+  {# Contenedor principal: datos de contexto + endpoints usados por gestion.js #}
+  <div id="main-content"
+       data-initial-view="gestion"
+       data-username="{{ username|default:''|escape }}"
+       data-role="{{ role|default:'administrador'|lower }}"
+       data-avatar="{{ avatar_url|default:''|escape }}"
+       data-description="{{ artist_description|default:''|escape }}"
+       data-created-at="{{ created_at|default:''|escape }}"
+       data-url-mi-muro="{% url 'mi_muro' %}"
+       data-url-gestion="{% url 'gestion' %}"
+       data-url-revertir="{% url 'revertir_accion' %}"
+       data-url-mi-musica-json="{% url 'mi_musica_json' %}"
+       data-url-catalogo-json="{% url 'catalogo_admin_json' %}"
+       data-url-catalogo-fragment="{% url 'catalogo_admin_fragment' %}"
+       data-live="0"
+       data-feed-scope="catalogo-admin">
 
-<!-- Script principal de gestión (maneja tabs, undo, filtros, bulk-delete, etc.) -->
-<script src="{% static 'gestion/gestion.js' %}?v={% now 'U' %}"></script>
+    {# Botón hamburguesa para colapsar/expandir sidebar #}
+    <button id="menu-toggle-btn">☰</button>
 
-<!-- Fallback mínimo si gestion.js no pudo cargarse -->
-<script>
-  if (!window.__gestion_loaded__) {
-    console.warn('gestion.js no se cargó, aplicando fallback mínimo');
-    (function(){
-      const tablist = document.querySelector('.tabs[role="tablist"]');
-      if (!tablist) return;
-      function activate(t){
-        tablist.querySelectorAll('.tab-btn[role="tab"]').forEach(b=>{
-          const on = b.dataset.tab===t; b.classList.toggle('active', on);
-          b.setAttribute('aria-selected', String(on)); b.tabIndex = on?0:-1;
+    {# Botón de regreso al Home (vista de servidor, sin SPA) #}
+    <a id="back-btn"
+       class="back"
+       href="{% url 'home' %}?no_spa=1"
+       title="Volver a inicio"
+       aria-label="Regresar">
+      ←
+    </a>
+
+    <div id="content">
+      <div class="page">
+        <header class="page-hd">
+          <h1 style="margin:0">Gestión (Administrador)</h1>
+        </header>
+
+        {# Barra de progreso: registro de usuarios (admin) #}
+        <div id="upload-bar"
+             class="upload-bar"
+             role="status"
+             aria-live="polite"
+             aria-label="Progreso de registro">
+          <div class="row">
+            <div class="progress"><i></i></div>
+            <div class="label"><span id="upload-pct">0%</span></div>
+          </div>
+        </div>
+
+        {# Mensajes flash/inline controlados por gestion.js #}
+        <div id="inline-msg" class="msg" style="display:none"></div>
+
+        {# Barra de “Deshacer” (undo) ligada a revertir_accion #}
+        {% if undo_data %}
+          <div id="undo-bar" class="undo-bar" style="display:flex">
+            <form id="undo-form"
+                  method="post"
+                  action="{% url 'revertir_accion' %}">
+              {% csrf_token %}
+              <button class="btn" type="submit">Deshacer</button>
+            </form>
+            <div id="undo-label" class="undo-label">{{ undo_label }}</div>
+          </div>
+        {% else %}
+          <div id="undo-bar" class="undo-bar" style="display:none">
+            <form id="undo-form"
+                  method="post"
+                  action="{% url 'revertir_accion' %}">
+              {% csrf_token %}
+              <button class="btn" type="submit">Deshacer</button>
+            </form>
+            <div id="undo-label" class="undo-label"></div>
+          </div>
+        {% endif %}
+
+        {# Formularios de alta rápida: artista y administrador #}
+        <div class="grid2">
+          <div class="card">
+            <h3 style="margin:0 0 12px">Registrar Artista</h3>
+            <form method="post"
+                  action="{% url 'registrar_artista' %}"
+                  enctype="multipart/form-data">
+              {% csrf_token %}
+              <label>Usuario (ID)</label>
+              <input name="user" type="text" required>
+
+              <label>Contraseña</label>
+              <input name="password" type="password" required>
+
+              <label>Descripción (máx. 200)</label>
+              <textarea name="description" maxlength="200" required></textarea>
+
+              <label>Avatar (opcional)</label>
+              <input name="avatar" type="file" accept="image/*">
+
+              <div style="margin-top:10px">
+                <button class="btn" type="submit">Agregar artista</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="card">
+            <h3 style="margin:0 0 12px">Registrar Administrador</h3>
+            <form method="post"
+                  action="{% url 'registrar_admin' %}"
+                  enctype="multipart/form-data">
+              {% csrf_token %}
+              <label>Usuario (ID)</label>
+              <input name="user" type="text" required>
+
+              <label>Contraseña</label>
+              <input name="password" type="password" required>
+
+              <label>Avatar (opcional)</label>
+              <input name="avatar" type="file" accept="image/*">
+
+              <div style="margin-top:10px">
+                <button class="btn" type="submit">Agregar administrador</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        {# Pestañas de administración: Usuarios / Catálogo #}
+        <div class="tabs" role="tablist" aria-label="Secciones de administración">
+          <button class="tab-btn"
+                  data-tab="usuarios"
+                  role="tab"
+                  aria-controls="tab-usuarios"
+                  aria-selected="true">
+            Usuarios
+          </button>
+          <button class="tab-btn"
+                  data-tab="catalogo"
+                  role="tab"
+                  aria-controls="tab-catalogo"
+                  aria-selected="false">
+            Catálogo
+          </button>
+        </div>
+
+        {# Pestaña «Usuarios»: lista y acciones (contenido parcial) #}
+        {% include "gestion/_usuarios_tab.html" %}
+
+        {# Pestaña «Catálogo»: canciones, filtros y borrado múltiple #}
+        <section id="tab-catalogo"
+                 class="tab"
+                 role="region"
+                 aria-label="Catálogo"
+                 hidden>
+          <div class="filters">
+            <select id="f-artist">
+              <option value="">Todos los artistas</option>
+              {% for a in artists %}
+                <option value="{{ a.user }}">{{ a.user }}</option>
+              {% endfor %}
+            </select>
+
+            <input id="f-q"
+                   type="text"
+                   placeholder="Buscar por título o intérprete">
+
+            <button class="btn" id="f-apply" type="button">Aplicar</button>
+          </div>
+
+          <div class="filters" id="bulk-bar">
+            <label style="display:flex;align-items:center;gap:8px">
+              <input type="checkbox" id="sel-all"> Seleccionar todo
+            </label>
+            <button class="btn" id="bulk-delete" type="button" disabled>
+              Eliminar seleccionadas
+            </button>
+            <span id="sel-count" class="muted"></span>
+          </div>
+
+          <div id="catalogo-songs" class="card" style="margin:0">
+            {% include "gestion/admin_catalogo_songs.html" with songs=songs %}
+          </div>
+        </section>
+      </div>
+
+      {# Modal de confirmación para borrados (usado por gestion.js) #}
+      <div id="confirm-modal" class="modal" aria-hidden="true">
+        <div class="dialog"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="confirm-title">
+          <h4 class="title" id="confirm-title">Confirmar</h4>
+          <p id="confirm-text" class="muted" style="margin:0 0 8px">
+            ¿Eliminar este elemento?
+          </p>
+          <div class="actions">
+            <button class="btn" id="confirm-cancel" type="button">Cancelar</button>
+            <button class="btn" id="confirm-accept" type="button">Eliminar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Toast global reutilizado por MDFCore (likes desde catálogo, etc.) #}
+  <div id="like-toast" aria-live="polite"></div>
+
+  {# Navegación “volver al Home” desde vistas de servidor #}
+  <script>window.MELODIFY_HOME_URL = "{% url 'home' %}";</script>
+  <script src="{% static 'inicio_sesion/backToHome.js' %}?v={% now 'U' %}"></script>
+
+  {# Módulo de playlists (expuesto en window.* para MDFCore) #}
+  <script src="{% static 'inicio_sesion/playListScript.js' %}?v={% now 'U' %}"></script>
+
+  {# Barra flotante del reproductor (cola global) #}
+  <script defer
+          src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
+
+  {# Lógica principal de Gestión (tabs, filtros, borrado múltiple, undo asíncrono) #}
+  <script src="{% static 'gestion/gestion.js' %}?v={% now 'U' %}"></script>
+
+  {# Fallback mínimo si gestion.js no carga #}
+  <script>
+    if (!window.__gestion_loaded__) {
+      console.warn('gestion.js no se cargó, aplicando fallback mínimo');
+      (function(){
+        const tablist = document.querySelector('.tabs[role="tablist"]');
+        if (!tablist) return;
+
+        function activate(t){
+          tablist.querySelectorAll('.tab-btn[role="tab"]').forEach(b=>{
+            const on = b.dataset.tab === t;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-selected', String(on));
+            b.tabIndex = on ? 0 : -1;
+          });
+          document.querySelectorAll('.tab[role="region"]').forEach(p=>{
+            const show = p.id === ('tab-' + t);
+            p.classList.toggle('active', show);
+            p.hidden = !show;
+          });
+          const u = new URL(location.href);
+          u.hash = t;
+          history.replaceState(null, '', u);
+        }
+
+        tablist.addEventListener('click', e=>{
+          const b = e.target.closest('.tab-btn[role="tab"]');
+          if (!b) return;
+          e.preventDefault();
+          activate(b.dataset.tab);
         });
-        document.querySelectorAll('.tab[role="region"]').forEach(p=>{
-          const show = p.id === ('tab-'+t); p.classList.toggle('active', show); p.hidden=!show;
-        });
-        const u = new URL(location.href); u.hash=t; history.replaceState(null,'',u);
-      }
-      tablist.addEventListener('click', e=>{
-        const b=e.target.closest('.tab-btn[role="tab"]'); if(!b) return;
-        e.preventDefault(); activate(b.dataset.tab);
-      });
-      activate((location.hash||'').slice(1)||'usuarios', false);
-    })();
-  }
-</script>
 
+        activate((location.hash || '').slice(1) || 'usuarios');
+      })();
+    }
+  </script>
 </body>
 </html>
