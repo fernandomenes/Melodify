@@ -28,4 +28,4 @@
 *.ogg  binary
 *.m4a  binary
 *.flac binary
-"@ | Set-Content -Encoding ascii .gitattributes
+"@  Set-Content -Encoding ascii .gitattributes
