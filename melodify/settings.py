@@ -164,23 +164,27 @@ if USE_S3:
         MEDIA_URL = f"{AWS_S3_ENDPOINT_URL.rstrip('/')}/{AWS_STORAGE_BUCKET_NAME}/"
 
 MEDIA_URL = os.environ.get("DJANGO_MEDIA_URL", MEDIA_URL)
+
 # ---- Cloudinary (media) ----
 USE_CLOUDINARY = os.environ.get("USE_CLOUDINARY", "0") == "1"
 if USE_CLOUDINARY:
     INSTALLED_APPS += ["cloudinary", "cloudinary_storage"]  # type: ignore
 
+    # Django 4.2: mueve el storage por defecto a Cloudinary aquí
     STORAGES["default"] = {
         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage"
     }
 
+    # Opciones para public_id determinístico y sobreescritura
     CLOUDINARY_STORAGE = {
-        "RESOURCE_TYPE": "auto",
-        "FOLDER": "uploaded_media",  
-        # "OVERWRITE": True,
-        # "UNIQUE_FILENAME": False,
+        "RESOURCE_TYPE": "auto",        # image / video (mp3) / raw según el archivo
+        "FOLDER": "uploaded_media",     # prefijo único de tu app
+        "OVERWRITE": True,              # re-subir mismo nombre => nueva versión v2, v3...
+        "UNIQUE_FILENAME": False,       # NO agregues sufijos aleatorios
     }
 
-    MEDIA_URL = os.environ.get("DJANGO_MEDIA_URL", MEDIA_URL)
+    # No fuerces MEDIA_URL con Cloudinary. Deja que el storage devuelva URLs absolutas.
+    # Si tenías DJANGO_MEDIA_URL en env, elimínala o déjala vacía.
 
 # -------------------------------- Varios ---------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
