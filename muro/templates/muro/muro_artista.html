@@ -17,8 +17,8 @@
   <!-- Estilos base de la aplicación -->
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
-  <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
-  <script src="{% static 'inicio_sesion/playListScript.js' %}"></script>
+<link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
+<script defer src="{% static 'inicio_sesion/playListScript.js' %}"></script>
 
   <!-- Estilos específicos del muro -->
   <link rel="stylesheet" href="{% static 'muro/muro.css' %}?v={% now 'U' %}">
@@ -335,9 +335,6 @@
 <!-- Scripts del muro y barra de reproducción -->
 <script defer src="{% static 'muro/muro.js' %}?v={% now 'U' %}"></script>
 <script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
-
-</body>
-</html>
 
 </body>
 </html>

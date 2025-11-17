@@ -1,19 +1,10 @@
 // static/muro/muro.js
-// ============================================================================
-// Melodify — Muro del artista
-// Lógica del muro del artista:
-//   - Reproducción básica (cola local con <audio>) si no existe MDFCore.
-//   - Selección de canciones (checkboxes) y borrado individual/múltiple con undo.
-//   - Subida de canción con barra de progreso.
-//   - Likes desde el muro (sin romper el núcleo MDFCore).
-//   - Apertura de diálogo para agregar a playlists.
-//   - Manejo básico de menú lateral y menú de usuario.
-// ============================================================================
+// Muro del artista: reproducción básica, selección, borrado, subida, likes y playlists.
 
 (function () {
   "use strict";
 
-  // ============================= Utilidades DOM / CSRF =============================
+  // Helpers DOM y CSRF
   const $  = (sel, ctx = document) => ctx.querySelector(sel);
   const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
   const H  = { "X-Requested-With": "fetch" };
@@ -30,15 +21,12 @@
     );
   }
 
-  // ========================= Toast local de likes / playlists ======================
+  // Reproductor usado en el muro (stub o MDFCore)
+  let muroPlayer = null;
+
+  // Toast local de likes / playlists
   let likeToastTimer = null;
 
-  /**
-   * Muestra un pequeño toast en el muro usando #like-toast (si existe).
-   * No afecta al helper global de HOME, es un fallback local.
-   *
-   * @param {string} message - Texto a mostrar en el toast.
-   */
   function showLikeToast(message) {
     if (!message) return;
     const toast = document.getElementById("like-toast");
@@ -55,17 +43,19 @@
     }, 2000);
   }
 
-  // ======================= Núcleo mínimo de reproducción (MDFCore stub) ===========
-  // Si ya existe window.MDFCore (reproductor global), NO se reemplaza.
+  // Stub de reproducción si no existe MDFCore global
   (function setupMuroCore() {
-    if (window.MDFCore) return;
+    if (window.MDFCore && typeof window.MDFCore.playFromDomItem === "function") {
+      muroPlayer = window.MDFCore;
+      return;
+    }
 
     const audio = new Audio();
     audio.preload = "metadata";
 
-    let queue      = []; // Cola de canciones normalizadas
-    let queueCards = []; // Tarjetas .js-song-card asociadas a la cola
-    let index      = -1; // Índice actual en la cola
+    let queue      = [];
+    let queueCards = [];
+    let index      = -1;
 
     function dispatch(name, detail) {
       document.dispatchEvent(new CustomEvent(name, { detail }));
@@ -108,7 +98,6 @@
         return;
       }
 
-      // Recorrido circular de la cola
       if (i < 0) i = queue.length - 1;
       if (i >= queue.length) i = 0;
       index = i;
@@ -119,9 +108,13 @@
         return;
       }
 
+      if (audio.src !== track.audioUrl) {
+        audio.src = track.audioUrl;
+      }
+      audio.play().catch(() => {});
+
       markCurrentPlaying();
 
-      // Notifica metadatos a posibles escuchas (barra global, etc.)
       dispatch("melodify:trackmeta", {
         title:  track.title,
         artist: track.author,
@@ -134,11 +127,6 @@
         total: queue.length,
         id:    track.id || null,
       });
-
-      if (audio.src !== track.audioUrl) {
-        audio.src = track.audioUrl;
-      }
-      audio.play().catch(() => {});
     }
 
     // Eventos del <audio> interno
@@ -166,7 +154,7 @@
       if (queue.length > 0) playIndex(index + 1);
     });
 
-    // API expuesta como MDFCore mínimo (solo para el muro)
+    // API mínima MDFCore para el muro
     const core = {
       __fromMuro: true,
 
@@ -208,15 +196,23 @@
       },
     };
 
-    window.MDFCore = core;
+    if (!window.MDFCore) {
+      window.MDFCore = core;
+      window.__MDF_MURO_CORE__ = core;
+      muroPlayer = core;
 
-    // Aviso para la barra global
-    dispatch("melodify:audioReady", { audio });
-    window.__MDF_FORMS_HIDE_BAR__ = false;
-    document.dispatchEvent(new CustomEvent("melodify:bar:shouldShow"));
+      dispatch("melodify:audioReady", { audio });
+      window.__MDF_FORMS_HIDE_BAR__ = false;
+      document.dispatchEvent(new CustomEvent("melodify:bar:shouldShow"));
+    } else {
+      if (typeof window.MDFCore.playFromDomItem !== "function") {
+        window.MDFCore.playFromDomItem = core.playFromDomItem;
+      }
+      muroPlayer = window.MDFCore;
+    }
   })();
 
-  // =========================== Elementos del muro ===============================
+  // Elementos del muro
   const root = document.getElementById("muro-content");
   if (!root) return;
 
@@ -232,7 +228,7 @@
     undo:       main?.dataset?.urlRevertirMuro || "/mi-muro/undo/",
   };
 
-  // ============================= Barra de "Deshacer" ============================
+  // Barra de "Deshacer"
   function showUndo(label) {
     const bar = $("#undo-bar", root);
     const lbl = $("#undo-label", root);
@@ -247,12 +243,7 @@
     if (bar) bar.style.display = "none";
   }
 
-  // ================= Vinculación de tarjetas con el reproductor global ==========
-  /**
-   * Enlaza tarjetas .js-song-card con MDFCore (click en tarjeta = reproducir).
-   *
-   * @param {HTMLElement} [scopeRoot=document] - Nodo raíz donde buscar tarjetas.
-   */
+  // Click en tarjeta → reproducir (evitando controles internos)
   function bindSongCardsToGlobalPlayer(scopeRoot = document) {
     const cards = scopeRoot.querySelectorAll(".js-song-card");
     if (!cards.length) return;
@@ -262,12 +253,11 @@
       card.dataset.playerBound = "1";
 
       card.addEventListener("click", (ev) => {
-        // No reproducir si el click fue sobre controles interactivos
         if (ev.target.closest('input[type="checkbox"], button, a, form')) {
           return;
         }
 
-        const core = window.MDFCore;
+        const core = muroPlayer || window.MDFCore;
         if (!core || typeof core.playFromDomItem !== "function") {
           console.warn("MDFCore no disponible en muro.");
           return;
@@ -280,9 +270,9 @@
     });
   }
 
-  // ============================== Estado de selección ===========================
-  const selected     = new Set(); // IDs de canciones seleccionadas
-  const removedCache = new Map(); // id -> nodo .js-song-card eliminado
+  // Selección de canciones
+  const selected     = new Set();
+  const removedCache = new Map();
 
   function updateUI() {
     const n = selected.size;
@@ -313,13 +303,7 @@
     updateUI();
   }
 
-  // ========================= Modal de confirmación genérico =====================
-  /**
-   * Muestra un modal de confirmación (si existe) o window.confirm() si no.
-   *
-   * @param {string} texto - Mensaje a mostrar.
-   * @returns {Promise<boolean>} true si el usuario confirma, false en otro caso.
-   */
+  // Confirm genérico (modal o window.confirm)
   function confirmWithModal(texto = "¿Eliminar este elemento?") {
     const modal     = $("#confirm-modal", document);
     const dlg       = modal?.querySelector(".dialog");
@@ -360,12 +344,11 @@
     });
   }
 
-  // =================== Manejo de checkboxes (selección múltiple) ================
+  // Checkboxes (selección múltiple)
   root.addEventListener("change", (e) => {
     const t = e.target;
     if (!t) return;
 
-    // Checkbox "Seleccionar todo"
     if (t.id === "sel-all") {
       if (!grid) return;
       $$(".song-select", grid).forEach((ch) => {
@@ -380,7 +363,6 @@
       return;
     }
 
-    // Checkbox individual
     if (t.classList && t.classList.contains("song-select")) {
       const id = parseInt(t.value, 10);
       if (!isNaN(id)) {
@@ -391,8 +373,7 @@
     }
   });
 
-  // ================= Cache previa a la eliminación individual ===================
-  // Guardamos la tarjeta por si luego se hace undo.
+  // Cache de tarjetas antes de delete individual
   root.addEventListener(
     "submit",
     (e) => {
@@ -408,7 +389,7 @@
     true
   );
 
-  // ================== Eliminación individual de canciones =======================
+  // Delete individual
   root.addEventListener(
     "submit",
     async (e) => {
@@ -434,7 +415,6 @@
 
         const ct = (res.headers.get("content-type") || "").toLowerCase();
 
-        // Respuesta JSON (gestión con undo en servidor)
         if (ct.includes("application/json")) {
           const j = await res.json();
           if (card) card.remove();
@@ -443,7 +423,6 @@
           return;
         }
 
-        // Sin contenido pero todo OK
         if (res.status === 204) {
           if (card) card.remove();
           showUndo(`Se eliminó “${title}”.`);
@@ -451,7 +430,6 @@
           return;
         }
 
-        // Fallback recargando la página
         location.reload();
       } catch {
         location.reload();
@@ -460,7 +438,7 @@
     true
   );
 
-  // ================== Eliminación múltiple (botón "Eliminar seleccionadas") =====
+  // Delete múltiple
   btnBulk?.addEventListener("click", async (e) => {
     e.preventDefault();
     if (selected.size === 0) return;
@@ -495,7 +473,6 @@
         return;
       }
 
-      // Eliminamos del DOM las tarjetas indicadas
       (j.removed_ids || []).forEach((id) => {
         const card = grid?.querySelector(`.js-song-card[data-song-id="${id}"]`);
         if (card) {
@@ -512,7 +489,7 @@
     }
   });
 
-  // ============================== Undo (revertir eliminación) ====================
+  // Undo
   undoForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
     try {
@@ -525,7 +502,6 @@
       });
 
       if (res.status === 204) {
-        // Restauramos del cache local las tarjetas eliminadas
         const frag = document.createDocumentFragment();
         removedCache.forEach((node) => {
           if (node) frag.appendChild(node);
@@ -546,7 +522,7 @@
     }
   });
 
-  // ======================= Menú lateral (colapsar / expandir) ====================
+  // Menú lateral
   (function menuToggle() {
     const btn    = document.getElementById("menu-toggle-btn");
     const menu   = document.getElementById("menuLateral");
@@ -559,7 +535,7 @@
     });
   })();
 
-  // ========================= Menú de usuario y logout vía POST ===================
+  // Menú de usuario y logout
   (function userMenu() {
     const trigger = document.getElementById("user-trigger");
     const menu    = document.getElementById("user-menu");
@@ -597,19 +573,18 @@
             return;
           }
         } catch {
-          // Redirección de respaldo
+          // fallback
         }
         location.href = url;
       });
     }
   })();
 
-  // ================== Subida de canción con barra de progreso ====================
+  // Subida de canción con barra de progreso
   (function singleUploadProgress() {
     const form = document.getElementById("form-upload");
     if (!form) return;
 
-    // Campo "otro" para género
     const genreSel   = form.querySelector("#genre");
     const genreOther = document.getElementById("genre-other");
     if (genreSel && genreOther) {
@@ -634,7 +609,6 @@
     }
 
     form.addEventListener("submit", (e) => {
-      // Solo si se indicó data-ajax="1" en el form
       if (form.dataset.ajax !== "1") return;
       e.preventDefault();
 
@@ -678,15 +652,7 @@
     });
   })();
 
-  // ============================= Likes desde el muro =============================
-  /**
-   * Marca / desmarca "Me gusta" en una canción del muro.
-   *
-   * Reglas visuales:
-   *  - Solo se actualiza data-liked en los botones .song-like-btn de ese ID.
-   *  - Se fuerza siempre el icono "♡" (sin clases de selección).
-   *  - El real modelo de likes vive en MDFCore; aquí solo lo sincronizamos.
-   */
+  // Likes desde el muro (sin estilos especiales)
   window.toggleSongLikeFromMuro = function (evt, songId, btn) {
     if (evt) {
       evt.preventDefault();
@@ -703,7 +669,6 @@
     const idNum = Number(rawId);
     if (!idNum || Number.isNaN(idNum)) return;
 
-    // Si el núcleo global sabe gestionar likes, delegamos allí
     if (
       window.MDFCore &&
       typeof window.MDFCore.toggleLikeFromReproductor === "function"
@@ -726,28 +691,22 @@
       .then((data) => {
         const liked = !!data.liked;
 
-        // Actualizamos todos los corazones que representen esa canción en el muro
         const allButtons = document.querySelectorAll(
           `.song-like-btn[data-song-id="${idNum}"]`
         );
         allButtons.forEach((b) => {
-          // Solo actualizamos el estado lógico
           b.dataset.liked = liked ? "1" : "0";
 
-          // Nada de clases especiales ni iconos rellenados,
-          // dejamos siempre el corazón vacío
           const txt = (b.textContent || "").trim();
           if (txt === "♥" || txt === "♡" || txt === "") {
             b.textContent = "♡";
           }
         });
 
-        // Toast: Me gusta / Ya no me gusta
         showLikeToast(
           liked ? "Añadida a tus Me gusta" : "Quitada de tus Me gusta"
         );
 
-        // Mantener sincronizado el modelo de likes en MDFCore (si existe)
         if (
           window.MDFCore &&
           typeof window.MDFCore.syncLikeModelFromClient === "function"
@@ -758,9 +717,9 @@
           if (row) {
             const ds = row.dataset || {};
             meta = {
-              id:       ds.songId  || String(idNum),
-              title:    ds.title   || "",
-              artist:   ds.artist  || "",
+              id:       ds.songId   || String(idNum),
+              title:    ds.title    || "",
+              artist:   ds.artist   || "",
               audioUrl: ds.audioUrl || "",
               coverUrl: ds.coverUrl || "",
               genre:    ds.genre    || "",
@@ -778,15 +737,7 @@
       });
   };
 
-  // ======================= Diálogo de playlists desde el muro ====================
-  /**
-   * Abre el diálogo de "Agregar a playlist" para una canción del muro.
-   *
-   * Prioridades:
-   *   1) window.openAddToPlaylistForSong(id)
-   *   2) window.MDFCore.openAddToPlaylistDialog(evt, id)
-   *   3) alert fallback
-   */
+  // Diálogo de playlists desde el muro
   window.openAddToPlaylistFromMuro = function (evt, songId) {
     if (evt) {
       evt.preventDefault();
@@ -812,7 +763,7 @@
     alert("No se encontró la función para agregar a playlist.");
   };
 
-  // ============================== Inicialización del muro ========================
+  // Init del muro
   function initMuro() {
     window.__MDF_FORMS_HIDE_BAR__ = false;
     document.dispatchEvent(new CustomEvent("melodify:bar:shouldShow"));
