@@ -59,7 +59,6 @@
   // Núcleo mínimo de reproducción (MDFCore) para Gestión
   // ---------------------------------------------------------------------------
   (function setupGestionCore() {
-    // Si MDFCore ya existe, no se redefine
     if (window.MDFCore) return;
 
     const audio = new Audio();
@@ -109,41 +108,47 @@
       index      = Math.max(0, queueCards.indexOf(card));
     }
 
-    function playIndex(i) {
-      if (!queue.length) {
-        clearPlayingClass();
-        return;
-      }
-      if (i < 0) i = queue.length - 1;
-      if (i >= queue.length) i = 0;
-      index = i;
+function playIndex(i) {
+  if (!queue.length) {
+    clearPlayingClass();
+    return;
+  }
 
-      const track = queue[index];
-      if (!track || !track.audioUrl) {
-        clearPlayingClass();
-        return;
-      }
+  // Recorrido circular de la cola
+  if (i < 0) i = queue.length - 1;
+  if (i >= queue.length) i = 0;
+  index = i;
 
-      markCurrentPlaying();
+  const track = queue[index];
+  if (!track || !track.audioUrl) {
+    clearPlayingClass();
+    return;
+  }
 
-      // Notifica metadatos al reproductor global
-      dispatch("melodify:trackmeta", {
-        title:  track.title,
-        artist: track.author,
-        cover:  track.coverUrl || "",
-        genre:  track.genre || "",
-      });
-      dispatch("melodify:trackchange", {
-        index,
-        total: queue.length,
-        id:    track.id || null,
-      });
+  // Primero aseguramos que el <audio> ya tenga src
+  if (audio.src !== track.audioUrl) {
+    audio.src = track.audioUrl;
+  }
 
-      if (audio.src !== track.audioUrl) {
-        audio.src = track.audioUrl;
-      }
-      audio.play().catch(() => {});
-    }
+  markCurrentPlaying();
+
+  // Notifica metadatos a posibles escuchas (barra global, etc.)
+  dispatch("melodify:trackmeta", {
+    title:  track.title,
+    artist: track.author,
+    cover:  track.coverUrl || "",
+    genre:  track.genre || "",
+  });
+
+  dispatch("melodify:trackchange", {
+    index,
+    total: queue.length,
+    id:    track.id || null,
+  });
+
+  audio.play().catch(() => {});
+}
+
 
     // Eventos del <audio> → barra de reproducción
     audio.addEventListener("timeupdate", () => {
@@ -963,7 +968,6 @@
 
     xhr.open("POST", form.action, true);
     if (csrf) xhr.setRequestHeader("X-CSRFToken", csrf);
-    // Indica al backend que debe responder en formato JSON
     xhr.setRequestHeader("X-Requested-With", "fetch");
 
     xhr.upload.onprogress = (ev) => {
