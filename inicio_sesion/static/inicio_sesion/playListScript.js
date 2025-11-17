@@ -1,14 +1,10 @@
 /* ==========================================================================
-   Melodify — Playlists del usuario
-   UI de gestión de playlists:
-   - Crear, renombrar y eliminar playlists propias.
-   - Listar playlists y su contenido (canciones).
-   - Dar / quitar like a playlists y canciones.
-   - Agregar / quitar canciones de una playlist.
-   - Integración con MDFCore (reproductor) y toasts globales.
+   Melodify — Playlists de usuario
+   Gestión de playlists personales: creación, edición, eliminación y likes.
+   Integración con el reproductor (MDFCore) y toasts globales.
    ========================================================================== */
 
-/* PlayList UI: listas del usuario (crear, editar, borrar, likes). */
+/* PlayList UI: listas del usuario. */
 
 // ---------------------------------------------------------------------------
 // Estado global
@@ -18,10 +14,10 @@ let currentViewPlaylist  = "allPlayList"; // "allPlayList" | "allSongsPlayList"
 let content              = null;          // Contenedor principal (#content)
 let USERNAME             = null;          // Usuario en sesión
 
-// Cache estable de nombres de playlist (id -> name)
+// Caché de nombres de playlist (id -> nombre)
 const PL_NAME = new Map();
 
-// Headers uniformes como en muro.js
+// Cabeceras comunes para peticiones fetch
 const H_FETCH = {
   'X-Requested-With': 'fetch',
   'Cache-Control': 'no-store',
@@ -32,20 +28,17 @@ const H_FETCH = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-// Intento robusto de obtener el usuario de sesión aunque no se haya llamado initPlayList()
+// Obtiene el usuario de sesión desde distintas fuentes
 function getSessionUsername() {
   return (
-    // preferentes
     (window.__SESSION_USER__ && (window.__SESSION_USER__.username || window.__SESSION_USER__.user)) ||
     document.getElementById('main-content')?.dataset?.username ||
     document.querySelector('meta[name="username"]')?.getAttribute('content') ||
-    // alternos
     window.__USER__ ||
     document.body?.getAttribute('data-username') ||
     ''
   );
 }
-
 
 function getCookie(name) {
   const v = document.cookie.split('; ').find(row => row.startsWith(name + '='));
@@ -338,7 +331,7 @@ function showPlaylists() {
     });
   }
 
-  // ---- Fetch real de playlists (sin cache y sin filtros en la vista) ----
+  // Carga de playlists desde el backend
   fetch(`/playlist/getAllList/?u=${encodeURIComponent(getSessionUsername())}&t=${Date.now()}`, {
     credentials: 'same-origin',
     headers: H_FETCH,
@@ -371,6 +364,20 @@ function showPlaylists() {
     try {
       window.__playlists_cache = lists.slice();
       document.dispatchEvent(new CustomEvent('melodify:playlists:loaded', { detail: { lists } }));
+    document.addEventListener('melodify:playlists:loaded', async (ev) => {
+  try {
+    if ((document.getElementById('main-content')?.dataset?.view || '') === 'home') {
+      HOME_SONGS_CACHE = null;
+      const allSongs = await fetchAllSongsForHome();
+      renderHomeArtists(allSongs, false);
+      renderHomeSongs(allSongs, false);
+      aplicarMensajePlaylistsHome();
+    }
+  } catch (e) {
+    console.warn('HOME: refresh tras playlists:loaded falló', e);
+  }
+});
+
     } catch {}
 
     renderPlaylists(lists, null);
@@ -472,10 +479,8 @@ function verSongs(playlistId, playlistName) {
         (data && (data.name || data.playlist?.name)) ||
         `Playlist ${pid}`;
 
-      // Actualiza cache estable
       PL_NAME.set(pid, stableName);
 
-      // Guardar contexto para duplicados
       try {
         const idsSet = new Set((songs || []).map(s => String(s.id)));
         window.__currentPlaylistContext = { id: pid, name: stableName, songIds: idsSet };
@@ -766,7 +771,6 @@ function addSongToPlaylistFromSearch(idSong, idPlaylist, playlistName) {
   });
 }
 
-
 // ===========================================================================
 // Selección de playlist (popup) para agregar desde el buscador
 // ===========================================================================
@@ -808,7 +812,6 @@ function openAddToPlaylistForSong(idSong /* metaOpcional */) {
   setTimeout(() => document.addEventListener('click', clickOutside), 0);
   overlay.addEventListener('click', cerrar);
 
-  // URLs: con y sin ?u= (para artistas)
   const uname = getSessionUsername();
   const urlPrimary  = `/playlist/getAllList/?u=${encodeURIComponent(uname)}&t=${Date.now()}`;
   const urlFallback = `/playlist/getAllList/?t=${Date.now()}`;
@@ -960,7 +963,9 @@ function deleteFromPlaylistSong(ev, idSong, playlistId, playlistName) {
   });
 }
 
-/* ====== Exponer entrypoints globales (para Home/Buscador/Muro/Reproductor) ====== */
+/* =========================================================================
+   Puntos de entrada globales para uso desde Home/Buscador/Muro/Reproductor
+   ========================================================================= */
 window.initPlayList                = initPlayList;
 window.openAddToPlaylistForSong    = openAddToPlaylistForSong;
 window.addSongToPlaylistFromSearch = addSongToPlaylistFromSearch;
@@ -968,7 +973,7 @@ window.addSongToPlaylist           = addSongToPlaylist;
 window.verSongs                    = verSongs;
 window.showPlaylists               = showPlaylists;
 
-// Bridges defensivos (por si el bundler encierra símbolos)
+// Puentes defensivos para exponer funciones en window
 (() => {
   const g = window;
   try { if (!g.openAddToPlaylistForSong && typeof openAddToPlaylistForSong === 'function') g.openAddToPlaylistForSong = openAddToPlaylistForSong; } catch {}
@@ -976,7 +981,7 @@ window.showPlaylists               = showPlaylists;
   try { if (!g.addSongToPlaylist && typeof addSongToPlaylist === 'function') g.addSongToPlaylist = addSongToPlaylist; } catch {}
 })();
 
-// Puente para HOME: si alguien llama al método de MDFCore, redirígelo al popup real
+// Integración con MDFCore para abrir el diálogo de selección de playlist
 window.MDFCore = window.MDFCore || {};
 if (!window.MDFCore.openAddToPlaylistDialog) {
   window.MDFCore.openAddToPlaylistDialog = function (_ev, idSong) {

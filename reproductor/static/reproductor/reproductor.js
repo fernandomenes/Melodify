@@ -17,6 +17,7 @@ let _state = {
   countedForKey: null,
 };
 
+
 // ---------------------------- Helpers DOM / utils --------------------------
 const q  = (s, r=document)=>r.querySelector(s);
 const qa = (s, r=document)=>Array.from(r.querySelectorAll(s));
@@ -45,6 +46,29 @@ function _pad2(n){ return String(n).padStart(2,'0'); }
 function fireBar(){ fire("melodify:bar:shouldShow", {}); }
 const pickFirst = (...c) => c.find(v => typeof v === 'string' && v.trim().length) || "";
 
+// --- Toast de plataforma (usa el global si existe) ---
+function _toast(msg) {
+  if (typeof window.__melodifyShowLikeToast === 'function') {
+    window.__melodifyShowLikeToast(String(msg || ''));
+    return;
+  }
+  let t = document.getElementById('mdf-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'mdf-toast';
+    t.style.cssText = `
+      position:fixed; left:50%; bottom:28px; transform:translateX(-50%);
+      background:#222; color:#eee; border:1px solid #333; border-radius:10px;
+      padding:10px 14px; z-index:99999; font-size:14px; opacity:0; transition:.18s;
+    `;
+    document.body.appendChild(t);
+  }
+  t.textContent = String(msg || '');
+  t.style.opacity = '1';
+  clearTimeout(_toast._t);
+  _toast._t = setTimeout(() => { t.style.opacity = '0'; }, 1500);
+}
+
 function fmtHistoryLabel(ts){
   if (!ts) return '';
   let d;
@@ -62,6 +86,96 @@ function fmtHistoryLabel(ts){
   if (sameDay)    return `hoy a las ${hh}:${mm}`;
   if (isYesterday) return `ayer a las ${hh}:${mm}`;
   return `${_pad2(d.getDate())}/${_pad2(d.getMonth()+1)}/${d.getFullYear()} ${hh}:${mm}`;
+}
+
+// --- Helper: buscar canción por id en el modelo/UI ---
+function _findSongByIdAnywhere(id) {
+  const idStr = String(id || '');
+  if (!idStr) return null;
+
+  // 1) Modelo en memoria
+  const P = Array.isArray(window._playlists) ? window._playlists : [];
+  for (const pl of P) {
+    for (const s of (pl?.songs || [])) {
+      if (s?.id != null && String(s.id) === idStr) return s;
+    }
+  }
+  // 2) DOM actual (columna izquierda)
+  const row = document.querySelector(`.song-item[data-id="${CSS.escape(idStr)}"]`);
+  if (row) {
+    return normalizeSong({
+      id: idStr,
+      title: row.getAttribute('data-title'),
+      artist_display_name: row.getAttribute('data-author'),
+      audioUrl: row.getAttribute('data-audio-url'),
+      coverUrl: row.querySelector('.song-cover')?.getAttribute('src') || '',
+      genre: row.getAttribute('data-genre') || '',
+    });
+  }
+  return null;
+}
+
+// --- Fallback directo al backend para agregar canción ---
+async function _fallbackAddSongToPlaylist(backendId, songId) {
+  const pid = String(backendId || '').trim();
+  const sid = String(songId    || '').trim();
+  if (!pid || !sid) throw new Error('Playlist o canción inválida.');
+
+  // 1) Obtener posición (len+1)
+  let position = 1;
+  try {
+    const r = await fetch(`/playlist/${encodeURIComponent(pid)}/songs/`, {
+      credentials: 'same-origin', cache: 'no-store', headers: {'X-Requested-With':'fetch'}
+    });
+    if (r.ok) {
+      const j = await r.json();
+      const arr = Array.isArray(j?.songs) ? j.songs : [];
+      position = (arr.length || 0) + 1;
+    }
+  } catch {}
+
+  // 2) POST a /playlist/addsong/
+  const csrftoken = getCookie('csrftoken') || '';
+  const res = await fetch(`/playlist/addsong/`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'fetch',
+      ...(csrftoken ? { 'X-CSRFToken': csrftoken } : {}),
+    },
+    body: JSON.stringify({ playlist_id: Number(pid) || pid, song_id: Number(sid) || sid, position })
+  });
+
+  if (!res.ok) {
+    let err = '';
+    try { err = (await res.json())?.error || ''; } catch {}
+    throw new Error(err || `HTTP ${res.status}`);
+  }
+
+  // 3) Actualizar modelo local + badge
+  try {
+    const song = _findSongByIdAnywhere(sid);
+    const plistId = `pl:${pid}`;
+    const pls = Array.isArray(window._playlists) ? window._playlists.slice() : [];
+    const idx = pls.findIndex(p => String(p.id) === plistId);
+    if (idx >= 0) {
+      const songs = Array.isArray(pls[idx].songs) ? pls[idx].songs.slice() : [];
+      if (song) songs.push(song);
+      pls[idx] = { ...pls[idx], songs };
+      window._playlists = pls;
+
+      // Badge en sidebar
+      const li = document.querySelector(`#rep-playlists li[data-pl="${CSS.escape(plistId)}"]`);
+      if (li) {
+        const badge = li.querySelector('.rep-badge');
+        if (badge) badge.textContent = String((songs || []).length);
+      }
+    }
+  } catch {}
+
+  document.dispatchEvent(new CustomEvent('melodify:playlists:changed'));
+  _toast('Canción agregada a la playlist.');
 }
 
 // ---------------------------- Usuario y namespace --------------------------
@@ -1274,11 +1388,17 @@ export function buildRightSidebarHTML({playlists, genres=DEFAULT_GENRES}){
 
   const playlistsHTML = `
     <div class="rep-panel">
-      <div class="rep-head"><h3 style="margin:0">Playlists</h3></div>
+      <div class="rep-head" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <h3 style="margin:0">Playlists</h3>
+        <button id="rep-add-playlist-btn" type="button"
+                style="padding:6px 10px;border:1px solid var(--line);background:#202020;border-radius:8px;cursor:pointer">
+          + Nueva
+        </button>
+      </div>
       <ul id="rep-playlists" class="rep-list" style="list-style:none;margin:0;padding:0">
-        ${liHTML || '<li class="muted" style="padding:8px 10px;">(sin playlists)</li>'}
-      </ul>
-    </div>`;
+      ${liHTML || '<li class="muted" style="padding:8px 10px;">(sin playlists)</li>'}
+        </ul>
+      </div>`;
 
   const chipsHTML = (genres||[]).map(g=>`<span class="rep-chip" data-genre="${_esc(g.value)}">${_esc(g.label)}</span>`).join('');
   const genresHTML=`
@@ -1294,6 +1414,14 @@ export function attachSidebarHandlers(){
     w.querySelectorAll('.rep-chip.active,[aria-selected="true"],[aria-pressed="true"]').forEach(x=>{x.classList.remove('active');x.removeAttribute('aria-selected');x.removeAttribute('aria-pressed');});
   };
   const clearPlaylists=()=>{ const ul=document.getElementById('rep-playlists'); if(!ul) return; ul.querySelectorAll('li.active').forEach(x=>x.classList.remove('active')); };
+
+  // Botón: crear playlist (abre el modal de nueva playlist)
+  const addBtn = document.getElementById('rep-add-playlist-btn');
+  if (addBtn) {
+    addBtn.addEventListener('click', async () => {
+      _openCreatePlaylistModal();
+    });
+  }
 
   const ul=document.getElementById('rep-playlists');
   if(ul){
@@ -1389,6 +1517,158 @@ export function attachSidebarHandlers(){
   }
 }
 
+// ======== Modal “Nueva playlist” ===========================================
+let _createPlOverlay = null;
+function _ensureCreatePlaylistOverlay() {
+  if (_createPlOverlay) return _createPlOverlay;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'mdf-create-playlist-overlay';
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.innerHTML = `
+    <div class="cpl-backdrop">
+      <div class="cpl-modal" role="dialog" aria-modal="true">
+        <h3 class="cpl-title">Nueva playlist</h3>
+        <label class="cpl-label">Nombre</label>
+        <input id="cpl-name" class="cpl-input" type="text" maxlength="80" placeholder="Mi playlist"/>
+        <div class="cpl-error" id="cpl-error" aria-live="polite"></div>
+        <div class="cpl-footer">
+          <button type="button" class="cpl-cancel">Cancelar</button>
+          <button type="button" class="cpl-ok">Crear</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Cerrar clic afuera
+  overlay.addEventListener('click', () => {
+    overlay.classList.remove('is-open');
+    overlay.setAttribute('aria-hidden', 'true');
+  });
+  overlay.querySelector('.cpl-modal').addEventListener('click', (ev) => ev.stopPropagation());
+
+  // Estilos
+  if (!document.getElementById('mdf-create-playlist-styles')) {
+    const style = document.createElement('style');
+    style.id = 'mdf-create-playlist-styles';
+    style.textContent = `
+      #mdf-create-playlist-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:9999}
+      #mdf-create-playlist-overlay.is-open{display:flex}
+      #mdf-create-playlist-overlay .cpl-modal{background:#181818;color:#f5f5f5;border-radius:12px;padding:16px 18px;max-width:360px;width:min(360px,90vw);box-shadow:0 22px 45px rgba(0,0,0,.7);border:1px solid var(--line,#333)}
+      .cpl-title{margin:0 0 8px;font-size:16px}
+      .cpl-label{display:block;margin:6px 0 4px;font-size:12px;opacity:.9}
+      .cpl-input{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--line,#333);background:#202020;color:#eee}
+      .cpl-input:focus{outline:none;border-color:#4a3f8f}
+      .cpl-error{min-height:16px;color:#f39; font-size:12px; margin:6px 0 0}
+      .cpl-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+      .cpl-cancel{border:none;background:transparent;color:#9aa0a6;cursor:pointer}
+      .cpl-ok{padding:6px 12px;border:1px solid var(--line,#333);background:#202020;color:#eee;border-radius:8px;cursor:pointer}
+      .cpl-ok:hover{background:#292929}
+    `;
+    document.head.appendChild(style);
+  }
+
+  _createPlOverlay = overlay;
+  return overlay;
+}
+
+async function _openCreatePlaylistModal() {
+  const ov = _ensureCreatePlaylistOverlay();
+  const input = ov.querySelector('#cpl-name');
+  const err   = ov.querySelector('#cpl-error');
+  const btnOk = ov.querySelector('.cpl-ok');
+  const btnCa = ov.querySelector('.cpl-cancel');
+
+  err.textContent = '';
+  input.value = '';
+
+  function close() {
+    ov.classList.remove('is-open');
+    ov.setAttribute('aria-hidden', 'true');
+    btnOk.onclick = btnCa.onclick = null;
+    input.onkeydown = null;
+  }
+
+  async function submit() {
+    const name = String(input.value || '').trim();
+    if (!name) { err.textContent = 'Escribe un nombre.'; input.focus(); return; }
+    try {
+      const pid = await _createPlaylistFromPlayer(name, { isPrivate: false });
+      _toast('Playlist creada.');
+      // Refresca la vista del reproductor para que aparezca con su badge
+      const mainContent = document.getElementById('main-content');
+      const contentDiv  = document.getElementById('content');
+      try {
+        await renderMenuReproductor({
+          mainContent,
+          contentDiv,
+          URL_MI_MUSICA_JSON: mainContent?.dataset?.urlMiMusicaJson
+        });
+      } catch {}
+      // Seleccionar la nueva
+      const ul = document.getElementById('rep-playlists');
+      const li = ul?.querySelector(`li[data-pl="pl:${CSS.escape(String(pid))}"]`);
+      if (li) li.click();
+      close();
+    } catch (e) {
+      err.textContent = e?.message || 'No se pudo crear la playlist.';
+    }
+  }
+
+  btnOk.onclick = submit;
+  btnCa.onclick = close;
+  input.onkeydown = (ev) => {
+    if (ev.key === 'Enter') submit();
+    if (ev.key === 'Escape') close();
+  };
+
+  ov.classList.add('is-open');
+  ov.setAttribute('aria-hidden', 'false');
+  setTimeout(() => input?.focus(), 50);
+}
+
+// ======== Crear playlist desde el reproductor y notificar a la app =========
+function _getUsername() {
+  const mc = document.getElementById('main-content');
+  return mc?.dataset?.username
+      || document.querySelector('meta[name="username"]')?.content
+      || '';
+}
+async function _createPlaylistFromPlayer(name, { isPrivate = false } = {}) {
+  const n = String(name || '').trim();
+  if (!n) throw new Error('Nombre vacío');
+
+  const body = { user: _getUsername(), name: n };
+  const res = await fetch('/playlist/create/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || !j?.playlist_id) {
+    throw new Error(j?.error || 'No se pudo crear la playlist');
+  }
+
+  const pid = j.playlist_id;
+
+  if (isPrivate === true) {
+    const r2 = await fetch(`/playlist/${pid}/update/`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ isprivate: true }),
+    });
+    if (!r2.ok) console.warn('No se pudo marcar como privada (continúo)');
+  }
+
+  // Notifica cambios de playlists al resto de la aplicación
+  document.dispatchEvent(new CustomEvent('melodify:playlists:changed'));
+  return pid;
+}
+
+
 // ---------------------------- Modelo de playlists --------------------------
 async function fetchAllPlaylistsWithSongs() {
   try {
@@ -1400,10 +1680,6 @@ async function fetchAllPlaylistsWithSongs() {
 
     const data = await res.json();
 
-    // Formatos soportados:
-    // [ {...}, {...} ]
-    // { playlists: [ ... ] }
-    // { results: [ ... ] }
     const lists =
       (Array.isArray(data) && data) ||
       (Array.isArray(data?.playlists) && data.playlists) ||
@@ -1413,7 +1689,6 @@ async function fetchAllPlaylistsWithSongs() {
     if (!lists.length) return [];
 
     const byId = async (pl) => {
-      // Soporta diferentes nombres de identificador
       const pid = pl.id ?? pl.pk ?? pl.id_playlist ?? pl.playlist_id;
       if (pid == null) {
         console.warn('Playlist sin id conocido en getAllList:', pl);
@@ -1634,9 +1909,9 @@ export function rebindReproductor(){
 export async function stopReproductorIfLoaded(){ try{ stopReproductor(); }catch{} }
 
 export function wireReproductorPlaylistEvents({ mainContent }){
-  window.addEventListener('melodify:playlistChanged', async ()=>{
+  window.addEventListener('melodify:playlists:changed', async ()=>{
     if((mainContent?.dataset.view||'')==='reproductor'){
-      try{ await renderMenuReproductor({ mainContent, contentDiv:document.getElementById('content') }); }catch{}
+      try{ await renderMenuReproductor({ mainContent, contentDiv:document.getElementById('content'), URL_MI_MUSICA_JSON: mainContent?.dataset?.urlMiMusicaJson }); }catch{}
     }
   });
 }
@@ -1691,24 +1966,20 @@ function _toggleLikeFromReproductor(evt, idSongRaw) {
       buttons.forEach((btn) => {
         const scope = btn.dataset.likeScope || '';
 
-        // Estado lógico común
+        // Botón en Home: estilo básico sin cambios de color permanentes
         btn.dataset.liked = liked ? '1' : '0';
         btn.setAttribute('data-liked', liked ? '1' : '0');
         btn.setAttribute('aria-pressed', liked ? 'true' : 'false');
 
         if (scope === 'home') {
-          // 🔒 HOME: nada de rellenos ni clases especiales
-          // (dejamos siempre el corazón vacío)
           const txt = (btn.textContent || '').trim();
           if (txt === '♥' || txt === '♡' || txt === '') {
             btn.textContent = '♡';
           }
           btn.classList.remove('is-liked', 'liked', 'active');
         } else {
-          // 🎧 Reproductor / búsqueda / otras vistas:
-          // comportamiento normal con corazón relleno
+          // Vistas de reproductor / otras secciones
           btn.classList.toggle('is-liked', liked);
-
           const txt = (btn.textContent || '').trim();
           if (txt === '♥' || txt === '♡') {
             btn.textContent = liked ? '♥' : '♡';
@@ -1741,65 +2012,180 @@ function _toggleLikeFromReproductor(evt, idSongRaw) {
       ) {
         window.MDFCore.syncLikeModelFromClient(idSong, liked, meta);
       }
+
+      // Mensaje de feedback
+      _toast(liked ? 'Añadido a tus me gusta' : 'Quitado de tus me gusta');
     })
     .catch((err) => {
       console.error('Error en like desde reproductor:', err);
     });
 }
 
-
 function _performAddSongToPlaylist(plId, idSong) {
   const backendId = String(plId || '').replace(/^pl:/, '').trim();
   const songId    = String(idSong || '').trim();
-
   if (!backendId || !songId) {
     console.warn('Playlist o canción inválida en _performAddSongToPlaylist:', plId, idSong);
-    alert('No se pudo agregar la canción: playlist o canción inválida.');
+    _toast('No se pudo agregar la canción.');
     return;
   }
 
+  // Se intenta usar helpers específicos de la vista y, si no existen, se recurre al backend
   if (typeof window.addSongToPlaylistFromSearch === 'function') {
-    console.log(
-      '[MDFCore] delegando a addSongToPlaylistFromSearch. Canción:',
-      songId,
-      'Playlist:',
-      backendId
-    );
-
     try {
       window.addSongToPlaylistFromSearch(Number(songId) || songId,
                                          Number(backendId) || backendId);
+      return;
     } catch (e) {
-      console.error('addSongToPlaylistFromSearch lanzó error:', e);
-      alert('Ocurrió un error al agregar la canción a la playlist.');
+      console.warn('addSongToPlaylistFromSearch falló, aplico fallback:', e);
     }
-    return;
-  }
-
-  if (typeof window.addSongToPlaylist === 'function') {
-    console.log(
-      '[MDFCore] delegando a addSongToPlaylist. Playlist:',
-      backendId,
-      'Canción:',
-      songId
-    );
-
+  } else if (typeof window.addSongToPlaylist === 'function') {
     try {
       window.addSongToPlaylist(Number(backendId) || backendId,
                                Number(songId)    || songId);
+      return;
     } catch (e) {
-      console.error('addSongToPlaylist lanzó error:', e);
-      alert('Ocurrió un error al agregar la canción a la playlist.');
+      console.warn('addSongToPlaylist falló, aplico fallback:', e);
     }
+  }
+
+  // Fallback universal
+  _fallbackAddSongToPlaylist(backendId, songId)
+    .catch(err => {
+      console.error('Fallback agregar canción falló:', err);
+      _toast('No se pudo agregar la canción.');
+    });
+}
+function _performRemoveSongFromPlaylist(plId, idSong) {
+  const backendId = String(plId || '').replace(/^pl:/, '').trim();
+  const songId    = String(idSong || '').trim();
+  if (!backendId || !songId) {
+    console.warn(
+      'Playlist o canción inválida en _performRemoveSongFromPlaylist:',
+      plId,
+      idSong
+    );
+    _toast('No se pudo quitar la canción de la playlist.');
     return;
   }
 
-  console.error(
-    'No se encontró addSongToPlaylistFromSearch ni addSongToPlaylist en esta página.'
+  // Se intentan helpers específicos de la vista antes del acceso directo al backend
+  if (typeof window.removeSongFromPlaylistFromSearch === 'function') {
+    try {
+      window.removeSongFromPlaylistFromSearch(
+        Number(songId)    || songId,
+        Number(backendId) || backendId
+      );
+      return;
+    } catch (e) {
+      console.warn('removeSongFromPlaylistFromSearch falló, aplico fallback:', e);
+    }
+  } else if (typeof window.removeSongFromPlaylist === 'function') {
+    try {
+      window.removeSongFromPlaylist(
+        Number(backendId) || backendId,
+        Number(songId)    || songId
+      );
+      return;
+    } catch (e) {
+      console.warn('removeSongFromPlaylist falló, aplico fallback:', e);
+    }
+  }
+
+  // Fallback universal (usa /playlist/removesong/)
+  _fallbackRemoveSongFromPlaylist(backendId, songId).catch(err => {
+    console.error('Fallback quitar canción falló:', err);
+    _toast('No se pudo quitar la canción de la playlist.');
+  });
+}
+
+async function _bulkAddSongsToPlaylist(plId, songIds) {
+  const ids = Array.from(
+    new Set((songIds || []).map(x => String(x || '').trim()).filter(Boolean))
   );
-  alert(
-    'No se pudo agregar la canción porque la lógica de playlists (playListScript.js) no está disponible en esta vista.'
+  for (const sid of ids) {
+    // Usa la misma lógica que el modal "Agregar a playlist"
+    await _performAddSongToPlaylist(plId, sid);
+  }
+}
+
+async function _bulkRemoveSongsFromPlaylist(plId, songIds) {
+  const ids = Array.from(
+    new Set((songIds || []).map(x => String(x || '').trim()).filter(Boolean))
   );
+  for (const sid of ids) {
+    await _performRemoveSongFromPlaylist(plId, sid);
+  }
+}
+
+// --- Fallback directo al backend para quitar canción de una playlist ---
+async function _fallbackRemoveSongFromPlaylist(backendId, songId) {
+  const pid = String(backendId || '').trim();
+  const sid = String(songId || '').trim();
+  if (!pid || !sid) throw new Error('Playlist o canción inválida.');
+
+  const csrftoken = getCookie('csrftoken') || '';
+
+  const res = await fetch(`/playlist/removesong/`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'fetch',
+      ...(csrftoken ? { 'X-CSRFToken': csrftoken } : {}),
+    },
+    body: JSON.stringify({
+      playlist_id: Number(pid) || pid,
+      song_id:    Number(sid) || sid,
+    }),
+  });
+
+  if (!res.ok) {
+    let err = '';
+    try { err = (await res.json())?.error || ''; } catch {}
+    throw new Error(err || `HTTP ${res.status}`);
+  }
+
+  // Actualizar modelo local + badge + vista activa
+  try {
+    const plistId = `pl:${pid}`;
+    const pls = Array.isArray(window._playlists) ? window._playlists.slice() : [];
+    const idx = pls.findIndex(p => String(p.id) === plistId);
+    if (idx >= 0) {
+      const songs = Array.isArray(pls[idx].songs) ? pls[idx].songs.slice() : [];
+      const nextSongs = songs.filter(s => String(s.id) !== sid);
+      pls[idx] = { ...pls[idx], songs: nextSongs };
+      window._playlists = pls;
+
+      const li = document.querySelector(
+        `#rep-playlists li[data-pl="${CSS.escape(plistId)}"]`
+      );
+      if (li) {
+        const badge = li.querySelector('.rep-badge');
+        if (badge) badge.textContent = String(nextSongs.length);
+      }
+
+      const main = document.getElementById('main-content');
+      const isReproductor = (main?.dataset.view || '').trim() === 'reproductor';
+      if (isReproductor) {
+        const active = document.querySelector(
+          `#rep-playlists li.active[data-pl="${CSS.escape(plistId)}"]`
+        );
+        if (active) {
+          renderLeftSongs(
+            nextSongs,
+            pls[idx].name || 'Playlist',
+            { countsMode: null }
+          );
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('No se pudo actualizar modelo local tras removesong:', e);
+  }
+
+  document.dispatchEvent(new CustomEvent('melodify:playlists:changed'));
+  _toast('Canción eliminada de la playlist.');
 }
 
 // ---------------------------- UI overlay "Agregar a playlist" --------------
@@ -1973,7 +2359,6 @@ window.openAddToPlaylistForSong = function(idSongRaw) {
       }
 
       if (!candidates.length) {
-        alert('No tienes playlists personales disponibles. Crea una primero en la sección de playlists.');
         return;
       }
 

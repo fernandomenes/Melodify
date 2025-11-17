@@ -214,6 +214,60 @@
 
     window.MDFCore = core;
 
+    // Extensión de MDFCore con API global (playlists, likes, diálogos)
+    window.MDFCore = {
+      getAudio() {
+        ensureAudio();
+        return _state.audio;
+      },
+      getQueue() {
+        return _state.queue.slice();
+      },
+      getIndex() {
+        return _state.index;
+      },
+      load: (idx, autoplay = true) => load(idx, autoplay),
+      toggle: () => toggle(),
+      prev: () => prev(),
+      next: () => next(),
+      playExternalSong,
+      playFromDomItem: (card) => playFromDomItem(card),
+      seekPercent: (p01) => {
+        ensureAudio();
+        const a = _state.audio;
+        if (!a || !Number.isFinite(a.duration) || a.duration <= 0) return;
+        const pct = clamp(Number(p01) || 0, 0, 1);
+        a.currentTime = Math.max(
+          0,
+          Math.min(a.duration * pct, a.duration - 0.25)
+        );
+      },
+      setVolume: (v) => {
+        ensureAudio();
+        _state.audio.volume = clamp(Number(v) || 0, 0, 1);
+      },
+
+      // API de playlists para otras vistas (Gestión, Mi música, etc.)
+      addSongToPlaylist: (playlistId, songId) =>
+        _performAddSongToPlaylist(playlistId, songId),
+
+      addSongsToPlaylistBulk: (playlistId, songIds) =>
+        _bulkAddSongsToPlaylist(playlistId, songIds),
+
+      removeSongFromPlaylist: (playlistId, songId) =>
+        _performRemoveSongFromPlaylist(playlistId, songId),
+
+      removeSongsFromPlaylistBulk: (playlistId, songIds) =>
+        _bulkRemoveSongsFromPlaylist(playlistId, songIds),
+
+      // Likes y diálogos expuestos al reproductor
+      syncLikeModelFromClient: _syncLikeModelFromClient,
+      toggleLikeFromReproductor: (evt, idSong) =>
+        _toggleLikeFromReproductor(evt, idSong),
+      openAddToPlaylistDialog: (evt, idSong) =>
+        _openAddToPlaylistDialog(evt, idSong),
+    };
+
     // Aviso global de audio listo y solicitud de mostrar la barra
     dispatch("melodify:audioReady", { audio });
     window.__MDF_FORMS_HIDE_BAR__ = false;

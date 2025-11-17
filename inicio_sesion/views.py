@@ -22,17 +22,13 @@ logger = logging.getLogger(__name__)
 
 def _safe_file_url(f):
     """
-    Devuelve una URL segura para un FileField/ImageField.
-
-    - Si el archivo no tiene nombre o no es accesible, retorna cadena vacía.
-    - Evita excepciones en plantillas o al serializar a JSON.
+    Devuelve una URL segura para un FileField/ImageField o cadena vacía si no es usable.
     """
     if not f:
         return ""
     try:
         return f.url if getattr(f, "name", "") else ""
     except Exception:
-        # Fallback muy defensivo
         try:
             return str(f)
         except Exception:
@@ -41,14 +37,14 @@ def _safe_file_url(f):
 
 def _song_audio_url(song):
     """
-    Devuelve la URL de audio de una instancia Song o cadena vacía.
+    Devuelve la URL de audio de una Song o cadena vacía.
     """
     return _safe_file_url(getattr(song, "audio_file", None)) or ""
 
 
 def _song_cover_url(song):
     """
-    Devuelve la URL de portada de una instancia Song o None.
+    Devuelve la URL de portada de una Song o None.
     """
     cover = _safe_file_url(getattr(song, "cover_image", None))
     return cover or None
@@ -56,8 +52,7 @@ def _song_cover_url(song):
 
 def _get_session_user_obj(request):
     """
-    Devuelve la instancia Users asociada a request.session['user'],
-    o None si no existe.
+    Devuelve la instancia Users asociada a request.session['user'], o None.
     """
     username = request.session.get("user")
     if not username:
@@ -74,19 +69,17 @@ def _get_session_user_obj(request):
 
 
 def pantallaPrincipal(request):
-    """Renderiza la pantalla pública principal."""
+    """Pantalla pública principal."""
     return render(request, "inicio_sesion/principal.html")
 
 
 def pantallaHome(request):
     """
-    Renderiza la pantalla principal autenticada (Home SPA).
+    Pantalla principal autenticada (Home SPA).
 
-    Incluye en el contexto:
-    - Información de la sesión actual:
-        * session_user, session_role, avatar, descripción y fecha de creación.
-    - Para usuarios con rol "artista", una playlist virtual “Mi música”
-      con sus canciones públicas, enviada en playlists_json (JSON).
+    Contexto:
+    - Datos de sesión (usuario, rol, avatar, fecha de creación, descripción).
+    - Para artistas, playlist virtual “Mi música” con sus canciones públicas (playlists_json).
     """
     if "user" not in request.session:
         messages.error(request, "Debes iniciar sesión para acceder a esta página.")
@@ -111,13 +104,12 @@ def pantallaHome(request):
             created_at_str = u.created_at.strftime("%Y-%m-%d %H:%M")
 
         if role_lower == "artista":
-            # Puede no existir el ArtistProfile
             try:
                 artist_description = (u.artist_profile.description or "").strip()
             except ArtistProfile.DoesNotExist:
                 artist_description = ""
     except Users.DoesNotExist:
-        # Usuario de sesión inconsistente: dejamos campos vacíos
+        # Usuario en sesión inconsistente: se dejan campos vacíos
         pass
 
     # Playlist virtual “Mi música” (solo para rol artista)
@@ -171,8 +163,8 @@ def pantallaRegistro(request):
     """
     Pantalla de registro de usuarios (modelo Users).
 
-    Nota: actualmente almacena la contraseña en texto plano.
-    (no se usa auth de Django, se respeta la implementación existente).
+    Actualmente almacena la contraseña en texto plano
+    (no se usa el sistema de autenticación de Django).
     """
     if request.method == "POST":
         username = request.POST.get("username", "")
@@ -217,11 +209,7 @@ def pantallaRegistro(request):
 @csrf_protect
 def pantallaLogout(request):
     """
-    Cierra la sesión del usuario y deshabilita el caché de la página anterior.
-
-    - Limpia la sesión (request.session.flush()).
-    - Ejecuta logout de Django.
-    - Redirige a login con cabeceras anti-cache.
+    Cierra sesión, limpia la sesión y deshabilita caché de la página anterior.
     """
     request.session.flush()
     django_logout(request)
@@ -241,7 +229,7 @@ def pantallaLogin(request):
 
     Al autenticar correctamente:
     - Regenera la clave de sesión.
-    - Limpia claves de estado temporal (undo, etc.).
+    - Limpia claves de estado temporal (undo).
     - Almacena usuario y rol en la sesión.
     """
     if request.method == "POST":
@@ -251,7 +239,6 @@ def pantallaLogin(request):
         try:
             usuario_db = Users.objects.get(user=user, password=password)
 
-            # Regenerar sesión y limpiar estados temporales
             request.session.cycle_key()
             for k in [
                 "gestion_undo",
@@ -287,38 +274,31 @@ def pantallaLogin(request):
 
 def playlist_getAll(request):
     """
-    Devuelve las playlists DEL USUARIO EN SESIÓN con información de likes.
+    Devuelve las playlists del usuario en sesión con información de likes.
 
-    Si el usuario no tiene playlists, regresa [] en lugar de 500.
-    Estructura:
-        [
-            {
-                "id": ...,
-                "idUser": ...,
-                "name": "...",
-                "portada": "...",
-                "isprivate": bool,
-                "created_at": "...",
-                "likes_count": int,
-                "liked": bool
-            },
-            ...
-        ]
+    Forma de cada elemento:
+    {
+        "id": ...,
+        "idUser": ...,
+        "name": "...",
+        "portada": "...",
+        "isprivate": bool,
+        "created_at": "...",
+        "likes_count": int,
+        "liked": bool
+    }
     """
     user = _get_session_user_obj(request)
     if not user:
-        # Si por alguna razón no hay usuario en sesión, devolvemos lista vacía
         return JsonResponse([], safe=False)
 
     try:
-        # Solo playlists del usuario en sesión
         base = list(
             PlayList.objects.filter(idUser=user.id).values(
                 "id", "idUser", "name", "portada", "isprivate", "created_at"
             )
         )
 
-        # Si no tiene ninguna playlist, devolvemos [] sin intentar leer likes
         if not base:
             return JsonResponse([], safe=False)
 
@@ -330,17 +310,14 @@ def playlist_getAll(request):
             object_id__in=playlist_ids,
         )
 
-        # Conteo de likes por playlist
         counts = {}
         for l in likes_qs:
             counts[l.object_id] = counts.get(l.object_id, 0) + 1
 
-        # Conjunto de playlists que el usuario actual ha likeado
         user_liked_ids = set(
             likes_qs.filter(user=user).values_list("object_id", flat=True)
         )
 
-        # Inyectar metadata de likes
         for p in base:
             pid = p["id"]
             p["likes_count"] = counts.get(pid, 0)
@@ -353,7 +330,6 @@ def playlist_getAll(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-
 @csrf_exempt
 @require_http_methods(["POST"])
 def create_playlist(request):
@@ -361,7 +337,7 @@ def create_playlist(request):
     Crea una playlist asociada a un usuario a partir de un cuerpo JSON.
 
     Espera JSON:
-        { "user": "<username>", "name": "<nombre playlist>" }
+    { "user": "<username>", "name": "<nombre de la playlist>" }
     """
     try:
         data = json.loads(request.body)
@@ -402,25 +378,7 @@ def create_playlist(request):
 @require_http_methods(["GET"])
 def get_songs_by_playlist(request, playlist_id):
     """
-    Devuelve las canciones asociadas a una playlist en el orden definido
-    en la tabla intermedia PlayListSong.
-
-    Formato de respuesta:
-        {
-            "songs": [
-                {
-                    "id": ...,
-                    "title": "...",
-                    "artist_display_name": "...",
-                    "genre": "...",
-                    "audioUrl": "...",
-                    "coverUrl": "... | null",
-                    "likes_count": int,
-                    "liked": bool
-                },
-                ...
-            ]
-        }
+    Devuelve las canciones de una playlist en el orden definido en PlayListSong.
     """
     try:
         logger.info("Buscando canciones para playlist_id=%s", playlist_id)
@@ -445,7 +403,6 @@ def get_songs_by_playlist(request, playlist_id):
             "cover_image",
         )
 
-        # --- Likes para estas canciones ---
         ct_song = ContentType.objects.get_for_model(Song)
         likes_qs = LikeMedia.objects.filter(
             content_type=ct_song,
@@ -463,7 +420,6 @@ def get_songs_by_playlist(request, playlist_id):
                 likes_qs.filter(user=user).values_list("object_id", flat=True)
             )
 
-        # Mapa de canciones por id con info extra
         songs_map = {}
         for s in qs:
             au = _song_audio_url(s)
@@ -504,15 +460,14 @@ def get_songs_by_playlist(request, playlist_id):
 def delete_playlist(request, playlist_id):
     """
     Elimina una playlist por identificador.
-
-    Respuesta:
-        200 -> { "message": "Playlist eliminada correctamente" }
-        404 -> { "error": "Playlist no encontrada" }
     """
     try:
         playlist = PlayList.objects.get(id=playlist_id)
         playlist.delete()
-        return JsonResponse({"message": "Playlist eliminada correctamente"}, status=200)
+        return JsonResponse(
+            {"message": "Playlist eliminada correctamente"},
+            status=200,
+        )
 
     except PlayList.DoesNotExist:
         return JsonResponse({"error": "Playlist no encontrada"}, status=404)
@@ -525,24 +480,36 @@ def delete_playlist(request, playlist_id):
 @require_http_methods(["PUT"])
 def update_playlist(request, playlist_id):
     """
-    Actualiza el nombre de una playlist a partir de un cuerpo JSON.
+    Actualiza nombre y/o privacidad de una playlist.
 
-    Espera JSON:
-        { "name": "<nuevo nombre>" }
+    JSON esperado:
+    { "name": "<nuevo nombre>", "isprivate": true|false }
     """
     try:
-        playlist = PlayList.objects.get(id=playlist_id)
-        data = json.loads(request.body)
-        new_name = (data.get("name") or "").strip()
+        pl = PlayList.objects.get(id=playlist_id)
+        data = json.loads(request.body or "{}")
 
-        if not new_name:
-            return JsonResponse({"error": "El nombre no puede estar vacío"}, status=400)
+        new_name = data.get("name", None)
+        if new_name is not None:
+            new_name = (new_name or "").strip()
+            if not new_name:
+                return JsonResponse(
+                    {"error": "El nombre no puede estar vacío"},
+                    status=400,
+                )
+            pl.name = new_name
 
-        playlist.name = new_name
-        playlist.save()
+        if "isprivate" in data:
+            ispriv = bool(data.get("isprivate"))
+            pl.isprivate = ispriv
 
+        pl.save()
         return JsonResponse(
-            {"message": "Playlist actualizada correctamente", "name": playlist.name},
+            {
+                "message": "Playlist actualizada",
+                "name": pl.name,
+                "isprivate": pl.isprivate,
+            },
             status=200,
         )
 
@@ -558,17 +525,7 @@ def update_playlist(request, playlist_id):
 @require_http_methods(["GET"])
 def get_all_songs(request):
     """
-    Devuelve un listado de canciones públicas para el Home / reproductor.
-
-    Cada canción:
-        {
-            "id": ...,
-            "title": "...",
-            "artist_display_name": "...",
-            "genre": "...",
-            "audioUrl": "...",
-            "coverUrl": "..." | null
-        }
+    Devuelve canciones públicas para Home / reproductor.
     """
     try:
         qs = (
@@ -589,7 +546,6 @@ def get_all_songs(request):
         for s in qs:
             au = _song_audio_url(s)
             if not au:
-                # Si no tiene audio reproducible, no la mostramos
                 continue
 
             songs.append(
@@ -616,15 +572,14 @@ def get_all_songs(request):
 @require_http_methods(["GET"])
 def mis_likes_json(request):
     """
-    Devuelve las canciones marcadas con "like" por el usuario autenticado,
-    en el formato esperado por el reproductor.
+    Devuelve las canciones marcadas con "like" por el usuario autenticado.
 
-    Respuesta:
-        {
-            "id": "pl:likes",
-            "name": "Mis likes",
-            "songs": [ ... ]
-        }
+    Formato:
+    {
+        "id": "pl:likes",
+        "name": "Mis likes",
+        "songs": [...]
+    }
     """
     user = _get_session_user_obj(request)
     if not user:
@@ -669,12 +624,12 @@ def add_song_to_playlist(request):
     """
     Agrega una canción a una playlist a partir de un cuerpo JSON.
 
-    Espera JSON:
-        {
-            "song_id": <id canción>,
-            "playlist_id": <id playlist>,
-            "position": <posición entera>
-        }
+    JSON esperado:
+    {
+        "song_id": <id canción>,
+        "playlist_id": <id playlist>,
+        "position": <posición entera>
+    }
     """
     try:
         data = json.loads(request.body)
@@ -712,11 +667,11 @@ def remove_song_from_playlist(request):
     """
     Elimina una canción de una playlist a partir de un cuerpo JSON.
 
-    Espera JSON:
-        {
-            "playlist_id": <id playlist>,
-            "song_id": <id canción>
-        }
+    JSON esperado:
+    {
+        "playlist_id": <id playlist>,
+        "song_id": <id canción>
+    }
     """
     try:
         data = json.loads(request.body)
@@ -736,7 +691,8 @@ def remove_song_from_playlist(request):
             return JsonResponse({"error": "Registro no encontrado"}, status=404)
 
         return JsonResponse(
-            {"message": "Canción eliminada de la playlist"}, status=200
+            {"message": "Canción eliminada de la playlist"},
+            status=200,
         )
 
     except json.JSONDecodeError:
@@ -753,13 +709,9 @@ def remove_song_from_playlist(request):
 
 def buscar(request):
     """
-    Vista HTML de búsqueda (página /buscar/).
+    Vista HTML de búsqueda (/buscar/).
 
-    Busca en:
-    - Canciones públicas (Song)
-    - Artistas (Users con type='artista')
-    - Playlists públicas (PlayList)
-
+    Busca en canciones públicas, artistas (Users type='artista') y playlists públicas.
     Requiere que el usuario haya iniciado sesión.
     """
     if "user" not in request.session:
@@ -770,7 +722,6 @@ def buscar(request):
     resultados = {"canciones": [], "artistas": [], "playlists": []}
 
     if query:
-        # Canciones públicas
         resultados["canciones"] = (
             Song.objects.filter(
                 Q(title__icontains=query) | Q(artist_display_name__icontains=query),
@@ -786,7 +737,6 @@ def buscar(request):
             )[:20]
         )
 
-        # Artistas
         resultados["artistas"] = (
             Users.objects.filter(
                 Q(user__icontains=query) & Q(type__iexact="artista")
@@ -794,7 +744,6 @@ def buscar(request):
             .only("id", "user", "avatar", "created_at")[:20]
         )
 
-        # Playlists públicas
         resultados["playlists"] = (
             PlayList.objects.filter(Q(name__icontains=query) & Q(isprivate=False))
             .only("id", "idUser", "name", "portada", "isprivate", "created_at")[:20]
@@ -824,12 +773,9 @@ def buscar(request):
 
 def api_buscar(request):
     """
-    API JSON para búsqueda en tiempo real (autosuggest).
+    API JSON para autosuggest de búsqueda.
 
-    Devuelve hasta 5 coincidencias por tipo:
-    - canciones (públicas)
-    - artistas (Users type='artista')
-    - playlists (públicas)
+    Devuelve hasta 5 coincidencias por tipo: canciones, artistas y playlists públicas.
     """
     query = request.GET.get("q", "").strip()
 
@@ -839,7 +785,6 @@ def api_buscar(request):
     results = {"canciones": [], "artistas": [], "playlists": []}
 
     try:
-        # Canciones
         canciones = Song.objects.filter(
             Q(title__icontains=query) | Q(artist_display_name__icontains=query),
             visibility="public",
@@ -855,7 +800,6 @@ def api_buscar(request):
                 }
             )
 
-        # Artistas
         artistas = Users.objects.filter(
             Q(user__icontains=query) & Q(type__iexact="artista")
         )[:5]
@@ -868,7 +812,6 @@ def api_buscar(request):
                 }
             )
 
-        # Playlists públicas
         playlists = PlayList.objects.filter(
             Q(name__icontains=query) & Q(isprivate=False)
         )[:5]
@@ -895,10 +838,10 @@ def api_buscar(request):
 @require_POST
 def like_song(request, song_id):
     """
-    Alterna el estado de "like" para una canción.
+    Alterna el estado de like para una canción.
 
     Respuesta JSON:
-        { "liked": bool, "total": int }
+    { "liked": bool, "total": int }
     """
     user = _get_session_user_obj(request)
     if not user:
@@ -922,10 +865,10 @@ def like_song(request, song_id):
 @require_POST
 def like_playlist(request, playlist_id):
     """
-    Alterna el estado de "like" para una playlist.
+    Alterna el estado de like para una playlist.
 
     Respuesta JSON:
-        { "liked": bool, "total": int }
+    { "liked": bool, "total": int }
     """
     user = _get_session_user_obj(request)
     if not user:
