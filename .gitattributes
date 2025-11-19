@@ -1,26 +1,41 @@
-# Por defecto: NO tocar EOL (evita que Git “toque” binarios)
-* -text
+# Texto por defecto
+* text=auto
 
-# Normaliza sólo archivos de texto comunes a LF
-*.py   text eol=lf
-*.js   text eol=lf
-*.ts   text eol=lf
-*.css  text eol=lf
-*.html text eol=lf
-*.md   text eol=lf
-*.json text eol=lf
-*.txt  text eol=lf
+# Fuerza LF en cosas de Linux
+*.sh         text eol=lf
+Dockerfile   text eol=lf
+*.py         text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
 
-# Redundante pero explícito para media
-*.mp3  -text binary
-*.m4a  -text binary
-*.wav  -text binary
-*.ogg  -text binary
-*.flac -text binary
-*.jpg  -text binary
-*.jpeg -text binary
-*.png  -text binary
-*.webp -text binary
+# Windows scripts (si quieres CRLF localmente en PowerShell)
+*.ps1        text eol=crlf
+*.bat        text eol=crlf
+*.cmd        text eol=crlf
 
-# Semilla completa siempre binaria
-seeds/** -text binary
+# Front-end (solo texto; EOL lo decide la regla general)
+*.js         text
+*.ts         text
+*.css        text
+*.html       text
+*.json       text
+*.md         text
+
+# Binarios: sin conversión de EOL
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.gif  binary
+*.mp3  binary
+*.m4a  binary
+*.wav  binary
+*.ogg  binary
+*.flac binary
+*.pdf  binary
+*.woff  binary
+*.woff2 binary
+*.ttf  binary
+*.eot  binary
+*.ico  binary
+*.zip  binary

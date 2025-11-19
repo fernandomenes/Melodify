@@ -1,23 +1,25 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUTF8=1 \
+    LC_ALL=C.UTF-8 \
+    LANG=C.UTF-8
 
 WORKDIR /app
 
-# Dependencias
+# Dependencias Python
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -U pip \
+ && pip install --no-cache-dir -r requirements.txt
 
 # Código
 COPY . .
 
-# Estáticos (WhiteNoise usará el manifest en runtime)
+RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
+
 RUN python manage.py collectstatic --noinput
 
-# Puerto
-ENV PORT=8000
 EXPOSE 8000
 
-# Entrypoint (migraciones + gunicorn)
 CMD ["./entrypoint.sh"]
