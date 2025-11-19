@@ -1,5 +1,7 @@
 # inicio_sesion/management/commands/seed_demo.py
 import json
+import re
+import unicodedata
 import hashlib
 from pathlib import Path
 
@@ -10,7 +12,7 @@ from django.utils.text import slugify
 from inicio_sesion.models import Users, ArtistProfile, Song
 
 SUPPORTED_AUDIO = {".mp3", ".m4a", ".wav", ".ogg", ".flac"}
-SUPPORTED_IMG = {".jpg", ".jpeg", ".png", ".webp"}
+SUPPORTED_IMG   = {".jpg", ".jpeg", ".png", ".webp"}
 
 
 def sha256_file(p: Path) -> str:
@@ -19,6 +21,42 @@ def sha256_file(p: Path) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def strip_accents(s: str) -> str:
+    # NFKD + quitar marcas combinantes → “José” => “Jose”; maneja ‘comillas tipográficas’
+    s = unicodedata.normalize("NFKD", s)
+    return "".join(ch for ch in s if not unicodedata.combining(ch))
+
+
+_SEP_RE = re.compile(r"[\s_\-–—~·\.]+")
+_TRASH_RE = re.compile(r"[\"'´`‘’“”\(\)\[\]\{\}:;,!?\|/\\]+")
+
+def norm_key(s: str) -> str:
+    """
+    Clave de comparación para nombres de archivo/títulos:
+    - toma el nombre (sin ruta) y el stem (sin extensión)
+    - quita acentos, comillas y puntuación “ruidosa”
+    - une separadores (espacios/guiones/underscores) y pasa a minúsculas
+    - también recorta patrones comunes “ - artista”
+    """
+    if not s:
+        return ""
+    # si viene como ruta, quedarse con el nombre
+    name = Path(s.replace("\\", "/")).name
+    stem = Path(name).stem
+
+    # a veces formatos “Titulo - Artista” → quedarnos con la 1a parte para empatar con cover/audio
+    # (pero solo para la clave de comparación; el título real lo dejamos aparte)
+    stem = stem.split(" - ")[0]
+
+    # quitar acentos y “basura” tipográfica
+    stem = strip_accents(stem)
+    stem = _TRASH_RE.sub("", stem)
+
+    # normalizar separadores
+    stem = _SEP_RE.sub(" ", stem).strip().lower()
+    return stem
 
 
 def pick_one(folder: Path, exts) -> Path | None:
@@ -30,13 +68,27 @@ def pick_one(folder: Path, exts) -> Path | None:
     return None
 
 
-def pick_cover_for_stem(covers_dir: Path, stem: str) -> Path | None:
+def pick_cover_for_stem(covers_dir: Path, audio_stem: str) -> Path | None:
+    """
+    Busca cover para un stem de audio probando:
+      1) coincidencia exacta por nombre con extensiones conocidas
+      2) escaneo completo con clave normalizada (tolerante a acentos/guiones)
+    """
     if not covers_dir.exists():
         return None
+
+    # 1) intento directo por extensiones
     for ext in (".jpg", ".jpeg", ".png", ".webp"):
-        cand = (covers_dir / stem).with_suffix(ext)
+        cand = (covers_dir / audio_stem).with_suffix(ext)
         if cand.exists() and cand.is_file():
             return cand
+
+    # 2) emparejo por clave normalizada
+    key = norm_key(audio_stem)
+    for p in sorted(covers_dir.iterdir()):
+        if p.is_file() and p.suffix.lower() in SUPPORTED_IMG:
+            if norm_key(p.stem) == key:
+                return p
     return None
 
 
@@ -48,8 +100,8 @@ class Command(BaseCommand):
         parser.add_argument("--default-pass", dest="default_pass", default="seed123", help="Password por defecto")
         parser.add_argument("--genre", default="demo", help="Género por defecto si no hay meta.json")
         parser.add_argument("--replace-avatars", dest="replace_avatars", action="store_true", help="Reemplaza avatar existente")
-        parser.add_argument("--replace-covers", dest="replace_covers", action="store_true", help="Reemplaza covers de canciones")
-        parser.add_argument("--replace-audio", dest="replace_audio", action="store_true", help="Reemplaza audio si ya existe canción con mismo título")
+        parser.add_argument("--replace-covers",  dest="replace_covers",  action="store_true", help="Reemplaza covers de canciones")
+        parser.add_argument("--replace-audio",   dest="replace_audio",   action="store_true", help="Reemplaza audio si ya existe canción con mismo título")
 
     def handle(self, *args, **opts):
         root = Path(opts["root"]).resolve()
@@ -59,16 +111,16 @@ class Command(BaseCommand):
 
         default_pass = opts["default_pass"]
         default_genre_global = opts["genre"]
-        replace_avatars = opts.get("replace_avatars", False)
-        replace_covers = opts.get("replace_covers", False)
-        replace_audio = opts.get("replace_audio", False)
+        replace_avatars = bool(opts.get("replace_avatars", False))
+        replace_covers  = bool(opts.get("replace_covers", False))
+        replace_audio   = bool(opts.get("replace_audio", False))
 
         total_users = 0
         total_songs = 0
 
         artist_dirs = [d for d in root.iterdir() if d.is_dir()]
         for artist_dir in sorted(artist_dirs):
-            a_slug = artist_dir.name
+            a_slug = artist_dir.name  # lo usamos como username y prefijo de archivos
 
             # meta.json opcional
             meta = {}
@@ -100,12 +152,13 @@ class Command(BaseCommand):
                 defaults={"description": meta.get("bio", "")},
             )
 
-            # Avatar
+            # Avatar (toma el primero válido si no hay específico)
             avatar_file = pick_one(artist_dir / "avatar", SUPPORTED_IMG)
             if avatar_file and (replace_avatars or not user.avatar.name):
                 with avatar_file.open("rb") as fh:
-                    name = f"uploaded_avatars/{a_slug}{avatar_file.suffix.lower()}"
-                    user.avatar.save(name, File(fh), save=True)
+                    # nombre estable y “seguro” (sin caracteres problemáticos)
+                    aname = f"uploaded_avatars/{slugify(a_slug)}{avatar_file.suffix.lower()}"
+                    user.avatar.save(aname, File(fh), save=True)
 
             # Cover por defecto del artista
             default_cover = pick_one(artist_dir / "covers", SUPPORTED_IMG)
@@ -116,40 +169,63 @@ class Command(BaseCommand):
                 self.stdout.write(f"[{a_slug}] sin carpeta audio/, se omite")
                 continue
 
+            songs_meta = meta.get("songs") or []
+            # índice para match rápido por clave normalizada del filename de meta.json
+            meta_by_key = {}
+            for s in songs_meta:
+                fn = s.get("file") or s.get("filename") or ""
+                meta_by_key[norm_key(fn)] = s
+
             for audio in sorted(audio_dir.iterdir()):
                 if not (audio.is_file() and audio.suffix.lower() in SUPPORTED_AUDIO):
                     continue
 
                 # Título y género por canción
-                title = audio.stem.replace("_", " ").title()
-                song_genre = genre_default
-                if meta.get("songs"):
-                    for s in meta["songs"]:
-                        if s.get("file") == f"audio/{audio.name}" or s.get("filename") == audio.name:
-                            title = s.get("title") or title
-                            song_genre = s.get("genre") or song_genre
-                            break
+                title_guess = audio.stem.replace("_", " ")
+                song_genre  = genre_default
+
+                # intenta empatar con meta.json por nombre normalizado
+                m = meta_by_key.get(norm_key(audio.name))
+                if m:
+                    title = m.get("title") or title_guess
+                    song_genre = m.get("genre") or song_genre
+                else:
+                    title = title_guess
+
+                # título capitalizado de forma razonable
+                title = title.strip()
+                if title:
+                    title = title[0].upper() + title[1:]
 
                 ahash = sha256_file(audio)
 
-                # Si existe misma canción por título y dueño, actualiza si replace_audio
+                # si ya existe por dueño+hash → idempotente
+                exists_by_hash = Song.objects.filter(owner_user=user.user, audio_sha256=ahash).first()
+                if exists_by_hash and not replace_audio:
+                    continue
+
+                # si existe por dueño+título → actualiza si --replace-audio, si no, crea nuevo
                 existing_by_title = Song.objects.filter(owner_user=user.user, title=title).first()
+
+                # nombre de archivo destino “seguro” con sufijo del hash para evitar colisiones
+                base_slug = f"{slugify(a_slug)}_{slugify(title)}_{ahash[:8]}"
+                audio_dest = f"uploaded_songs/{base_slug}{audio.suffix.lower()}"
+
                 if existing_by_title:
                     changed = False
                     if replace_audio:
                         with audio.open("rb") as fh:
-                            dest_name = f"uploaded_songs/{a_slug}_{slugify(title)}{audio.suffix.lower()}"
-                            existing_by_title.audio_file.save(dest_name, File(fh), save=False)
+                            existing_by_title.audio_file.save(audio_dest, File(fh), save=False)
                         existing_by_title.audio_sha256 = ahash
                         changed = True
 
-                    # Cover de canción para actualización
+                    # cover específico (match tolerante) o default_cover
                     cover_src = pick_cover_for_stem(artist_dir / "covers", audio.stem) or default_cover
                     if cover_src and (replace_covers or not existing_by_title.cover_image.name):
                         with cover_src.open("rb") as fh:
                             cext = cover_src.suffix.lower()
-                            cname = f"uploaded_covers/{a_slug}_{slugify(title)}{cext}"
-                            existing_by_title.cover_image.save(cname, File(fh), save=False)
+                            cover_dest = f"uploaded_covers/{base_slug}{cext}"
+                            existing_by_title.cover_image.save(cover_dest, File(fh), save=False)
                         changed = True
 
                     if changed:
@@ -157,11 +233,6 @@ class Command(BaseCommand):
                         existing_by_title.artist_display_name = display_name
                         existing_by_title.visibility = "public"
                         existing_by_title.save()
-                    continue
-
-                # Evita duplicados por hash (mismo archivo ya cargado para ese dueño)
-                exists_by_hash = Song.objects.filter(owner_user=user.user, audio_sha256=ahash).first()
-                if exists_by_hash and not replace_audio:
                     continue
 
                 # Crear nueva canción
@@ -175,17 +246,18 @@ class Command(BaseCommand):
                 )
 
                 with audio.open("rb") as fh:
-                    dest_name = f"uploaded_songs/{a_slug}_{slugify(title)}{audio.suffix.lower()}"
-                    song.audio_file.save(dest_name, File(fh), save=False)
+                    song.audio_file.save(audio_dest, File(fh), save=False)
 
                 cover_src = pick_cover_for_stem(artist_dir / "covers", audio.stem) or default_cover
                 if cover_src:
                     with cover_src.open("rb") as fh:
                         cext = cover_src.suffix.lower()
-                        cname = f"uploaded_covers/{a_slug}_{slugify(title)}{cext}"
-                        song.cover_image.save(cname, File(fh), save=False)
+                        cover_dest = f"uploaded_covers/{base_slug}{cext}"
+                        song.cover_image.save(cover_dest, File(fh), save=False)
 
                 song.save()
                 total_songs += 1
 
-        self.stdout.write(self.style.SUCCESS(f"Hecho. Usuarios nuevos: {total_users}, Canciones nuevas: {total_songs}"))
+        self.stdout.write(self.style.SUCCESS(
+            f"Hecho. Usuarios nuevos: {total_users}, Canciones nuevas: {total_songs}"
+        ))
