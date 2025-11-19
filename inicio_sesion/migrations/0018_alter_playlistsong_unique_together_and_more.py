@@ -10,10 +10,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AlterUniqueTogether(
-            name='playlistsong',
-            unique_together=set(),
-        ),
+        #migrations.AlterUniqueTogether(
+         #   name='playlistsong',
+          #  unique_together=set(),
+        #),
         migrations.AlterField(
             model_name='playlist',
             name='portada',

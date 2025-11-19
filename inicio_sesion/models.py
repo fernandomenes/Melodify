@@ -197,3 +197,19 @@ class LikeMedia(models.Model):
 
     def __str__(self) -> str:
         return f"Like by {self.user.user} -> {self.content_type}#{self.object_id}"
+
+class PlaylistCollaborator(models.Model):
+    """
+    Colaboradores de playlists. Guardamos playlist_id como entero
+    porque PlayList usa managed=False / idUser int.
+    collaborator_user almacena el campo Users.user (username).
+    """
+    playlist_id = models.IntegerField(db_index=True)
+    collaborator_user = models.CharField(max_length=100, db_index=True)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "PlaylistCollaborators"
+        unique_together = (("playlist_id", "collaborator_user"),)
+        ordering = ["-added_at"]
+

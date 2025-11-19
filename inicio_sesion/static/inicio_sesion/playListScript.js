@@ -963,6 +963,65 @@ function deleteFromPlaylistSong(ev, idSong, playlistId, playlistName) {
   });
 }
 
+
+// ===========================================================================
+// Agregar colaboradores a playlist
+// ===========================================================================
+
+// mostrar colaboradores (llama y actualiza un contenedor)
+async function fetchCollaborators(playlistId) {
+    try {
+        const resp = await fetch(`/playlist/${playlistId}/collaborators/`, { credentials: 'same-origin' });
+        if (!resp.ok) {
+            console.warn('No se pudo obtener colaboradores', await resp.json());
+            return [];
+        }
+        const data = await resp.json();
+        return data.collaborators || [];
+    } catch (e) {
+        console.error('fetchCollaborators error', e);
+        return [];
+    }
+}
+
+async function addCollaborator(playlistId, username, role = 'viewer') {
+    const csrf = getCookie('csrftoken');
+    try {
+        const resp = await fetch(`/playlist/${playlistId}/collaborators/add/`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrf,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ username, role })
+        });
+        return await resp.json();
+    } catch (e) {
+        console.error('addCollaborator error', e);
+        return { error: 'network' };
+    }
+}
+
+async function removeCollaborator(playlistId, userId) {
+    const csrf = getCookie('csrftoken');
+    try {
+        const resp = await fetch(`/playlist/${playlistId}/collaborators/remove/${userId}/`, {
+            method: 'DELETE',
+            credentials: 'same-origin',
+            headers: {
+                'X-CSRFToken': csrf,
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        return await resp.json();
+    } catch (e) {
+        console.error('removeCollaborator error', e);
+        return { error: 'network' };
+    }
+}
+
 /* =========================================================================
    Puntos de entrada globales para uso desde Home/Buscador/Muro/Reproductor
    ========================================================================= */

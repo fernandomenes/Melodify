@@ -1,10 +1,13 @@
 import json
 import logging
 
+
 from django.contrib import messages
 from django.contrib.auth import logout as django_logout
+from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
+from django.db import IntegrityError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
@@ -61,7 +64,6 @@ def _get_session_user_obj(request):
         return Users.objects.get(user=username)
     except Users.DoesNotExist:
         return None
-
 
 # ============================================================================
 # Pantallas básicas (pública / autenticación / home)
@@ -887,3 +889,122 @@ def like_playlist(request, playlist_id):
 
     total = LikeMedia.objects.filter(content_type=ct, object_id=playlist.id).count()
     return JsonResponse({"liked": liked, "total": total})
+
+# ============================================================================
+# Colaboradores (playlists)
+# ============================================================================
+
+
+@require_http_methods(["GET"])
+def playlist_collaborators_list(request, playlist_id):
+    """
+    GET -> devuelve lista de colaboradores: [{user_id, username, role, created_at}]
+    Si el request.user no es el owner u admin, devuelve solo list si se permite (o 403).
+    """
+    session_user = _get_session_user_obj(request)
+    # Obtener playlist y verificar permisos de lectura: generalmente público, pero listar colaboradores
+    pl = get_object_or_404(PlayList, id=playlist_id)
+    # Solo el propietario (idUser) o admins deberían listar colaboradores
+    if not session_user:
+        return JsonResponse({"error": "login_required"}, status=401)
+
+    # comprobar si es owner o admin
+    is_owner = (pl.idUser == session_user.id) if getattr(session_user, "id", None) is not None else False
+    is_admin = (getattr(session_user, "is_superadmin", False) or (session_user.type or "").lower() == "administrador")
+    if not (is_owner or is_admin):
+        return JsonResponse({"error": "forbidden"}, status=403)
+
+    cols = PlayListCollaborator.objects.filter(playlist_id=playlist_id).select_related("user")
+    result = [
+        {
+            "user_id": c.user.id,
+            "username": c.user.user,
+            "role": c.role,
+            "created_at": c.created_at.isoformat(),
+        }
+        for c in cols
+    ]
+    return JsonResponse({"collaborators": result})
+
+
+@require_POST
+def playlist_collaborator_add(request, playlist_id):
+    """
+    POST JSON { username: "other_user", role: "editor" }
+    Solo propietario (idUser) o admin puede añadir.
+    Responde {added: true, user_id, username, role}
+    """
+    session_user = _get_session_user_obj(request)
+    if not session_user:
+        return JsonResponse({"error": "login_required"}, status=401)
+
+    pl = get_object_or_404(PlayList, id=playlist_id)
+    # sólo owner o admin
+    is_owner = (pl.idUser == session_user.id) if getattr(session_user, "id", None) is not None else False
+    is_admin = (getattr(session_user, "is_superadmin", False) or (session_user.type or "").lower() == "administrador")
+    if not (is_owner or is_admin):
+        return JsonResponse({"error": "forbidden"}, status=403)
+
+    try:
+        data = json.loads(request.body.decode("utf-8") or "{}")
+    except Exception:
+        data = {}
+
+    username = (data.get("username") or "").strip()
+    role = (data.get("role") or "viewer").strip()
+    if not username:
+        return JsonResponse({"error": "username_required"}, status=400)
+    if role not in ("editor", "viewer"):
+        return JsonResponse({"error": "invalid_role"}, status=400)
+
+    try:
+        target = Users.objects.get(user=username)
+    except Users.DoesNotExist:
+        return JsonResponse({"error": "user_not_found"}, status=404)
+
+    # Añadir colaborador (evitar duplicado)
+    try:
+        col, created = PlayListCollaborator.objects.get_or_create(
+            playlist_id=playlist_id, user=target, defaults={"role": role}
+        )
+        if not created:
+            # si ya existe, actualizar role si distinto
+            if col.role != role:
+                col.role = role
+                col.save(update_fields=["role"])
+        return JsonResponse({
+            "added": True,
+            "user_id": target.id,
+            "username": target.user,
+            "role": col.role,
+        })
+    except IntegrityError:
+        return JsonResponse({"error": "db_error"}, status=500)
+
+
+@require_http_methods(["DELETE"])
+def playlist_collaborator_remove(request, playlist_id, user_id):
+    """
+    DELETE -> elimina la colaboración del user_id en playlist_id.
+    Solo owner o admin pueden eliminar colaboradores.
+    """
+    session_user = _get_session_user_obj(request)
+    if not session_user:
+        return JsonResponse({"error": "login_required"}, status=401)
+
+    pl = get_object_or_404(PlayList, id=playlist_id)
+    is_owner = (pl.idUser == session_user.id) if getattr(session_user, "id", None) is not None else False
+    is_admin = (getattr(session_user, "is_superadmin", False) or (session_user.type or "").lower() == "administrador")
+    if not (is_owner or is_admin):
+        return JsonResponse({"error": "forbidden"}, status=403)
+
+    try:
+        target = Users.objects.get(id=user_id)
+    except Users.DoesNotExist:
+        return JsonResponse({"error": "user_not_found"}, status=404)
+
+    deleted, _ = PlayListCollaborator.objects.filter(playlist_id=playlist_id, user=target).delete()
+    if deleted:
+        return JsonResponse({"removed": True})
+    else:
+        return JsonResponse({"removed": False, "error": "not_found"}, status=404)

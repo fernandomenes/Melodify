@@ -31,4 +31,9 @@ urlpatterns = [
     path("mis-likes/json/", v.mis_likes_json, name="mis_likes_json"),
     path("api/all-songs/", v.get_all_songs, name="all_songs_json"),
 
+    # Colaboradores
+    path("playlist/<int:playlist_id>/collaborators/", v.playlist_collaborators_list, name="playlist_collaborators_list"),
+    path("playlist/<int:playlist_id>/collaborators/add/", v.playlist_collaborator_add, name="playlist_collaborator_add"),
+    path("playlist/<int:playlist_id>/collaborators/remove/<int:user_id>/", v.playlist_collaborator_remove, name="playlist_collaborator_remove"),
+    
 ]
