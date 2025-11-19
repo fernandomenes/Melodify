@@ -1,31 +1,26 @@
-@"
-* text=auto
+# Por defecto: NO tocar EOL (evita que Git “toque” binarios)
+* -text
 
-# Fuerza LF en scripts/código (Linux-friendly)
-*.sh   text eol=lf
+# Normaliza sólo archivos de texto comunes a LF
 *.py   text eol=lf
 *.js   text eol=lf
 *.ts   text eol=lf
 *.css  text eol=lf
 *.html text eol=lf
 *.md   text eol=lf
-*.yml  text eol=lf
-*.yaml text eol=lf
 *.json text eol=lf
-*.svg  text eol=lf
+*.txt  text eol=lf
 
-# PowerShell en Windows (CRLF ok)
-*.ps1  text eol=crlf
+# Redundante pero explícito para media
+*.mp3  -text binary
+*.m4a  -text binary
+*.wav  -text binary
+*.ogg  -text binary
+*.flac -text binary
+*.jpg  -text binary
+*.jpeg -text binary
+*.png  -text binary
+*.webp -text binary
 
-# Binario: no tocar finales de línea
-*.png  binary
-*.jpg  binary
-*.jpeg binary
-*.webp binary
-*.gif  binary
-*.mp3  binary
-*.wav  binary
-*.ogg  binary
-*.m4a  binary
-*.flac binary
-"@  Set-Content -Encoding ascii .gitattributes
+# Semilla completa siempre binaria
+seeds/** -text binary
