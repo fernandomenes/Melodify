@@ -522,18 +522,38 @@
     }
   });
 
-  // Menú lateral
-  (function menuToggle() {
-    const btn    = document.getElementById("menu-toggle-btn");
-    const menu   = document.getElementById("menuLateral");
-    const header = document.getElementById("header");
+  // Menú lateral (mismo comportamiento que en Home, pero local al muro)
+  (function setupMuroMenuToggle() {
+    const btnToggle   = document.getElementById("menu-toggle-btn");
+    const logoToggle  = document.getElementById("toggle-menu");
+    const menuLateral = document.getElementById("menuLateral");
+    const mainContent = document.getElementById("main-content");
+    const header      = document.getElementById("header");
 
-    btn?.addEventListener("click", () => {
-      menu?.classList.toggle("collapsed");
-      document.getElementById("main-content")?.classList.toggle("menuLateral-collapsed");
-      header?.classList.toggle("menuLateral-collapsed");
-    });
+    if (!menuLateral || !mainContent) return;
+
+    function applyCollapsed(collapsed) {
+      menuLateral.classList.toggle("collapsed", collapsed);
+      mainContent.classList.toggle("menuLateral-collapsed", collapsed);
+      header?.classList.toggle("menuLateral-collapsed", collapsed);
+      document
+        .querySelector("._mdf-player-bar")
+        ?.classList.toggle("menuLateral-collapsed", collapsed);
+    }
+
+    // Estado inicial: barra lateral OCULTA (colapsada)
+    applyCollapsed(true);
+
+    function handleToggleClick() {
+      const nowCollapsed = menuLateral.classList.contains("collapsed");
+      applyCollapsed(!nowCollapsed);
+    }
+
+    // Botón ☰ y logo de la barra lateral
+    btnToggle?.addEventListener("click", handleToggleClick);
+    logoToggle?.addEventListener("click", handleToggleClick);
   })();
+
 
   // Menú de usuario y logout
   (function userMenu() {

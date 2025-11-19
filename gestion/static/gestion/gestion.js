@@ -365,17 +365,40 @@ function playIndex(i) {
   // ---------------------------------------------------------------------------
   // Toggle del menú lateral
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Toggle del menú lateral (mismo comportamiento que Home / Muro)
+  // ---------------------------------------------------------------------------
   function initSideToggle() {
-    const btn    = $("#menu-toggle-btn");
-    const menu   = $("#menuLateral");
-    const header = $("#header");
+    const btnToggle   = $("#menu-toggle-btn");
+    const logoToggle  = $("#toggle-menu");
+    const menuLateral = $("#menuLateral");
+    const mainContent = $("#main-content");
+    const header      = $("#header");
 
-    btn?.addEventListener("click", () => {
-      menu?.classList.toggle("collapsed");
-      $("#main-content")?.classList.toggle("menuLateral-collapsed");
-      header?.classList.toggle("menuLateral-collapsed");
-    });
+    if (!menuLateral || !mainContent) return;
+
+    function applyCollapsed(collapsed) {
+      menuLateral.classList.toggle("collapsed", collapsed);
+      mainContent.classList.toggle("menuLateral-collapsed", collapsed);
+      header?.classList.toggle("menuLateral-collapsed", collapsed);
+      document
+        .querySelector("._mdf-player-bar")
+        ?.classList.toggle("menuLateral-collapsed", collapsed);
+    }
+
+    // Estado inicial: menú colapsado
+    applyCollapsed(true);
+
+    function handleToggleClick() {
+      const nowCollapsed = menuLateral.classList.contains("collapsed");
+      applyCollapsed(!nowCollapsed);
+    }
+
+    // Botón ☰ y clic en el logo
+    btnToggle?.addEventListener("click", handleToggleClick);
+    logoToggle?.addEventListener("click", handleToggleClick);
   }
+
 
   // ---------------------------------------------------------------------------
   // Mensajes inline + barra de deshacer
