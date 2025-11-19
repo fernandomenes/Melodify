@@ -11,7 +11,7 @@ def env_list(name: str, default: list[str]) -> list[str]:
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # --------------------------- Seguridad / Debug ---------------------------
-DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
+DEBUG = True
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-dev-only")
 
 _DEFAULT_HOSTS = [

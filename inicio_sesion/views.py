@@ -12,6 +12,8 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.http import require_GET
+
 
 from .models import ArtistProfile, LikeMedia, PlayList, PlayListSong, Song, Users
 
@@ -274,6 +276,23 @@ def pantallaLogin(request):
 # ============================================================================
 
 
+@require_GET
+def get_user_id(request):
+    """
+    Devuelve el ID del usuario si existe, dado el parámetro 'user'.
+    Ejemplo: /api/get-user-id/?user=jua
+    """
+    username = request.GET.get('user')
+    if not username:
+        return JsonResponse({'error': 'Parámetro "user" es requerido'}, status=400)
+
+    try:
+        user_obj = Users.objects.get(user=username, is_active=True)
+        return JsonResponse({'id': user_obj.id})
+    except Users.DoesNotExist:
+        return JsonResponse({'error': 'Usuario no encontrado o inactivo'}, status=404)
+
+
 def playlist_getAll(request):
     """
     Devuelve las playlists del usuario en sesión con información de likes.
@@ -296,7 +315,7 @@ def playlist_getAll(request):
 
     try:
         base = list(
-            PlayList.objects.filter(idUser=user.id).values(
+            PlayList.objects.values(
                 "id", "idUser", "name", "portada", "isprivate", "created_at"
             )
         )

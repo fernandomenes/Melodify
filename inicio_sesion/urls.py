@@ -24,6 +24,8 @@ urlpatterns = [
     path("playlist/allsongs/", v.get_all_songs, name="get-all-songs"),
     path("playlist/addsong/", v.add_song_to_playlist, name="add-song-to-playlist"),
     path("playlist/removeSong/", v.remove_song_from_playlist, name="remove-song-from-playlist"),
+    path("playlist/getuserid/", v.get_user_id, name='get_user_id'),
+
 
     # Likes
     path("api/like/song/<int:song_id>/", v.like_song, name="api_like_song"),

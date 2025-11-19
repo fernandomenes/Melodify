@@ -13,6 +13,8 @@
 let currentViewPlaylist  = "allPlayList"; // "allPlayList" | "allSongsPlayList"
 let content              = null;          // Contenedor principal (#content)
 let USERNAME             = null;          // Usuario en sesión
+let USERID             = null;          // IDUsuario en sesión
+
 
 // Caché de nombres de playlist (id -> nombre)
 const PL_NAME = new Map();
@@ -97,11 +99,34 @@ function initPlayList(username) {
   USERNAME = username || getSessionUsername();
   content  = document.getElementById('content');
   showPlaylists();
+  getUSerIdLogin(USERNAME).then(id => { USERID=id });
 }
 
 function clickBackBtnPlaylist() {
   if (currentViewPlaylist === "allSongsPlayList") {
     showPlaylists();
+  }
+}
+
+
+
+async function getUSerIdLogin(username) {
+  const url = `/playlist/getuserid/?user=${encodeURIComponent(username)}`;
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('ID del usuario:', data.id);
+      return data.id;
+    } else {
+      console.error('Error:', data.error);
+      return null;
+    }
+  } catch (error) {
+    console.error('Error de red o parsing:', error);
+    return null;
   }
 }
 
@@ -168,9 +193,10 @@ async function likePlaylist(id) {
   }
 }
 
-function editarPlaylist(id, newname) {
+function editarPlaylist(playListId, newname,idUSer) {
+  console.log('editarPlaylist->idUSer:'+idUSer);
   const csrf = getCookie('csrftoken');
-  fetch(`/playlist/${id}/update/`, {
+  fetch(`/playlist/${playListId}/update/`, {
     method: 'PUT',
     credentials: 'same-origin',
     headers: {
@@ -182,7 +208,7 @@ function editarPlaylist(id, newname) {
   })
   .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.error || `HTTP ${r.status}`); }))
   .then(_ => {
-    PL_NAME.set(String(id), newname);
+    PL_NAME.set(String(playListId), newname);
     showPlaylists();
   })
   .catch(error => {
@@ -191,8 +217,11 @@ function editarPlaylist(id, newname) {
   });
 }
 
-function eliminarPlaylist(playlistId) {
-  if (!confirm('¿Seguro que deseas eliminar esta playlist?')) return;
+function eliminarPlaylist(playlistId,idUSer) {
+  if (idUSer.toString() !== USERID.toString()) {
+    alert('No has Creado la PlayList No podras Editarla o Eliminarla');
+    return;
+  }
 
   const csrf = getCookie('csrftoken');
   fetch(`/playlist/${playlistId}/delete/`, {
@@ -244,7 +273,7 @@ function showPlaylists() {
     btn.textContent = '+';
     btn.addEventListener('click', function () {
       const rect = btn.getBoundingClientRect();
-      showAlertNewPlaylist(btn, rect, "new", null);
+      showAlertNewPlaylist(btn, rect, "new", null,null);
     });
 
     headerContainer.appendChild(title);
@@ -263,6 +292,8 @@ function showPlaylists() {
 
     data.forEach(p => {
       const pid = String(p.id);
+      const uid = String(p.idUser);
+
       const pname = (p.name || `Playlist ${pid}`).trim();
       PL_NAME.set(pid, pname);
 
@@ -314,7 +345,7 @@ function showPlaylists() {
       const deleteBtn = document.createElement('button');
       deleteBtn.textContent = 'Eliminar';
       deleteBtn.className   = 'btnRoundPlaylist';
-      deleteBtn.addEventListener('click', () => eliminarPlaylist(pid));
+      deleteBtn.addEventListener('click', () => eliminarPlaylist(pid,uid));
 
       buttonsDiv.appendChild(likeBtn);
       buttonsDiv.appendChild(editBtn);
@@ -325,8 +356,12 @@ function showPlaylists() {
       content.appendChild(li);
 
       editBtn.addEventListener('click', () => {
-        const rect = editBtn.getBoundingClientRect();
-        showAlertNewPlaylist(editBtn, rect, "update", pid);
+        if(uid.toString() !== USERID.toString()){
+          alert('No has Creado la PlayList No podras Editarla o Eliminarla');
+        }else{
+          const rect = editBtn.getBoundingClientRect();
+          showAlertNewPlaylist(editBtn, rect, "update", pid,uid);
+        }
       });
     });
   }
@@ -392,7 +427,7 @@ function showPlaylists() {
 // Popup inline para crear/renombrar playlist
 // ===========================================================================
 
-function showAlertNewPlaylist(btn, rectPosition, option, idPlaylist) {
+function showAlertNewPlaylist(btn, rectPosition, option, idPlaylist,idUser) {
   const formContainer = document.createElement('div');
   formContainer.className = 'playlist-form';
   formContainer.style.left      = rectPosition.right + window.scrollX + 'px';
@@ -420,7 +455,7 @@ function showAlertNewPlaylist(btn, rectPosition, option, idPlaylist) {
       if (option === "new") {
         crearPlaylist(name);
       } else if (option === "update") {
-        editarPlaylist(idPlaylist, name);
+        editarPlaylist(idPlaylist, name,idUser);
       }
       document.body.removeChild(formContainer);
     } else {
