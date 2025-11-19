@@ -317,40 +317,40 @@ canvas._mdf-spikes { display:none !important; }
     display: none; /* opcional: ocultar velocidad en móvil */
   }
 }
-
 /* =========================
    Layout móvil barra player
    ========================= */
 @media (max-width: 640px){
 
-  /* La barra deja de ser grid y pasa a ser flex en columna */
+  /* La barra en 2 columnas y 2 filas */
   ._mdf-player-bar{
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
     height: auto;
     padding: 8px 10px;
     gap: 6px;
   }
 
-  /* Portada + título/artista en la primera fila */
+  /* Portada + título/autor: que se pueda encoger */
   ._mdf-now{
     min-width: 0;
   }
 
-  /* Título recortado fuerte (6–8 caracteres aprox.) */
+  /* Título MUY recortado en móvil */
   ._mdf-player-title{
-    max-width: 7ch; /* ajusta a 6ch / 8ch si quieres */
+    max-width: 7ch;   /* puedes probar 6ch u 8ch */
   }
 
-  /* Controles centrados en segunda fila horizontal */
+  /* Controles (prev/play/next) en la primera fila, centrados */
   ._mdf-ctrls{
     justify-content: center;
     gap: 8px;
   }
 
-  /* Parte de tiempos + seek + volumen abajo ocupando todo el ancho */
+  /* Parte derecha va ABAJO ocupando todo el ancho */
   ._mdf-right{
+    grid-column: 1 / -1;  /* de la col 1 a la última */
+    grid-row: 2;          /* segunda fila */
     min-width: 0;
     width: 100%;
     justify-content: space-between;
@@ -368,7 +368,7 @@ canvas._mdf-spikes { display:none !important; }
   }
 
   ._mdf-vol{
-    width: 90px; /* más compacto en móvil */
+    width: 80px;   /* más compacto */
   }
 
 }
