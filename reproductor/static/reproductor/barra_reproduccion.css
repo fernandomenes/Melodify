@@ -297,3 +297,23 @@ canvas._mdf-spikes { display:none !important; }
 /* Round progress integrado sin sombra extra */
 ._mdf-ctrls { position: relative; }
 ._mdf-ctrls.mdf-round-progress { box-shadow: none !important; }
+
+/* Recorta el título agresivamente en pantallas pequeñas (~6–8 caracteres) */
+@media (max-width: 640px){
+  ._mdf-player-title{
+    max-width: 7ch;   /* prueba 6ch, 7ch u 8ch según te guste */
+  }
+}
+
+@media (max-width: 640px){
+  ._mdf-right{
+    min-width: 0;
+    gap: 6px;
+  }
+  ._mdf-vol{
+    width: 90px;   /* slider de volumen más corto */
+  }
+  ._mdf-speed{
+    display: none; /* opcional: ocultar velocidad en móvil */
+  }
+}

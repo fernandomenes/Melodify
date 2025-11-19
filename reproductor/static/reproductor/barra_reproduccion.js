@@ -436,35 +436,49 @@
     startBeatMeter();
     enforceVisibility();
   }
+  
+function onTrackMeta(ev){
+  const d = ev?.detail || {};
 
-  function onTrackMeta(ev){
-    const d = ev?.detail||{};
-    els.title.textContent  = d.title || "—";
-    els.artist.textContent = d.artist || "—";
+  const fullTitle = d.title || "—";
+  const isMobile  = window.matchMedia("(max-width: 640px)").matches;
+  let displayTitle = fullTitle;
 
-    if(d.cover){
-      els.cover.style.visibility = "visible";
-      els.cover.src = d.cover;
-      els.cover.onerror = ()=>{ els.cover.style.visibility="hidden"; };
-    }else{
-      els.cover.removeAttribute("src");
-      els.cover.style.visibility="hidden";
-    }
-
-    const k = normGenre(d.genre);
-    const h = k!=null ? GENRE_HUES[k] : null;
-
-    // Tema blanco para género “otro”
-    els.bar?.classList.toggle("mdf-whiteglow", k === "otro");
-
-    if(h != null){
-      lockGenreHue = true;
-      hue = h;
-    }else{
-      lockGenreHue = false;
-    }
-    setVars(intensity, hue);
+  // En móviles, recorta a 8 caracteres y añade “…”
+  if (isMobile && fullTitle.length > 8) {
+    displayTitle = fullTitle.slice(0, 8) + "…";
   }
+
+  els.title.textContent = displayTitle;
+  els.title.title       = fullTitle;  // tooltip con el nombre completo en desktop
+
+  const artist = d.artist || "—";
+  els.artist.textContent = artist;
+
+  if (d.cover){
+    els.cover.style.visibility = "visible";
+    els.cover.src = d.cover;
+    els.cover.onerror = () => { els.cover.style.visibility = "hidden"; };
+  } else {
+    els.cover.removeAttribute("src");
+    els.cover.style.visibility = "hidden";
+  }
+
+  const k = normGenre(d.genre);
+  const h = k != null ? GENRE_HUES[k] : null;
+
+  // Tema blanco para género “otro”
+  els.bar?.classList.toggle("mdf-whiteglow", k === "otro");
+
+  if (h != null){
+    lockGenreHue = true;
+    hue = h;
+  } else {
+    lockGenreHue = false;
+  }
+  setVars(intensity, hue);
+}
+
 
   function onTrackChange(){
     enforceVisibility();
