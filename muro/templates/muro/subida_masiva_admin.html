@@ -1,0 +1,109 @@
+{% extends "gestion/gestion.html" %}
+
+{% block content %}
+<header class="page-hd">
+  <h1 style="margin:0">Sembrar canciones</h1>
+  <span class="muted" style="margin-left:8px;font-size:13px">
+    para {{ target_artist.user }}
+  </span>
+</header>
+
+{# Mensajes de éxito / error de Django #}
+{% if messages %}
+  {% for m in messages %}
+    <div class="msg{% if m.tags %} {{ m.tags }}{% endif %}" style="display:block">
+      {{ m }}
+    </div>
+  {% endfor %}
+{% endif %}
+
+<div class="card">
+  <p class="muted" style="margin-top:0">
+    Los audios se agregarán al muro del artista como si los hubiera subido él mismo.
+  </p>
+
+  <form id="seed-form" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <label>Archivos de audio (puedes seleccionar varios):</label>
+    <input type="file"
+           name="audio_files"
+           accept="audio/*"
+           multiple
+           required>
+
+    <label>Género (para todas las canciones):</label>
+    <select name="genre" required>
+      <option value="">Selecciona un género</option>
+          <option value="rock">Rock</option>
+            <option value="electronica">Electrónica</option>
+            <option value="hiphop">Hip-Hop</option>
+            <option value="reggaeton">Reguetón</option>
+            <option value="regional">Regional Mexicano</option>
+            <option value="balada">Balada</option>
+            <option value="indie">Indie</option>
+            <option value="jazz">Jazz</option>
+            <option value="clasica">Clásica</option>
+            <option value="salsa">Salsa</option>
+            <option value="_other">Otro…</option>
+    </select>
+
+
+    <label>Portada común (opcional):</label>
+    <input type="file"
+           name="cover_image"
+           accept="image/*">
+
+    <div style="margin-top:14px">
+      <button id="seed-submit" class="btn" type="submit">
+        Sembrar canciones
+      </button>
+    </div>
+  </form>
+</div>
+
+{# Barra de carga (reutiliza estilos .upload-bar de gestion.css) #}
+<div id="seed-upload-bar" class="upload-bar" aria-hidden="true">
+  <div class="row">
+    <div class="progress"><i></i></div>
+    <div class="label">
+      <span id="seed-upload-label">Preparando…</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function(){
+    const form = document.getElementById('seed-form');
+    if (!form) return;
+
+    const submitBtn = document.getElementById('seed-submit');
+    const bar = document.getElementById('seed-upload-bar');
+    const barInner = bar ? bar.querySelector('.progress > i') : null;
+    const barLabel = document.getElementById('seed-upload-label');
+
+    if (!bar || !barInner) return;
+
+    form.addEventListener('submit', function() {
+      if (submitBtn) {
+        submitBtn.setAttribute('aria-busy', 'true');
+      }
+      bar.classList.add('is-visible');
+      bar.removeAttribute('aria-hidden');
+
+      let pct = 5;
+      barInner.style.width = pct + '%';
+      if (barLabel) barLabel.textContent = 'Subiendo…';
+
+      const timer = setInterval(function() {
+        if (pct >= 90) {
+          clearInterval(timer);
+          return;
+        }
+        pct += 3;
+        barInner.style.width = pct + '%';
+      }, 180);
+    });
+  })();
+</script>
+{% endblock %}

@@ -191,6 +191,14 @@ def _get_artist_profile_by_username(username: str) -> Optional[ArtistProfile]:
         return user.artist_profile
     except (Users.DoesNotExist, ArtistProfile.DoesNotExist):
         return None
+def _put_gestion_undo(request, label: str, data: dict) -> None:
+    """
+    Registra en sesión la última acción de Gestión (admin) para poder deshacerla
+    desde /gestion/ o cualquier plantilla que tenga la barra #undo-bar.
+    """
+    request.session["gestion_undo"] = data
+    request.session["gestion_undo_label"] = label
+    request.session.modified = True
 
 
 # =============================================================================
@@ -875,6 +883,16 @@ def revertir_mi_cancion(request):
     if _is_fetch(request):
         return HttpResponse(status=204)
     return redirect("mi_muro")
+def _put_undo_gestion(request, label: str, data: dict) -> None:
+    """
+    Guarda en sesión el último undo global para Gestión (admin).
+
+    Lo leerá la vista de 'gestion' para mostrar la barra de deshacer, y
+    'revertir_accion' para ejecutar la reversión.
+    """
+    request.session["gestion_undo"] = data
+    request.session["gestion_undo_label"] = label
+    request.session.modified = True
 
 
 @require_http_methods(["GET", "POST"])
@@ -1116,6 +1134,230 @@ def subida_masiva(request):
     messages.info(request, f"Subida masiva: {creadas} creadas, {omitidas} omitidas.")
     return redirect("muro_subida_masiva")
 
+@require_http_methods(["GET", "POST"])
+def subida_masiva_admin_para_artista(request, artist_username: str):
+    """
+    Subida masiva de canciones iniciada desde Gestión, pero sembrando contenido
+    en el muro de un artista concreto.
+
+    - Solo la puede usar un administrador.
+    - El owner_user y artist_display_name de las canciones será `artist_username`.
+    - Usa la misma heurística de títulos y validaciones que `subida_masiva`.
+    """
+    # 1) Validar admin
+    session_username = _require_session_user(request)
+    if not session_username:
+        return _redirect_login_clean(request)
+
+    role = (_get_user_role(session_username) or "").lower()
+    if role != "administrador":
+        return HttpResponse("No autorizado", status=403)
+
+    artist_user = Users.objects.filter(
+        user=artist_username,
+        type__iexact="artista",
+    ).first()
+    if not artist_user:
+        return HttpResponse("Artista no encontrado", status=404)
+
+    is_fetch = _is_fetch(request)
+
+    if request.method == "GET":
+        return render(
+            request,
+            "muro/subida_masiva_admin.html",
+            {
+                "target_artist": artist_user,
+                "MAX_FILES": _MAX_FILES,
+                "MAX_MB": int(_MAX_FILE_SIZE / 1024 / 1024),
+            },
+        )
+
+    # 2) POST: procesar subida
+    files = request.FILES.getlist("audio_files")
+    default_genre = (request.POST.get("genre") or "").strip()
+    genre_other = (request.POST.get("genre_other") or "").strip()
+    cover_file = request.FILES.get("cover_image")
+
+    def _err(msg, status=400):
+        if is_fetch:
+            return JsonResponse({"ok": False, "error": msg}, status=status)
+        messages.error(request, msg)
+        return redirect(request.path)
+
+    if not files:
+        return _err("No se enviaron archivos de audio.")
+    if len(files) > _MAX_FILES:
+        return _err(f"Máximo permitido por subida: {_MAX_FILES} archivos.")
+
+    genre = genre_other if default_genre == "_other" else default_genre
+    if not genre:
+        return _err("El género es obligatorio para la subida masiva.")
+
+    storage = _storage()
+
+    cover_bytes = None
+    cover_suffix = ""
+    if cover_file:
+        try:
+            cover_bytes = cover_file.read()
+            try:
+                cover_file.seek(0)
+            except Exception:
+                pass
+            cover_suffix = Path(cover_file.name).suffix or ".jpg"
+        except Exception:
+            cover_bytes = None
+            cover_suffix = ""
+
+    target_username = artist_user.user
+
+    results = []
+    for f in files:
+        ext = (Path(f.name).suffix.lower().lstrip(".") or "")
+        if ext not in _ALLOWED_EXTS:
+            results.append({"name": f.name, "ok": False, "error": "Extensión no permitida"})
+            continue
+
+        if getattr(f, "size", 0) > _MAX_FILE_SIZE:
+            results.append(
+                {
+                    "name": f.name,
+                    "ok": False,
+                    "error": f"Archivo excede {int(_MAX_FILE_SIZE/1024/1024)} MB",
+                }
+            )
+            continue
+
+        candidate = _title_candidate_from_filename(f.name)
+        ok_title, why = _title_is_sensible(candidate)
+        if not ok_title:
+            results.append(
+                {
+                    "name": f.name,
+                    "ok": False,
+                    "error": f"Nombre no válido para subida rápida ({why}).",
+                }
+            )
+            continue
+
+        try:
+            sha = _sha256_file(f)
+        except Exception:
+            results.append({"name": f.name, "ok": False, "error": "No se pudo leer el archivo"})
+            continue
+
+        if Song.objects.filter(
+            owner_user=target_username,
+            audio_sha256=sha,
+            visibility="public",
+        ).exists():
+            results.append(
+                {
+                    "name": f.name,
+                    "ok": False,
+                    "error": "Duplicado (mismo audio para este artista)",
+                }
+            )
+            continue
+
+        title = candidate
+        if Song.objects.filter(
+            owner_user=target_username,
+            visibility="public",
+            title__iexact=title,
+        ).exists():
+            results.append(
+                {
+                    "name": f.name,
+                    "ok": False,
+                    "error": "Duplicado (mismo título para este artista)",
+                }
+            )
+            continue
+
+        try:
+            with transaction.atomic():
+                audio_path = storage.save(
+                    f"uploaded_songs/audio_{target_username}_{sha[:12]}.{ext}",
+                    f,
+                )
+
+                cover_path = None
+                if cover_bytes:
+                    cf_name = (
+                        f"uploaded_covers/cover_{target_username}_{sha[:12]}"
+                        f"{cover_suffix or '.jpg'}"
+                    )
+                    cover_path = storage.save(cf_name, ContentFile(cover_bytes))
+
+                s = Song.objects.create(
+                    title=title,
+                    artist_display_name=target_username,
+                    genre=genre,
+                    owner_user=target_username,
+                    audio_file=audio_path,
+                    cover_image=cover_path,
+                    audio_sha256=sha,
+                    visibility="public",
+                )
+
+            audio_url = _safe_file_url(s.audio_file)
+            cover_url = _safe_file_url(s.cover_image)
+            results.append(
+                {
+                    "name": f.name,
+                    "ok": True,
+                    "song": {
+                        "id": s.id,
+                        "title": s.title,
+                        "artist_display_name": s.artist_display_name,
+                        "genre": s.genre,
+                        "audio_url": audio_url,
+                        "cover_url": cover_url,
+                        "created_at": s.created_at.isoformat(timespec="minutes")
+                        if s.created_at
+                        else "",
+                    },
+                }
+            )
+        except Exception as e:
+            results.append({"name": f.name, "ok": False, "error": f"Error al guardar: {e}"})
+
+    # 3) Respuesta + UNDO
+    created_ids = [
+        r["song"]["id"]
+        for r in results
+        if r.get("ok") and isinstance(r.get("song"), dict) and r["song"].get("id")
+    ]
+    creadas = len(created_ids)
+    undo_label = ""
+    if creadas:
+        undo_label = (
+            f"Se sembraron {creadas} canción"
+            f"{'' if creadas == 1 else 'es'} para {artist_username}."
+        )
+        _put_undo_gestion(
+            request,
+            undo_label,
+            {
+                "kind": "admin_seed_songs",
+                "artist_username": artist_username,
+                "song_ids": created_ids,
+                "actor": session_username,  # <- CLAVE PARA QUE APAREZCA LA BARRA
+            },
+        )
+
+    if is_fetch:
+        return JsonResponse(
+            {
+                "ok": creadas > 0,
+                "results": results,
+                "undo_label": undo_label,
+            }
+        )
+
+    return redirect("gestion")
 
 # =============================================================================
 # Fragmento de playlists (UI)

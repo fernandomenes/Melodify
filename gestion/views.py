@@ -147,6 +147,33 @@ def gestion_dashboard(request):
     if error:
         return error
 
+    # --- Filtros de catálogo (artist y q desde el formulario / querystring) ---
+    artist_filter = (request.GET.get("artist") or "").strip()
+    q = (request.GET.get("q") or "").strip()
+
+    songs_qs = Song.objects.filter(visibility="public")
+    if artist_filter:
+        songs_qs = songs_qs.filter(owner_user=artist_filter)
+    if q:
+        songs_qs = songs_qs.filter(
+            Q(title__icontains=q) | Q(artist_display_name__icontains=q)
+        )
+
+    songs_qs = songs_qs.only(
+        "id",
+        "title",
+        "artist_display_name",
+        "owner_user",
+        "created_at",
+        "cover_image",
+        "audio_file",
+        "visibility",
+        "genre",
+    ).order_by("-created_at")
+
+    # Marcamos likes para el usuario actual
+    songs = _attach_is_liked(request, songs_qs)
+
     admins = Users.objects.filter(type__iexact="administrador").order_by("user")
     artists = (
         Users.objects.filter(type__iexact="artista")
@@ -154,22 +181,6 @@ def gestion_dashboard(request):
         .order_by("user")
     )
     viewers = Users.objects.filter(type__iexact="usuario").order_by("user")
-
-    songs = (
-        Song.objects.filter(visibility="public")
-        .only(
-            "id",
-            "title",
-            "artist_display_name",
-            "owner_user",
-            "created_at",
-            "cover_image",
-            "audio_file",
-            "visibility",
-            "genre",
-        )
-        .order_by("-created_at")
-    )
 
     albums = Album.objects.all().order_by("-id") if Album else []
     playlists = Playlist.objects.all().order_by("-id") if Playlist else []
@@ -217,6 +228,9 @@ def gestion_dashboard(request):
         "avatar_url": avatar_url,
         "artist_description": artist_description,
         "created_at": created_at,
+        # Para que el template pueda rellenar data-filter-*
+        "artist_filter": artist_filter,
+        "q": q,
     }
     return render(request, "gestion/gestion.html", ctx)
 
@@ -400,7 +414,7 @@ def desactivar_usuario(request, username: str):
 @require_http_methods(["POST"])
 def activar_usuario(request, username: str):
     """Activa una cuenta previamente desactivada."""
-    _, error = _require_admin(request)
+    session_user, error = _require_admin(request)
     if error:
         return error
 
@@ -411,7 +425,7 @@ def activar_usuario(request, username: str):
     _put_undo(
         request,
         f"Se activó “{username}”.",
-        {"kind": "toggle_active", "username": username, "to": True},
+        {"kind": "toggle_active", "username": username, "to": True, "actor": session_user},
     )
     if _is_fetch(request):
         return JsonResponse(
@@ -689,6 +703,36 @@ def revertir_accion(request):
                     _msg_success(request, f"Se restauraron {len(songs)} canciones.")
                     _clear_undo(request)
 
+                resp["catalogo_html"] = _catalogo_html(request)
+
+            elif kind == "admin_seed_songs":
+                # Deshacer siembra masiva de canciones para un artista
+                artist_username = data.get("artist_username") or ""
+                song_ids = data.get("song_ids") or []
+
+                if not song_ids:
+                    _msg_info(request, "Nada que deshacer.")
+                    _clear_undo(request)
+                else:
+                    songs = list(
+                        Song.objects.filter(
+                            id__in=song_ids,
+                            owner_user=artist_username,
+                        )
+                    )
+                    count = len(songs)
+                    # Soft-delete: las canciones dejan de ser públicas
+                    for s in songs:
+                        s.visibility = "removed"
+                        s.save(update_fields=["visibility"])
+                    _msg_success(
+                        request,
+                        f"Se deshizo la siembra para “{artist_username}” "
+                        f"({count} canción{'es' if count != 1 else ''}).",
+                    )
+                    _clear_undo(request)
+
+                # Actualizamos catálogo tras modificar visibilidad
                 resp["catalogo_html"] = _catalogo_html(request)
 
             else:

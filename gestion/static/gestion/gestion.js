@@ -1271,6 +1271,85 @@ function playIndex(i) {
     const name = d.playlistName || d.playlist || d.name || "";
     showPlaylistToast(false, name);
   });
+   // ---------------------------------------------------------------------------
+  // Filtros del catálogo (artista + texto de búsqueda)
+  // ---------------------------------------------------------------------------
+  function initCatalogFilters() {
+    const main      = document.getElementById("main-content");
+    const artistSel = document.getElementById("f-artist");
+    const qInput    = document.getElementById("f-q");
+    const applyBtn  = document.getElementById("f-apply");
+
+    // Si no hay nada de esto, no hacemos nada
+    if (!main || (!artistSel && !qInput && !applyBtn)) return;
+
+    const baseUrl =
+      main.dataset.urlCatalogoFragment || "/gestion/catalogo/";
+
+    async function cargarCatalogo() {
+      const params = new URLSearchParams();
+
+      if (artistSel && artistSel.value) {
+        params.set("artist", artistSel.value);
+      }
+      if (qInput && qInput.value.trim()) {
+        params.set("q", qInput.value.trim());
+      }
+
+      const qs  = params.toString();
+      const url = qs ? `${baseUrl}?${qs}` : baseUrl;
+
+      try {
+        const res = await fetch(url, {
+          method:      "GET",
+          headers:     H,
+          credentials: "same-origin",
+        });
+
+        if (!res.ok) {
+          console.error("Error al cargar catálogo filtrado:", res.status, res.statusText);
+          // Fallback: navegación clásica
+          window.location.href = url;
+          return;
+        }
+
+        const html = await res.text();
+        replaceCatalogo(html);
+      } catch (err) {
+        console.error("Error de red en filtro de catálogo:", err);
+        // Fallback: recarga básica
+        window.location.href = baseUrl;
+      }
+    }
+
+    // Botón "Aplicar"
+    if (applyBtn) {
+      applyBtn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        cargarCatalogo();
+      });
+    }
+
+    // Cambio de artista → aplica en automático
+    if (artistSel) {
+      artistSel.addEventListener("change", () => {
+        cargarCatalogo();
+      });
+    }
+
+    // Enter en el campo de búsqueda
+    if (qInput) {
+      qInput.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          cargarCatalogo();
+        }
+      });
+    }
+  }
+
+
 
   // ---------------------------------------------------------------------------
   // Init global
@@ -1281,10 +1360,12 @@ function playIndex(i) {
     initSideToggle();
     initTabs();
     resetSelection();
+    initCatalogFilters();
 
     // Enlaza el catálogo inicial con el reproductor global
     if (window.__melodify_admin_rebind_player) {
       window.__melodify_admin_rebind_player();
     }
   });
+  
 })();

@@ -222,6 +222,14 @@ if (__SPA_DISABLED__) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
     }
+function soloFecha(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "—";
+
+  // si viene "2025-11-03 22:12" -> "2025-11-03"
+  const [fecha] = s.split(" ");
+  return fecha || "—";
+}
 
     function showContent(html) {
       contentDiv.innerHTML = html;
@@ -775,7 +783,7 @@ if (__SPA_DISABLED__) {
             )}</p>`
           : "";
       const fechaHTML = `<p style="margin:0 0 4px;">Registrado: ${escapeHtml(
-        CREATED_AT || "—"
+      soloFecha(CREATED_AT)
       )}</p>`;
 
       const html = `

@@ -44,4 +44,5 @@ urlpatterns = [
         va.playlists_fragment,
         name="muro_playlists_fragment",
     ),
+
 ]
