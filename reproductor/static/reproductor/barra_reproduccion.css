@@ -317,3 +317,58 @@ canvas._mdf-spikes { display:none !important; }
     display: none; /* opcional: ocultar velocidad en móvil */
   }
 }
+
+/* =========================
+   Layout móvil barra player
+   ========================= */
+@media (max-width: 640px){
+
+  /* La barra deja de ser grid y pasa a ser flex en columna */
+  ._mdf-player-bar{
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    height: auto;
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  /* Portada + título/artista en la primera fila */
+  ._mdf-now{
+    min-width: 0;
+  }
+
+  /* Título recortado fuerte (6–8 caracteres aprox.) */
+  ._mdf-player-title{
+    max-width: 7ch; /* ajusta a 6ch / 8ch si quieres */
+  }
+
+  /* Controles centrados en segunda fila horizontal */
+  ._mdf-ctrls{
+    justify-content: center;
+    gap: 8px;
+  }
+
+  /* Parte de tiempos + seek + volumen abajo ocupando todo el ancho */
+  ._mdf-right{
+    min-width: 0;
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  ._mdf-time{
+    min-width: auto;
+    font-size: 11px;
+  }
+
+  ._mdf-player-seek{
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  ._mdf-vol{
+    width: 90px; /* más compacto en móvil */
+  }
+
+}
