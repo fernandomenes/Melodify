@@ -1,0 +1,31 @@
+@"
+* text=auto
+
+# Fuerza LF en scripts/código (Linux-friendly)
+*.sh   text eol=lf
+*.py   text eol=lf
+*.js   text eol=lf
+*.ts   text eol=lf
+*.css  text eol=lf
+*.html text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.svg  text eol=lf
+
+# PowerShell en Windows (CRLF ok)
+*.ps1  text eol=crlf
+
+# Binario: no tocar finales de línea
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.gif  binary
+*.mp3  binary
+*.wav  binary
+*.ogg  binary
+*.m4a  binary
+*.flac binary
+"@  Set-Content -Encoding ascii .gitattributes
