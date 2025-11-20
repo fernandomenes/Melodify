@@ -437,34 +437,58 @@
     enforceVisibility();
   }
 
-  function onTrackMeta(ev){
-    const d = ev?.detail||{};
-    els.title.textContent  = d.title || "—";
-    els.artist.textContent = d.artist || "—";
+function onTrackMeta(ev){
+  const d = ev?.detail || {};
+  const isMobile = window.matchMedia("(max-width: 640px)").matches;
 
-    if(d.cover){
-      els.cover.style.visibility = "visible";
-      els.cover.src = d.cover;
-      els.cover.onerror = ()=>{ els.cover.style.visibility="hidden"; };
-    }else{
-      els.cover.removeAttribute("src");
-      els.cover.style.visibility="hidden";
-    }
+  const fullTitle  = d.title  || "—";
+  const fullArtist = d.artist || "—";
 
-    const k = normGenre(d.genre);
-    const h = k!=null ? GENRE_HUES[k] : null;
+  // Límites de caracteres en móvil
+  const TITLE_LIMIT  = 8;   // por si luego quieres subir/bajar
+  const ARTIST_LIMIT = 10;
 
-    // Tema blanco para género “otro”
-    els.bar?.classList.toggle("mdf-whiteglow", k === "otro");
+  const clampText = (text, limit) => {
+    text = String(text || "—");
+    if (!isMobile || !limit || text.length <= limit) return text;
+    return text.slice(0, limit) + "…";
+  };
 
-    if(h != null){
-      lockGenreHue = true;
-      hue = h;
-    }else{
-      lockGenreHue = false;
-    }
-    setVars(intensity, hue);
+  const displayTitle  = clampText(fullTitle, TITLE_LIMIT);
+  const displayArtist = clampText(fullArtist, ARTIST_LIMIT);
+
+  // Texto que se ve en la barra
+  els.title.textContent  = displayTitle;
+  els.artist.textContent = displayArtist;
+
+  // Tooltip con el texto completo (útil en desktop)
+  els.title.title  = fullTitle;
+  els.artist.title = fullArtist;
+
+  // --------- lo demás igual que ya lo tenías ---------
+  if (d.cover){
+    els.cover.style.visibility = "visible";
+    els.cover.src = d.cover;
+    els.cover.onerror = () => { els.cover.style.visibility = "hidden"; };
+  } else {
+    els.cover.removeAttribute("src");
+    els.cover.style.visibility = "hidden";
   }
+
+  const k = normGenre(d.genre);
+  const h = k != null ? GENRE_HUES[k] : null;
+
+  // Tema blanco para género “otro”
+  els.bar?.classList.toggle("mdf-whiteglow", k === "otro");
+
+  if (h != null){
+    lockGenreHue = true;
+    hue = h;
+  } else {
+    lockGenreHue = false;
+  }
+  setVars(intensity, hue);
+}
 
   function onTrackChange(){
     enforceVisibility();

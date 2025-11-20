@@ -8,6 +8,7 @@ from django.urls import path
 
 from . import views as v
 from . import views_music as vm
+from muro import views_artist
 
 urlpatterns = [
     # ------------------------------------------------------------------
@@ -39,4 +40,9 @@ urlpatterns = [
     # Deshacer en muro
     # ------------------------------------------------------------------
     path("muro/undo/", vm.revertir_mi_cancion, name="revertir_muro"),
+     path(
+        "gestion/sembrar-canciones/<str:artist_username>/",
+        views_artist.subida_masiva_admin_para_artista,
+        name="gestion_sembrar_canciones_artista",
+    ),
 ]

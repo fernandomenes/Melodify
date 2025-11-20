@@ -365,17 +365,40 @@ function playIndex(i) {
   // ---------------------------------------------------------------------------
   // Toggle del menú lateral
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Toggle del menú lateral (mismo comportamiento que Home / Muro)
+  // ---------------------------------------------------------------------------
   function initSideToggle() {
-    const btn    = $("#menu-toggle-btn");
-    const menu   = $("#menuLateral");
-    const header = $("#header");
+    const btnToggle   = $("#menu-toggle-btn");
+    const logoToggle  = $("#toggle-menu");
+    const menuLateral = $("#menuLateral");
+    const mainContent = $("#main-content");
+    const header      = $("#header");
 
-    btn?.addEventListener("click", () => {
-      menu?.classList.toggle("collapsed");
-      $("#main-content")?.classList.toggle("menuLateral-collapsed");
-      header?.classList.toggle("menuLateral-collapsed");
-    });
+    if (!menuLateral || !mainContent) return;
+
+    function applyCollapsed(collapsed) {
+      menuLateral.classList.toggle("collapsed", collapsed);
+      mainContent.classList.toggle("menuLateral-collapsed", collapsed);
+      header?.classList.toggle("menuLateral-collapsed", collapsed);
+      document
+        .querySelector("._mdf-player-bar")
+        ?.classList.toggle("menuLateral-collapsed", collapsed);
+    }
+
+    // Estado inicial: menú colapsado
+    applyCollapsed(true);
+
+    function handleToggleClick() {
+      const nowCollapsed = menuLateral.classList.contains("collapsed");
+      applyCollapsed(!nowCollapsed);
+    }
+
+    // Botón ☰ y clic en el logo
+    btnToggle?.addEventListener("click", handleToggleClick);
+    logoToggle?.addEventListener("click", handleToggleClick);
   }
+
 
   // ---------------------------------------------------------------------------
   // Mensajes inline + barra de deshacer
@@ -921,6 +944,51 @@ function playIndex(i) {
     true
   );
 
+    function validateFriendlyUserId(raw) {
+    const v = (raw || "").trim();
+    if (!v) {
+      return "El usuario es obligatorio.";
+    }
+
+    // Límite similar a los títulos (27)
+    if (v.length > 27) {
+      return "Máximo 27 caracteres para el usuario.";
+    }
+
+    // Caracteres básicos permitidos (letras, números, guion bajo y punto)
+    if (!/^[a-zA-Z0-9._áéíóúÁÉÍÓÚñÑ]+$/.test(v)) {
+      return "Usa solo letras, números, punto o guion bajo.";
+    }
+
+    const letters = v.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ]/g, "");
+    const vowels  = v.replace(/[^aeiouáéíóúAEIOUÁÉÍÓÚ]/g, "");
+    const digits  = v.replace(/[^0-9]/g, "");
+
+    if (letters.length >= 5 && vowels.length === 0) {
+      return "sin vocales (parece código aleatorio)";
+    }
+
+    const letterRatio = letters.length / v.length;
+    const digitRatio  = digits.length  / v.length;
+
+    // Parecido a código/ID raro: muchos números/símbolos
+    if (v.length >= 10 && letterRatio < 0.5 && digitRatio > 0.3) {
+      return "demasiados números/símbolos";
+    }
+
+    // Heurística tipo hash/UUID/base64
+    if (
+      v.length >= 16 &&
+      !v.includes(" ") &&
+      /^[A-Za-z0-9\-_=]+$/.test(v) &&
+      letterRatio > 0.7
+    ) {
+      return "parece un identificador (hash/UUID/base64)";
+    }
+
+    return null;
+  }
+
   // ---------------------------------------------------------------------------
   // Registro de artista/admin con barra de progreso
   // ---------------------------------------------------------------------------
@@ -943,20 +1011,36 @@ function playIndex(i) {
       if (pctEl) pctEl.textContent = "0%";
     };
 
-    // Validaciones básicas antes de enviar
-    const u = form.querySelector('input[name="user"]')?.value?.trim() || "";
-    const p = form.querySelector('input[name="password"]')?.value || "";
-    if (!u || !p) {
-      showInlineError("Completa usuario y contraseña.");
+    const uInput = form.querySelector('input[name="user"]');
+    const pInput = form.querySelector('input[name="password"]');
+    const dInput = form.querySelector('textarea[name="description"]');
+
+    const u = uInput?.value?.trim() || "";
+    const p = pInput?.value || "";
+    const desc = dInput?.value || "";
+
+    // Validación "humana" para el usuario
+    const userErr = validateFriendlyUserId(u);
+    if (userErr) {
+      showInlineError(userErr);
+      uInput?.focus();
+      return;
+    }
+
+    if (!p) {
+      showInlineError("Completa la contraseña.");
+      pInput?.focus();
       return;
     }
     if (p.length < 6) {
       showInlineError("La contraseña debe tener al menos 6 caracteres.");
+      pInput?.focus();
       return;
     }
-    const desc = form.querySelector('textarea[name="description"]')?.value || "";
+
     if (desc && desc.length > 200) {
       showInlineError("La descripción no puede superar 200 caracteres.");
+      dInput?.focus();
       return;
     }
 
@@ -1248,6 +1332,85 @@ function playIndex(i) {
     const name = d.playlistName || d.playlist || d.name || "";
     showPlaylistToast(false, name);
   });
+   // ---------------------------------------------------------------------------
+  // Filtros del catálogo (artista + texto de búsqueda)
+  // ---------------------------------------------------------------------------
+  function initCatalogFilters() {
+    const main      = document.getElementById("main-content");
+    const artistSel = document.getElementById("f-artist");
+    const qInput    = document.getElementById("f-q");
+    const applyBtn  = document.getElementById("f-apply");
+
+    // Si no hay nada de esto, no hacemos nada
+    if (!main || (!artistSel && !qInput && !applyBtn)) return;
+
+    const baseUrl =
+      main.dataset.urlCatalogoFragment || "/gestion/catalogo/";
+
+    async function cargarCatalogo() {
+      const params = new URLSearchParams();
+
+      if (artistSel && artistSel.value) {
+        params.set("artist", artistSel.value);
+      }
+      if (qInput && qInput.value.trim()) {
+        params.set("q", qInput.value.trim());
+      }
+
+      const qs  = params.toString();
+      const url = qs ? `${baseUrl}?${qs}` : baseUrl;
+
+      try {
+        const res = await fetch(url, {
+          method:      "GET",
+          headers:     H,
+          credentials: "same-origin",
+        });
+
+        if (!res.ok) {
+          console.error("Error al cargar catálogo filtrado:", res.status, res.statusText);
+          // Fallback: navegación clásica
+          window.location.href = url;
+          return;
+        }
+
+        const html = await res.text();
+        replaceCatalogo(html);
+      } catch (err) {
+        console.error("Error de red en filtro de catálogo:", err);
+        // Fallback: recarga básica
+        window.location.href = baseUrl;
+      }
+    }
+
+    // Botón "Aplicar"
+    if (applyBtn) {
+      applyBtn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        cargarCatalogo();
+      });
+    }
+
+    // Cambio de artista → aplica en automático
+    if (artistSel) {
+      artistSel.addEventListener("change", () => {
+        cargarCatalogo();
+      });
+    }
+
+    // Enter en el campo de búsqueda
+    if (qInput) {
+      qInput.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          cargarCatalogo();
+        }
+      });
+    }
+  }
+
+
 
   // ---------------------------------------------------------------------------
   // Init global
@@ -1258,10 +1421,12 @@ function playIndex(i) {
     initSideToggle();
     initTabs();
     resetSelection();
+    initCatalogFilters();
 
     // Enlaza el catálogo inicial con el reproductor global
     if (window.__melodify_admin_rebind_player) {
       window.__melodify_admin_rebind_player();
     }
   });
+  
 })();

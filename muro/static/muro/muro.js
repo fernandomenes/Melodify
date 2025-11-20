@@ -216,6 +216,21 @@
   const root = document.getElementById("muro-content");
   if (!root) return;
 
+  const inlineMsg = root.querySelector("#inline-msg");
+
+  function showInlineMsg(text, type = "error") {
+    if (!inlineMsg) {
+      if (text) window.alert(text);
+      return;
+    }
+    inlineMsg.textContent = text || "";
+    inlineMsg.style.display = text ? "block" : "none";
+    inlineMsg.classList.remove("error");
+    if (type === "error" && text) {
+      inlineMsg.classList.add("error");
+    }
+  }
+
   const grid     = $("#songs-grid", root);
   const selAll   = $("#sel-all", root);
   const btnBulk  = $("#bulk-delete", root);
@@ -522,18 +537,38 @@
     }
   });
 
-  // Menú lateral
-  (function menuToggle() {
-    const btn    = document.getElementById("menu-toggle-btn");
-    const menu   = document.getElementById("menuLateral");
-    const header = document.getElementById("header");
+  // Menú lateral (mismo comportamiento que en Home, pero local al muro)
+  (function setupMuroMenuToggle() {
+    const btnToggle   = document.getElementById("menu-toggle-btn");
+    const logoToggle  = document.getElementById("toggle-menu");
+    const menuLateral = document.getElementById("menuLateral");
+    const mainContent = document.getElementById("main-content");
+    const header      = document.getElementById("header");
 
-    btn?.addEventListener("click", () => {
-      menu?.classList.toggle("collapsed");
-      document.getElementById("main-content")?.classList.toggle("menuLateral-collapsed");
-      header?.classList.toggle("menuLateral-collapsed");
-    });
+    if (!menuLateral || !mainContent) return;
+
+    function applyCollapsed(collapsed) {
+      menuLateral.classList.toggle("collapsed", collapsed);
+      mainContent.classList.toggle("menuLateral-collapsed", collapsed);
+      header?.classList.toggle("menuLateral-collapsed", collapsed);
+      document
+        .querySelector("._mdf-player-bar")
+        ?.classList.toggle("menuLateral-collapsed", collapsed);
+    }
+
+    // Estado inicial: barra lateral OCULTA (colapsada)
+    applyCollapsed(true);
+
+    function handleToggleClick() {
+      const nowCollapsed = menuLateral.classList.contains("collapsed");
+      applyCollapsed(!nowCollapsed);
+    }
+
+    // Botón ☰ y logo de la barra lateral
+    btnToggle?.addEventListener("click", handleToggleClick);
+    logoToggle?.addEventListener("click", handleToggleClick);
   })();
+
 
   // Menú de usuario y logout
   (function userMenu() {
@@ -580,7 +615,7 @@
     }
   })();
 
-  // Subida de canción con barra de progreso
+  // Subida de canción con barra de progreso (subida normal)
   (function singleUploadProgress() {
     const form = document.getElementById("form-upload");
     if (!form) return;
@@ -612,13 +647,17 @@
       if (form.dataset.ajax !== "1") return;
       e.preventDefault();
 
+      // limpia mensaje previo
+      showInlineMsg("", "error");
+
       const fd   = new FormData(form);
       const xhr  = new XMLHttpRequest();
       const csrf = getCSRF();
 
       xhr.open("POST", form.action, true);
       if (csrf) xhr.setRequestHeader("X-CSRFToken", csrf);
-      xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+      // Marcamos como "fetch" para que el backend devuelva JSON
+      xhr.setRequestHeader("X-Requested-With", "fetch");
 
       xhr.upload.onprogress = (ev) => {
         if (ev.lengthComputable) setPct((ev.loaded / ev.total) * 100);
@@ -634,17 +673,43 @@
         setPct(0);
         bar?.classList.remove("is-visible");
         btn?.removeAttribute("disabled");
-        alert("No se pudo subir el archivo. Revisa tu conexión e inténtalo de nuevo.");
+        showInlineMsg(
+          "No se pudo subir el archivo. Revisa tu conexión e inténtalo de nuevo.",
+          "error"
+        );
       };
 
       xhr.onload = () => {
+        const ct = (xhr.getResponseHeader("content-type") || "").toLowerCase();
+        let data = null;
+        if (ct.includes("application/json")) {
+          try {
+            data = JSON.parse(xhr.responseText || "{}");
+          } catch {
+            data = null;
+          }
+        }
+
         if (xhr.status >= 200 && xhr.status < 300) {
           setPct(100);
+          // En éxito simplemente recargamos para ver la nueva canción en el grid
           setTimeout(() => location.reload(), 500);
+          return;
+        }
+
+        // Error: quitar barra y re-habilitar botón
+        btn?.removeAttribute("disabled");
+        bar?.classList.remove("is-visible");
+
+        if (data && typeof data.error === "string" && data.error) {
+          // Mensaje de validación del backend (título inválido, duplicado, etc.)
+          showInlineMsg(data.error, "error");
         } else {
-          btn?.removeAttribute("disabled");
-          bar?.classList.remove("is-visible");
-          alert("Error al subir: " + xhr.status + " " + xhr.statusText);
+          const msg =
+            xhr.status === 0
+              ? "No se pudo subir el archivo. Revisa tu conexión e inténtalo de nuevo."
+              : "Error al subir la canción (" + xhr.status + ").";
+          showInlineMsg(msg, "error");
         }
       };
 
@@ -683,7 +748,7 @@
       method: "POST",
       headers: {
         "X-CSRFToken": csrftoken || "",
-        "X-Requested-With": "XMLHttpRequest",
+        "X-Requested-With": "fetch",
       },
       credentials: "same-origin",
     })

@@ -1,31 +1,41 @@
-@"
+# Texto por defecto
 * text=auto
 
-# Fuerza LF en scripts/código (Linux-friendly)
-*.sh   text eol=lf
-*.py   text eol=lf
-*.js   text eol=lf
-*.ts   text eol=lf
-*.css  text eol=lf
-*.html text eol=lf
-*.md   text eol=lf
-*.yml  text eol=lf
-*.yaml text eol=lf
-*.json text eol=lf
-*.svg  text eol=lf
+# Fuerza LF en cosas de Linux
+*.sh         text eol=lf
+Dockerfile   text eol=lf
+*.py         text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
 
-# PowerShell en Windows (CRLF ok)
-*.ps1  text eol=crlf
+# Windows scripts (si quieres CRLF localmente en PowerShell)
+*.ps1        text eol=crlf
+*.bat        text eol=crlf
+*.cmd        text eol=crlf
 
-# Binario: no tocar finales de línea
+# Front-end (solo texto; EOL lo decide la regla general)
+*.js         text
+*.ts         text
+*.css        text
+*.html       text
+*.json       text
+*.md         text
+
+# Binarios: sin conversión de EOL
 *.png  binary
 *.jpg  binary
 *.jpeg binary
 *.webp binary
 *.gif  binary
 *.mp3  binary
+*.m4a  binary
 *.wav  binary
 *.ogg  binary
-*.m4a  binary
 *.flac binary
-"@  Set-Content -Encoding ascii .gitattributes
+*.pdf  binary
+*.woff  binary
+*.woff2 binary
+*.ttf  binary
+*.eot  binary
+*.ico  binary
+*.zip  binary
