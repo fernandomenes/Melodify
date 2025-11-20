@@ -658,3 +658,104 @@ canvas._mdf-spikes {
     width: 72px;
   }
 }
+
+/* ----------------------------------------
+   Alineación con sidebar (desktop)
+   ---------------------------------------- */
+._mdf-player-bar{
+  --sidebar-open: 248px;
+  --sidebar-collapsed: 72px;
+}
+
+/* >= 961px: barra dentro del área de contenido */
+@media (min-width: 961px){
+  ._mdf-player-bar{
+    left: calc(var(--sidebar-open, 248px) + 16px);
+    right: 16px;
+    transform: none;
+    width: auto;
+    max-width: 1180px;
+    margin: 0;
+  }
+  ._mdf-player-bar.menuLateral-collapsed{
+    left: calc(var(--sidebar-collapsed, 72px) + 16px);
+  }
+}
+
+/* <= 960px: barra casi a todo el ancho del viewport */
+@media (max-width: 960px){
+  ._mdf-player-bar,
+  ._mdf-player-bar.menuLateral-collapsed{
+    left: 16px;
+    right: 16px;
+    transform: none;
+    width: auto;
+    max-width: none;
+  }
+}
+
+/* ----------------------------------------
+   Layout compacto para móvil (<640px)
+   ---------------------------------------- */
+@media (max-width: 640px){
+
+  /* Misma anchura, pero 2 filas */
+  ._mdf-player-bar{
+    height: auto;
+    padding: 8px 10px;
+    gap: 6px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+  }
+
+  ._mdf-now{
+    min-width: 0;
+  }
+
+  /* Recortes agresivos en móvil */
+  ._mdf-player-title{
+    max-width: 7ch;   /* ajusta 6–8ch si quieres */
+  }
+  ._mdf-player-artist{
+    max-width: 10ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Controles centrados en la primera fila */
+  ._mdf-ctrls{
+    justify-content: center;
+    gap: 6px;
+  }
+
+  ._mdf-speed{
+    display: inline-flex;
+    padding: 0 8px;
+  }
+
+  /* Tiempos + seek + volumen en la segunda fila */
+  ._mdf-right{
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    width: 100%;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  ._mdf-time{
+    min-width: auto;
+    font-size: 11px;
+  }
+
+  ._mdf-player-seek{
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  ._mdf-vol{
+    width: 70px;
+  }
+}
