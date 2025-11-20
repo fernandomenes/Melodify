@@ -68,6 +68,8 @@ _ALLOWED_EXTS = {"mp3", "wav", "ogg", "m4a", "flac"}
 # Si es True, se aplica un filtro más estricto a los títulos
 STRICT_TITLE_FILTER = True
 
+# Longitud máxima permitida para los títulos de canción 
+MAX_SONG_TITLE_LEN = 27
 # =============================================================================
 # Helpers generales
 # =============================================================================
@@ -77,10 +79,13 @@ def _is_fetch(request) -> bool:
     """
     Indica si la petición fue enviada por fetch/AJAX.
 
-    Se basa en el encabezado `X-Requested-With` que el front envía
-    como 'fetch' cuando no se trata de un POST/GET clásico de navegador.
+    Acepta:
+    - X-Requested-With: fetch
+    - X-Requested-With: XMLHttpRequest
+    - X-Requested-With: ajax
     """
-    return (request.headers.get("X-Requested-With") or "").lower() == "fetch"
+    xrw = (request.headers.get("X-Requested-With") or "").lower()
+    return xrw in {"fetch", "xmlhttprequest", "ajax"}
 
 
 def _redirect_login_clean(request):
@@ -280,17 +285,14 @@ def _title_is_sensible(title: str) -> tuple[bool, str]:
 
     Criterios (cuando STRICT_TITLE_FILTER es True):
     - Longitud mínima (>= 3).
+    - Longitud máxima (<= MAX_SONG_TITLE_LEN).
     - No parece un hash/UUID/base64 (_looks_random).
     - No es una cadena sin vocales larga (tipo 'FJNRK').
     - Proporción aceptable de letras vs dígitos/símbolos.
     - Contiene alguna palabra reconocible (3+ letras).
-    - No es excesivamente largo (> 120 caracteres).
     """
     if not STRICT_TITLE_FILTER:
         return True, ""
-
-    if len(title) < 3:
-        return False, "muy corto"
 
     compact = re.sub(r"\s+", "", title)
     letters = re.findall(rf"[{_WORD_CHARS}]", title, flags=re.I)
@@ -314,11 +316,11 @@ def _title_is_sensible(title: str) -> tuple[bool, str]:
     if not long_words:
         return False, "no contiene palabras reconocibles"
 
-    if len(title) > 120:
-        return False, "demasiado largo"
+    # límite duro por longitud para no romper la UI
+    if len(title) > MAX_SONG_TITLE_LEN:
+        return False, f"demasiado largo (máx. {MAX_SONG_TITLE_LEN} caracteres)"
 
     return True, ""
-
 
 def _sha256_file(django_file) -> str:
     """
@@ -753,6 +755,13 @@ def editar_mi_cancion_en_muro(request, song_id: int):
         if not new_title:
             if not _is_fetch(request):
                 messages.error(request, "El título es obligatorio.")
+            return redirect("editar_mi_cancion_en_muro", song_id=song.id)
+
+        # Nueva validación de título (incluye longitud máxima)
+        ok_title, why = _title_is_sensible(new_title)
+        if not ok_title:
+            if not _is_fetch(request):
+                messages.error(request, f"Título no válido ({why}).")
             return redirect("editar_mi_cancion_en_muro", song_id=song.id)
 
         try:

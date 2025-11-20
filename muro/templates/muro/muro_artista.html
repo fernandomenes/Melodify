@@ -7,31 +7,25 @@
   <title>Muro del artista — {{ artist.user }} | Melodify</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
-  <!-- Desactiva la SPA del home en esta vista -->
   <script>window.__DISABLE_HOME_SCRIPT__ = true;</script>
   <meta name="csrf-token" content="{{ csrf_token }}"/>
 
-  <!-- Fuentes -->
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
 
-  <!-- Estilos base de la aplicación -->
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}?v={% now 'U' %}">
-<link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
-<script defer src="{% static 'inicio_sesion/playListScript.js' %}"></script>
+  <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
+  <script defer src="{% static 'inicio_sesion/playListScript.js' %}"></script>
 
-  <!-- Estilos específicos del muro -->
   <link rel="stylesheet" href="{% static 'muro/muro.css' %}?v={% now 'U' %}">
 
-  <!-- Estilos del reproductor (JS manejado en muro.js) -->
   <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
   <style>
-    /* Toast flotante para mensajes de playlists / likes en el muro */
     #like-toast{
       position:fixed;
       left:50%;
-      bottom:80px; /* arriba de la barra de reproducción */
+      bottom:80px;
       transform:translateX(-50%) translateY(10px);
       background:rgba(0,0,0,.85);
       color:#fff;
@@ -48,8 +42,6 @@
       transform:translateX(-50%) translateY(0);
     }
   </style>
-</head>
-
 </head>
 <body class="page-muro">
 
@@ -116,7 +108,6 @@
       </div>
     </header>
 
-    {# Barra de deshacer (solo owner) #}
     {% if undo_muro_data %}
       <div class="undo-bar" id="undo-bar">
         <form id="muro-undo-form" method="post" action="{% url 'revertir_mi_cancion' %}">
@@ -137,7 +128,6 @@
 
     <div id="inline-msg" class="msg" role="alert"></div>
 
-    {# Sección: subir canción (solo owner) #}
     {% if is_owner %}
       <div class="card">
         <h3 style="margin:0 0 12px">Subir canción</h3>
@@ -153,7 +143,7 @@
           {% csrf_token %}
 
           <label for="title">Título</label>
-          <input id="title" name="title" type="text" required>
+          <input id="title" name="title" type="text" required maxlength="27">
 
           <p class="muted" style="margin:6px 0 0">
             Esta canción se publicará como <strong>{{ session_user }}</strong>.
@@ -193,7 +183,6 @@
       </div>
     {% endif %}
 
-    {# Sección: lista de canciones #}
     <section aria-label="Canciones">
       <h3 style="margin:0 0 12px">Canciones</h3>
 
@@ -224,13 +213,11 @@
                      {% if s.cover_image %}data-cover-url="{{ s.cover_image.url }}"{% endif %}>
 
               {% if is_owner %}
-                <!-- Checkbox de selección -->
                 <label class="select-wrap">
                   <input class="song-select" type="checkbox" value="{{ s.id }}"> Seleccionar
                 </label>
               {% endif %}
 
-              <!-- Zona clickeable para reproducir -->
               <div class="row js-song-main">
                 {% if s.cover_image %}
                   <img class="preview"
@@ -246,16 +233,15 @@
                     <span class="song-title-text">{{ s.title }}</span>
 
                     {% if session_user %}
-                     <button
-  type="button"
-  class="song-like-btn"
-  data-song-id="{{ s.id }}"
-  data-liked="{% if s.is_liked %}1{% else %}0{% endif %}"
-  onclick="toggleSongLikeFromMuro(event, '{{ s.id }}', this)"
-  aria-label="Añadir o quitar de tus Me gusta">
-  ♡
-</button>
-
+                      <button
+                        type="button"
+                        class="song-like-btn"
+                        data-song-id="{{ s.id }}"
+                        data-liked="{% if s.is_liked %}1{% else %}0{% endif %}"
+                        onclick="toggleSongLikeFromMuro(event, '{{ s.id }}', this)"
+                        aria-label="Añadir o quitar de tus Me gusta">
+                        ♡
+                      </button>
 
                       <button type="button"
                               class="song-add-btn"
@@ -302,7 +288,6 @@
     </section>
   </div>
 
-  {# Modal de confirmación para eliminación (solo owner) #}
   {% if is_owner %}
     <div id="confirm-modal" class="modal" aria-hidden="true">
       <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title" tabindex="-1">
@@ -317,7 +302,6 @@
   {% endif %}
 </main>
 
-{# Barra de progreso de subida (solo owner) #}
 {% if is_owner %}
   <div id="upload-bar" class="upload-bar" role="status" aria-live="polite" aria-label="Progreso de subida">
     <div class="row">
@@ -329,10 +313,8 @@
 
 <script>window.MELODIFY_LOGOUT_URL = "{{ logout_url|default:'/logout/' }}";</script>
 
-<!-- Contenedor de toast para likes / playlists -->
 <div id="like-toast" aria-live="polite"></div>
 
-<!-- Scripts del muro y barra de reproducción -->
 <script defer src="{% static 'muro/muro.js' %}?v={% now 'U' %}"></script>
 <script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
 

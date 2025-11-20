@@ -8,7 +8,7 @@
   </span>
 </header>
 
-{# Mensajes de éxito / error de Django #}
+{# Mensajes de éxito / error de Django (fallback no-AJAX) #}
 {% if messages %}
   {% for m in messages %}
     <div class="msg{% if m.tags %} {{ m.tags }}{% endif %}" style="display:block">
@@ -16,6 +16,9 @@
     </div>
   {% endfor %}
 {% endif %}
+
+{# Mensajes específicos de esta siembra vía AJAX #}
+<div id="seed-msg" class="msg" style="display:none" aria-live="polite"></div>
 
 <div class="card">
   <p class="muted" style="margin-top:0">
@@ -35,19 +38,18 @@
     <label>Género (para todas las canciones):</label>
     <select name="genre" required>
       <option value="">Selecciona un género</option>
-          <option value="rock">Rock</option>
-            <option value="electronica">Electrónica</option>
-            <option value="hiphop">Hip-Hop</option>
-            <option value="reggaeton">Reguetón</option>
-            <option value="regional">Regional Mexicano</option>
-            <option value="balada">Balada</option>
-            <option value="indie">Indie</option>
-            <option value="jazz">Jazz</option>
-            <option value="clasica">Clásica</option>
-            <option value="salsa">Salsa</option>
-            <option value="_other">Otro…</option>
+      <option value="rock">Rock</option>
+      <option value="electronica">Electrónica</option>
+      <option value="hiphop">Hip-Hop</option>
+      <option value="reggaeton">Reguetón</option>
+      <option value="regional">Regional Mexicano</option>
+      <option value="balada">Balada</option>
+      <option value="indie">Indie</option>
+      <option value="jazz">Jazz</option>
+      <option value="clasica">Clásica</option>
+      <option value="salsa">Salsa</option>
+      <option value="_other">Otro…</option>
     </select>
-
 
     <label>Portada común (opcional):</label>
     <input type="file"
@@ -62,7 +64,7 @@
   </form>
 </div>
 
-{# Barra de carga (reutiliza estilos .upload-bar de gestion.css) #}
+{# Barra de carga (reutiliza estilos .upload-bar de gestion.css/muro.css) #}
 <div id="seed-upload-bar" class="upload-bar" aria-hidden="true">
   <div class="row">
     <div class="progress"><i></i></div>
@@ -74,35 +76,152 @@
 
 <script>
   (function(){
-    const form = document.getElementById('seed-form');
+    const form      = document.getElementById('seed-form');
     if (!form) return;
 
     const submitBtn = document.getElementById('seed-submit');
-    const bar = document.getElementById('seed-upload-bar');
-    const barInner = bar ? bar.querySelector('.progress > i') : null;
-    const barLabel = document.getElementById('seed-upload-label');
+    const bar       = document.getElementById('seed-upload-bar');
+    const barInner  = bar ? bar.querySelector('.progress > i') : null;
+    const barLabel  = document.getElementById('seed-upload-label');
+    const msgBox    = document.getElementById('seed-msg');
+    let timer       = null;
 
-    if (!bar || !barInner) return;
-
-    form.addEventListener('submit', function() {
-      if (submitBtn) {
-        submitBtn.setAttribute('aria-busy', 'true');
+    function showSeedMsg(html, isError) {
+      if (!msgBox) {
+        alert(html.replace(/<br\s*\/?>/gi, '\n'));
+        return;
       }
+      msgBox.innerHTML = html || '';
+      msgBox.className = 'msg' + (isError ? ' error' : '');
+      msgBox.style.display = html ? 'block' : 'none';
+    }
+
+    function clearSeedMsg() {
+      if (!msgBox) return;
+      msgBox.innerHTML = '';
+      msgBox.className = 'msg';
+      msgBox.style.display = 'none';
+    }
+
+    function startBar() {
+      if (!bar || !barInner) return;
       bar.classList.add('is-visible');
       bar.removeAttribute('aria-hidden');
-
       let pct = 5;
       barInner.style.width = pct + '%';
       if (barLabel) barLabel.textContent = 'Subiendo…';
 
-      const timer = setInterval(function() {
+      if (timer) clearInterval(timer);
+      timer = setInterval(function() {
         if (pct >= 90) {
           clearInterval(timer);
+          timer = null;
           return;
         }
         pct += 3;
         barInner.style.width = pct + '%';
       }, 180);
+    }
+
+    function stopBar() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      if (!bar || !barInner) return;
+      setTimeout(function(){
+        bar.classList.remove('is-visible');
+        bar.setAttribute('aria-hidden', 'true');
+        barInner.style.width = '0%';
+        if (barLabel) barLabel.textContent = 'Preparando…';
+      }, 700);
+    }
+
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      clearSeedMsg();
+
+      if (!bar || !barInner) {
+        form.submit();
+        return;
+      }
+
+      if (submitBtn) {
+        submitBtn.setAttribute('disabled', 'disabled');
+        submitBtn.setAttribute('aria-busy', 'true');
+      }
+      startBar();
+
+      const fd = new FormData(form);
+
+      try {
+        const resp = await fetch(form.action || window.location.href, {
+          method: 'POST',
+          body: fd,
+          headers: {
+            'X-Requested-With': 'fetch',
+            'Accept': 'application/json'
+          },
+          credentials: 'same-origin'
+        });
+
+        let data = null;
+        const ct = (resp.headers.get('Content-Type') || '').toLowerCase();
+        if (ct.includes('application/json')) {
+          try {
+            data = await resp.json();
+          } catch (err) {
+            console.error('JSON inválido en siembra admin:', err);
+          }
+        }
+
+        if (!resp.ok || !data) {
+          const msg = `Error al sembrar canciones (${resp.status} ${resp.statusText}).`;
+          showSeedMsg(msg, true);
+          return;
+        }
+
+        if (barLabel) barLabel.textContent = 'Procesando…';
+        if (barInner) barInner.style.width = '100%';
+
+        const results = data.results || [];
+        if (!results.length && data.error) {
+          showSeedMsg(
+            String(data.error).replace(/</g, '&lt;'),
+            true
+          );
+          return;
+        }
+
+        if (!results.length) {
+          showSeedMsg('No se procesó ningún archivo.', true);
+          return;
+        }
+
+        let anyOk = false;
+        const lines = results.map(function(r) {
+          const name = (r.name || 'archivo').replace(/</g, '&lt;');
+          if (r.ok) {
+            anyOk = true;
+            return '✓ ' + name + ': creada';
+          }
+          const err = String(r.error || 'Error')
+            .replace(/</g, '&lt;');
+          return '✗ ' + name + ': ' + err;
+        });
+
+        showSeedMsg(lines.join('<br>'), !anyOk);
+
+      } catch (err) {
+        console.error('Error de red en siembra admin:', err);
+        showSeedMsg('Error de red al sembrar canciones. Intenta de nuevo.', true);
+      } finally {
+        stopBar();
+        if (submitBtn) {
+          submitBtn.removeAttribute('disabled');
+          submitBtn.removeAttribute('aria-busy');
+        }
+      }
     });
   })();
 </script>
