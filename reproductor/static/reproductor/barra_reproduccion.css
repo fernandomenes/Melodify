@@ -1,329 +1,618 @@
 /* ==========================================================================
-   Melodify Player — Variables de tema y visualización
+   Melodify — Barra de reproducción global y vista de reproductor
    ========================================================================== */
-:root{
-  --bg:#121212; --card:#1b1b1b; --line:#2a2a2a; --muted:#9aa0a6;
-  --accent:#7a3cff; --accent-2:#8b5dff; --text:#efeeee;
-  --glow-bg-1:#221a36; --glow-bg-2:#191627;
-  --glow-border:#6f58ff; --glow-outer:rgba(122,60,255,.25);
 
-  /* Ganancia visual del glow (subir para más intensidad) */
+/* Tema y parámetros del efecto de glow */
+:root {
+  --bg: #121212;
+  --card: #1b1b1b;
+  --line: #2a2a2a;
+  --muted: #9aa0a6;
+  --accent: #7a3cff;
+  --accent-2: #8b5dff;
+  --text: #efeeee;
+  --glow-bg-1: #221a36;
+  --glow-bg-2: #191627;
+  --glow-border: #6f58ff;
+  --glow-outer: rgba(122, 60, 255, 0.25);
+
+  /* Ganancia visual general del glow */
   --viz-k: 3.6;
 }
 
-/* ==========================================================================
+/* --------------------------------------------------------------------------
    Barra del reproductor (flotante)
-   ========================================================================== */
-._mdf-player-bar{
-  position:fixed; left:50%; transform:translateX(-50%); bottom:16px;
-  width:min(1180px,calc(100vw - 24px)); height:76px;
-  background:rgba(18,18,18,.92);
-  backdrop-filter:saturate(120%) blur(6px);
-  border:1px solid var(--line); border-radius:16px;
-  display:none;
-  grid-template-columns:minmax(260px,1.2fr) auto minmax(420px,1fr);
-  align-items:center; gap:16px; padding:0 18px; z-index:1000; color:var(--text);
-  box-shadow:0 10px 28px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.03) inset;
+   -------------------------------------------------------------------------- */
+._mdf-player-bar {
+  position: fixed;
+  bottom: 16px;
 
-  --viz-int: 0;  /* JS actualiza en tiempo real */
+  /* Posicionamiento base respecto a la sidebar */
+  --sidebar-open: 248px;
+  --sidebar-collapsed: 72px;
+  left: calc(var(--sidebar-open) + 16px);
+  right: 16px;
+
+  width: auto;
+  max-width: 1180px;
+  height: 76px;
+
+  background: rgba(18, 18, 18, 0.92);
+  backdrop-filter: saturate(120%) blur(6px);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+
+  display: none;
+  grid-template-columns: minmax(260px, 1.2fr) auto minmax(420px, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 0 18px;
+  z-index: 1000;
+  color: var(--text);
+
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+
+  /* Variables que el JS actualiza en tiempo real */
+  --viz-int: 0;
   --viz-hue: 270;
 
-  /* Transiciones cortas para una respuesta “snappy” */
-  transition: box-shadow .04s linear, outline-color .04s linear;
+  transition: box-shadow 0.04s linear, outline-color 0.04s linear;
 }
-._mdf-player-bar.is-visible{ display:grid; }
 
-/* Columna izquierda (portada + metadatos) */
-._mdf-now{ display:flex; align-items:center; gap:12px; min-width:0; }
-._mdf-cover{
-  width:48px; height:48px; border-radius:10px; background:#222; object-fit:cover;
+._mdf-player-bar.is-visible {
+  display: grid;
+}
+
+/* Posición con sidebar colapsada */
+._mdf-player-bar.menuLateral-collapsed {
+  left: calc(var(--sidebar-collapsed) + 16px);
+}
+
+/* Ajuste de posición en pantallas medias/pequeñas (ancho completo) */
+@media (max-width: 960px) {
+  ._mdf-player-bar,
+  ._mdf-player-bar.menuLateral-collapsed {
+    left: 16px;
+    right: 16px;
+    max-width: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Columna izquierda (portada + metadatos)
+   -------------------------------------------------------------------------- */
+._mdf-now {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+._mdf-cover {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: #222;
+  object-fit: cover;
   box-shadow:
-    0 0 0 1px rgba(0,0,0,.35),
+    0 0 0 1px rgba(0, 0, 0, 0.35),
     0 0 calc(8px + 22px * (var(--viz-int) * var(--viz-k)))
-      hsl(var(--viz-hue) 80% 60% / calc(.34 * (var(--viz-int) * var(--viz-k))));
-  transition: box-shadow .02s linear;
+      hsl(var(--viz-hue) 80% 60% / calc(0.34 * (var(--viz-int) * var(--viz-k))));
+  transition: box-shadow 0.02s linear;
   will-change: box-shadow;
 }
-._mdf-meta{ display:flex; flex-direction:column; min-width:0; flex:1; }
 
-/* Título/autor recortados */
-._mdf-player-title{
-  font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-  max-width:min(56vw, 560px);
-}
-._mdf-player-artist{
-  font-size:.9rem; color:#b3b3b3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+._mdf-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
 }
 
-/* Columna central (controles) */
-._mdf-ctrls{
-  position:relative;
-  display:flex; align-items:center; gap:10px;
+/* Título y artista recortados por ancho */
+._mdf-player-title {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(50vw, 520px);
 }
-._mdf-btn, ._mdf-speed{
-  height:40px; min-width:40px; border-radius:999px; display:inline-flex;
-  align-items:center; justify-content:center; cursor:pointer; color:#fff;
-  border:1px solid var(--line); background:#1a1a1a;
-  transition: background .06s, transform .06s, border-color .06s, box-shadow .05s linear;
+
+._mdf-player-artist {
+  font-size: 0.9rem;
+  color: #b3b3b3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --------------------------------------------------------------------------
+   Columna central (controles principales)
+   -------------------------------------------------------------------------- */
+._mdf-ctrls {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+._mdf-btn,
+._mdf-speed {
+  height: 40px;
+  min-width: 40px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+  border: 1px solid var(--line);
+  background: #1a1a1a;
+  transition:
+    background 0.06s,
+    transform 0.06s,
+    border-color 0.06s,
+    box-shadow 0.05s linear;
   will-change: box-shadow, background, transform;
-  -webkit-appearance:none; appearance:none;
+  -webkit-appearance: none;
+  appearance: none;
   box-shadow:
-    0 0 0 1px rgba(255,255,255,.03) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
     0 0 calc(4px + 16px * (var(--viz-int) * var(--viz-k)))
-      hsl(var(--viz-hue) 80% 60% / calc(.32 * (var(--viz-int) * var(--viz-k))));
+      hsl(var(--viz-hue) 80% 60% / calc(0.32 * (var(--viz-int) * var(--viz-k))));
 }
-._mdf-btn:hover, ._mdf-speed:hover{
-  background:#242424;
+
+._mdf-btn:hover,
+._mdf-speed:hover {
+  background: #242424;
   box-shadow:
-    0 0 0 1px rgba(255,255,255,.03) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
     0 0 calc(6px + 20px * (var(--viz-int) * var(--viz-k)))
-      hsl(var(--viz-hue) 80% 60% / calc(.38 * (var(--viz-int) * var(--viz-k))));
+      hsl(var(--viz-hue) 80% 60% / calc(0.38 * (var(--viz-int) * var(--viz-k))));
 }
-._mdf-btn:active, ._mdf-speed:active{ transform:translateY(1px); }
-._mdf-btn:focus-visible, ._mdf-speed:focus-visible{ outline:2px solid var(--accent-2); outline-offset:2px; }
 
-/* Botón primario (Play/Pause) */
-._mdf-btn--primary{
-  background:var(--accent)!important; border-color:var(--accent-2)!important;
+._mdf-btn:active,
+._mdf-speed:active {
+  transform: translateY(1px);
+}
+
+._mdf-btn:focus-visible,
+._mdf-speed:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+
+/* Botón principal (Play/Pause) */
+._mdf-btn--primary {
+  background: var(--accent) !important;
+  border-color: var(--accent-2) !important;
   box-shadow:
-    0 0 0 1px rgba(0,0,0,.2) inset,
-    0 0 14px rgba(122,60,255,.28),
+    0 0 0 1px rgba(0, 0, 0, 0.2) inset,
+    0 0 14px rgba(122, 60, 255, 0.28),
     0 0 calc(10px + 24px * (var(--viz-int) * var(--viz-k)))
-      hsl(var(--viz-hue) 80% 60% / calc(.42 * (var(--viz-int) * var(--viz-k))));
+      hsl(var(--viz-hue) 80% 60% / calc(0.42 * (var(--viz-int) * var(--viz-k))));
 }
-._mdf-btn--primary:hover{ background:var(--accent-2)!important; }
 
-/* Botón velocidad */
-._mdf-speed{ padding:0 10px; font-weight:600; }
+._mdf-btn--primary:hover {
+  background: var(--accent-2) !important;
+}
 
-/* Oculta adornos originales del round-progress */
+/* Botón de velocidad */
+._mdf-speed {
+  padding: 0 10px;
+  font-weight: 600;
+}
+
+/* Oculta elementos decorativos del round-progress original */
 ._mdf-circle,
 ._mdf-ctrls ._mdf-spikes,
-canvas._mdf-spikes { display:none !important; }
+canvas._mdf-spikes {
+  display: none !important;
+}
+
 ._mdf-ctrls::before,
-._mdf-ctrls::after { content:none !important; animation:none !important; background:none !important; }
-
-/* Columna derecha (tiempos, seek, volumen) */
-._mdf-right{
-  display:flex; align-items:center; gap:12px; justify-content:flex-end; min-width:420px;
+._mdf-ctrls::after {
+  content: none !important;
+  animation: none !important;
+  background: none !important;
 }
-._mdf-time{ font-size:12px; color:#bbb; min-width:98px; text-align:right; }
-._mdf-player-seek{ flex:1 1 380px; width:auto; min-width:180px; }
-._mdf-vol{ width:140px; display:inline-block; }
 
-/* ==========================================================================
-   Sliders (seek/volumen) — con “relleno”
-   ========================================================================== */
-._mdf-player-seek, ._mdf-vol{
-  -webkit-appearance:none; appearance:none; height:4px; background:#2b2b2b;
-  border-radius:999px; border:none; outline:none;
+/* --------------------------------------------------------------------------
+   Columna derecha (tiempos, seek, volumen)
+   -------------------------------------------------------------------------- */
+._mdf-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-end;
+  min-width: 420px;
 }
+
+._mdf-time {
+  font-size: 12px;
+  color: #bbb;
+  min-width: 98px;
+  text-align: right;
+}
+
+._mdf-player-seek {
+  flex: 1 1 380px;
+  width: auto;
+  min-width: 180px;
+}
+
+._mdf-vol {
+  width: 140px;
+  display: inline-block;
+}
+
+/* --------------------------------------------------------------------------
+   Sliders (seek / volumen)
+   -------------------------------------------------------------------------- */
+._mdf-player-seek,
+._mdf-vol {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: #2b2b2b;
+  border-radius: 999px;
+  border: none;
+  outline: none;
+}
+
 ._mdf-player-seek::-webkit-slider-thumb,
-._mdf-vol::-webkit-slider-thumb{
-  -webkit-appearance:none; appearance:none; width:14px; height:14px;
-  border-radius:50%; background:#fff; border:1px solid #0003;
-  box-shadow:0 0 0 2px var(--accent); cursor:pointer; transition:transform .12s;
+._mdf-vol::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #0003;
+  box-shadow: 0 0 0 2px var(--accent);
+  cursor: pointer;
+  transition: transform 0.12s;
 }
+
 ._mdf-player-seek::-webkit-slider-thumb:hover,
-._mdf-vol::-webkit-slider-thumb:hover{ transform:scale(1.05); }
-._mdf-player-seek::-moz-range-thumb,
-._mdf-vol::-moz-range-thumb{
-  width:14px; height:14px; border-radius:50%; background:#fff; border:1px solid #0003;
-  box-shadow:0 0 0 2px var(--accent); cursor:pointer;
+._mdf-vol::-webkit-slider-thumb:hover {
+  transform: scale(1.05);
 }
 
-.mdf-round-progress{ position:relative; }
-._mdf-circle{ display:none !important; }
+._mdf-player-seek::-moz-range-thumb,
+._mdf-vol::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #0003;
+  box-shadow: 0 0 0 2px var(--accent);
+  cursor: pointer;
+}
 
-/* ==========================================================================
-   Listado de canciones + vista de reproductor
-   ========================================================================== */
+.mdf-round-progress {
+  position: relative;
+}
+
+._mdf-circle {
+  display: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   Listado de canciones y vista de reproductor
+   -------------------------------------------------------------------------- */
 
 /* Listado principal de canciones */
-.songs-wrap{ width:min(1180px, 92vw); margin:8px 0 120px; }
-.song-item{
-  display:grid; grid-template-columns:72px 1fr auto; align-items:center; gap:14px;
-  padding:12px 14px; background:var(--card); border:1px solid var(--line);
-  border-radius:12px; margin:10px 0; cursor:pointer;
-  transition:background .2s, border-color .2s, transform .12s, box-shadow .2s;
+.songs-wrap {
+  width: min(1180px, 92vw);
+  margin: 8px 0 120px;
 }
-.song-item:hover{ background:#232323; border-color:#333; box-shadow:0 2px 14px rgba(0,0,0,.25); }
-.song-cover{
-  width:56px; height:56px; border-radius:10px; background:#2a2a2a; object-fit:cover;
-  box-shadow:0 0 0 1px rgba(0,0,0,.25);
-}
-.song-cover--placeholder{ display:block; }
-.song-info{ min-width:0; }
-.song-title{ font-weight:700; font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.song-author{ color:#9aa0a6; font-size:.9rem; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.song-actions{ display:flex; align-items:center; gap:10px; justify-self:end; }
-.song-actions .play-pill{
-  display:inline-flex; align-items:center; gap:8px; padding:8px 12px;
-  border-radius:999px; background:#232323; border:1px solid var(--line);
-  color:#ddd; font-size:.9rem;
-}
-.song-actions .play-pill::before{ content:"▶"; font-size:.85rem; }
 
-.song-item.is-playing{
-  background:linear-gradient(180deg, var(--glow-bg-1), var(--glow-bg-2));
-  border-color:var(--glow-border);
-  box-shadow:0 0 0 1px rgba(122,60,255,.35) inset, 0 0 18px var(--glow-outer);
+.song-item {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin: 10px 0;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    transform 0.12s,
+    box-shadow 0.2s;
+}
+
+.song-item:hover {
+  background: #232323;
+  border-color: #333;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.25);
+}
+
+.song-cover {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  background: #2a2a2a;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.song-cover--placeholder {
+  display: block;
+}
+
+.song-info {
+  min-width: 0;
+}
+
+.song-title {
+  font-weight: 700;
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.song-author {
+  color: #9aa0a6;
+  font-size: 0.9rem;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.song-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-self: end;
+}
+
+.song-actions .play-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #232323;
+  border: 1px solid var(--line);
+  color: #ddd;
+  font-size: 0.9rem;
+}
+
+.song-actions .play-pill::before {
+  content: "▶";
+  font-size: 0.85rem;
+}
+
+.song-item.is-playing {
+  background: linear-gradient(180deg, var(--glow-bg-1), var(--glow-bg-2));
+  border-color: var(--glow-border);
+  box-shadow:
+    0 0 0 1px rgba(122, 60, 255, 0.35) inset,
+    0 0 18px var(--glow-outer);
 }
 
 /* Layout de la vista Reproductor */
-.rep-grid{ display:grid; grid-template-columns:1fr 360px; gap:16px; }
-@media (max-width:960px){
-  .rep-grid{ grid-template-columns:1fr; }
-  .rep-right{ order:-1; }
-}
-.rep-left{ min-width:0; }
-.rep-right{ min-width:0; }
-
-.rep-panel{
-  background:var(--card); border:1px solid var(--line); border-radius:12px;
-  padding:12px; margin-bottom:12px; overflow:hidden;
-}
-.rep-head{ display:flex; align-items:center; justify-content:space-between; margin:8px 0; }
-.rep-badge{
-  display:inline-block; min-width:22px; padding:0 6px; border-radius:999px;
-  border:1px solid var(--line); font-size:12px; text-align:center;
+.rep-grid {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 16px;
 }
 
-/* Chips de géneros/listas rápidas */
-#rep-genres{ display:flex; flex-wrap:wrap; gap:8px; align-items:flex-start; }
-.rep-chip{
-  display:inline-flex!important; align-items:center; gap:8px; line-height:1;
-  padding:6px 10px; margin:0; border:1px solid var(--line);
-  border-radius:999px!important; background:#181818; color:#ddd; cursor:pointer;
-  white-space:nowrap; font:inherit; transition:background .2s, border-color .2s, box-shadow .2s, transform .08s;
+@media (max-width: 960px) {
+  .rep-grid {
+    grid-template-columns: 1fr;
+  }
+  .rep-right {
+    order: -1;
+  }
 }
-.rep-chip:hover{
-  background:linear-gradient(180deg, #1e1e29, #191922);
-  border-color:#3a345c; box-shadow:0 0 10px rgba(122,60,255,.15);
-  border-radius:999px!important;
+
+.rep-left {
+  min-width: 0;
 }
-.rep-chip:active{ transform:translateY(1px); }
-.rep-chip.active, .rep-chip[aria-selected="true"], .rep-chip[aria-pressed="true"]{
-  background:radial-gradient(120% 120% at 10% 10%, var(--glow-bg-1) 0%, var(--glow-bg-2) 60%), #1a1726;
-  border-color:var(--glow-border);
-  box-shadow:0 0 0 1px rgba(122,60,255,.35) inset, inset 0 0 18px rgba(122,60,255,.35), 0 0 18px var(--glow-outer);
-  color:#fff; border-radius:999px!important;
+
+.rep-right {
+  min-width: 0;
+}
+
+.rep-panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.rep-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8px 0;
+}
+
+.rep-badge {
+  display: inline-block;
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Chips de géneros / listas rápidas */
+#rep-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.rep-chip {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  line-height: 1;
+  padding: 6px 10px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px !important;
+  background: #181818;
+  color: #ddd;
+  cursor: pointer;
+  white-space: nowrap;
+  font: inherit;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    box-shadow 0.2s,
+    transform 0.08s;
+}
+
+.rep-chip:hover {
+  background: linear-gradient(180deg, #1e1e29, #191922);
+  border-color: #3a345c;
+  box-shadow: 0 0 10px rgba(122, 60, 255, 0.15);
+  border-radius: 999px !important;
+}
+
+.rep-chip:active {
+  transform: translateY(1px);
+}
+
+.rep-chip.active,
+.rep-chip[aria-selected="true"],
+.rep-chip[aria-pressed="true"] {
+  background:
+    radial-gradient(120% 120% at 10% 10%, var(--glow-bg-1) 0%, var(--glow-bg-2) 60%),
+    #1a1726;
+  border-color: var(--glow-border);
+  box-shadow:
+    0 0 0 1px rgba(122, 60, 255, 0.35) inset,
+    inset 0 0 18px rgba(122, 60, 255, 0.35),
+    0 0 18px var(--glow-outer);
+  color: #fff;
+  border-radius: 999px !important;
 }
 
 /* Listas auxiliares (Top10, Discover, etc.) */
-.rep-list{ list-style:none; margin:0; padding:0; }
-.rep-list li{
-  display:flex; align-items:center; justify-content:space-between; gap:10px;
-  background:#181818; border:1px solid var(--line); border-radius:8px;
-  padding:8px 10px; margin:6px 0; cursor:pointer;
-  transition:background .2s, border-color .2s, box-shadow .2s;
+.rep-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-.rep-list li:hover{ background:#232323; }
-.rep-list li.active{
-  background:linear-gradient(180deg, var(--glow-bg-1), var(--glow-bg-2));
-  border-color:var(--glow-border);
-  box-shadow:0 0 0 1px rgba(122,60,255,.35) inset, inset 0 0 18px rgba(122,60,255,.35), 0 0 18px var(--glow-outer);
-  color:#fff;
+
+.rep-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #181818;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.rep-list li:hover {
+  background: #232323;
+}
+
+.rep-list li.active {
+  background: linear-gradient(180deg, var(--glow-bg-1), var(--glow-bg-2));
+  border-color: var(--glow-border);
+  box-shadow:
+    0 0 0 1px rgba(122, 60, 255, 0.35) inset,
+    inset 0 0 18px rgba(122, 60, 255, 0.35),
+    0 0 18px var(--glow-outer);
+  color: #fff;
 }
 
 /* Estado vacío */
-.rep-empty{
-  background:var(--card); border:1px solid var(--line); border-radius:12px;
-  padding:32px 24px; color:#b3b3b3; min-height:240px;
-  display:flex; align-items:center; justify-content:center; text-align:center;
+.rep-empty {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 32px 24px;
+  color: #b3b3b3;
+  min-height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
-.rep-left .songs-wrap{ width:100%; max-width:none; margin:8px 0 120px; }
 
-/* ==========================================================================
-   Ajustes de glow/borde de la barra del reproductor
-   ========================================================================== */
-._mdf-player-bar{
+.rep-left .songs-wrap {
+  width: 100%;
+  max-width: none;
+  margin: 8px 0 120px;
+}
+
+/* --------------------------------------------------------------------------
+   Ajustes de glow / borde de la barra
+   -------------------------------------------------------------------------- */
+._mdf-player-bar {
   border-color: hsl(0 0% 16% / 1);
-  outline: 1px solid hsl(var(--viz-hue) 70% 60% / calc(.26 * (var(--viz-int) * var(--viz-k))));
+  outline: 1px solid
+    hsl(var(--viz-hue) 70% 60% / calc(0.26 * (var(--viz-int) * var(--viz-k))));
   outline-offset: 0;
   box-shadow:
-    0 10px 28px rgba(0,0,0,.45),
+    0 10px 28px rgba(0, 0, 0, 0.45),
     0 0 calc(12px + 32px * (var(--viz-int) * var(--viz-k)))
-      hsl(var(--viz-hue) 80% 60% / calc(.22 + .26 * (var(--viz-int) * var(--viz-k))));
+      hsl(var(--viz-hue) 80% 60% /
+        calc(0.22 + 0.26 * (var(--viz-int) * var(--viz-k))));
 }
 
-/* Limpia decoraciones previas del wrapper original */
-._mdf-player-bar::before,
-._mdf-player-bar::after{
-  content:none !important;
-  display:none !important;
-}
-
-/* ==========================================================================
-   Ajuste de posición de la barra según sidebar
-   ========================================================================== */
-._mdf-player-bar{
-  --sidebar-open: 248px;
-  --sidebar-collapsed: 72px;
-}
-._mdf-player-bar{
-  left: calc(var(--sidebar-open) + 16px);
-  right: 16px;
-  transform: none;
-  width: auto;
-  max-width: 1180px;
-  margin: 0;
-}
-._mdf-player-bar.menuLateral-collapsed{
-  left: calc(var(--sidebar-collapsed) + 16px);
-}
-@media (max-width: 960px){
-  ._mdf-player-bar,
-  ._mdf-player-bar.menuLateral-collapsed{
-    left: 16px; right: 16px; max-width: none;
-  }
-}
-
-/* Micro-ajustes de layout */
-._mdf-player-title{ max-width: min(50vw, 520px); }
-._mdf-right{ gap: 10px; min-width: 360px; }
-._mdf-time{ min-width: 88px; }
-._mdf-player-seek{ flex: 1 1 440px; }
-._mdf-vol{ width: 128px; }
-
-/* Variación de tema en blanco (modo “white glow”) */
-._mdf-player-bar.mdf-whiteglow{
-  --accent:#ffffff; --accent-2:#dfe4ea;
+/* Variante clara (“white glow”) */
+._mdf-player-bar.mdf-whiteglow {
+  --accent: #ffffff;
+  --accent-2: #dfe4ea;
   filter:
-    drop-shadow(0 0 10px rgba(255,255,255,.35))
-    drop-shadow(0 0 25px rgba(255,255,255,.20));
+    drop-shadow(0 0 10px rgba(255, 255, 255, 0.35))
+    drop-shadow(0 0 25px rgba(255, 255, 255, 0.2));
 }
 
-/* Round progress integrado sin sombra extra */
-._mdf-ctrls { position: relative; }
-._mdf-ctrls.mdf-round-progress { box-shadow: none !important; }
-
-/* Recorta el título agresivamente en pantallas pequeñas (~6–8 caracteres) */
-@media (max-width: 640px){
-  ._mdf-player-title{
-    max-width: 7ch;   /* prueba 6ch, 7ch u 8ch según te guste */
-  }
+/* Round progress integrado sin sombra adicional */
+._mdf-ctrls {
+  position: relative;
 }
 
-@media (max-width: 640px){
-  ._mdf-right{
-    min-width: 0;
-    gap: 6px;
-  }
-  ._mdf-vol{
-    width: 90px;   /* slider de volumen más corto */
-  }
-  ._mdf-speed{
-    display: none; /* opcional: ocultar velocidad en móvil */
-  }
+._mdf-ctrls.mdf-round-progress {
+  box-shadow: none !important;
 }
-/* =========================
-   Layout móvil barra player
-   ========================= */
-@media (max-width: 640px){
 
-  /* La barra en 2 columnas y 2 filas */
-  ._mdf-player-bar{
+/* --------------------------------------------------------------------------
+   Modo móvil (barra de reproducción compacta)
+   -------------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  /* Recorte más agresivo de título y artista */
+  ._mdf-player-title {
+    max-width: 7ch;
+  }
+
+  ._mdf-player-artist {
+    max-width: 10ch;
+  }
+
+  /* Layout en dos filas:
+     - Fila 1: portada + metadatos + controles
+     - Fila 2: tiempos, seek y volumen a ancho completo */
+  ._mdf-player-bar {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto auto;
     height: auto;
@@ -331,44 +620,41 @@ canvas._mdf-spikes { display:none !important; }
     gap: 6px;
   }
 
-  /* Portada + título/autor: que se pueda encoger */
-  ._mdf-now{
+  ._mdf-now {
     min-width: 0;
   }
 
-  /* Título MUY recortado en móvil */
-  ._mdf-player-title{
-    max-width: 7ch;   /* puedes probar 6ch u 8ch */
-  }
-
-  /* Controles (prev/play/next) en la primera fila, centrados */
-  ._mdf-ctrls{
+  ._mdf-ctrls {
     justify-content: center;
-    gap: 8px;
+    gap: 6px;
   }
 
-  /* Parte derecha va ABAJO ocupando todo el ancho */
-  ._mdf-right{
-    grid-column: 1 / -1;  /* de la col 1 a la última */
-    grid-row: 2;          /* segunda fila */
+  /* Botón de velocidad visible también en móvil */
+  ._mdf-speed {
+    display: inline-flex;
+    padding: 0 8px;
+  }
+
+  ._mdf-right {
+    grid-column: 1 / -1;
+    grid-row: 2;
     min-width: 0;
     width: 100%;
     justify-content: space-between;
     gap: 8px;
   }
 
-  ._mdf-time{
+  ._mdf-time {
     min-width: auto;
     font-size: 11px;
   }
 
-  ._mdf-player-seek{
+  ._mdf-player-seek {
     flex: 1 1 auto;
     min-width: 0;
   }
 
-  ._mdf-vol{
-    width: 80px;   /* más compacto */
+  ._mdf-vol {
+    width: 72px;
   }
-
 }
