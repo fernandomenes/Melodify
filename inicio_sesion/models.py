@@ -213,3 +213,20 @@ class PlaylistCollaborator(models.Model):
         unique_together = (("playlist_id", "collaborator_user"),)
         ordering = ["-added_at"]
 
+
+
+
+
+
+class Followers(models.Model):
+    seguidor = models.ForeignKey('Users', related_name='following', on_delete=models.CASCADE)
+    seguido  = models.ForeignKey('Users', related_name='followers', on_delete=models.CASCADE)
+    followed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'Followers'
+        unique_together = ('seguidor', 'seguido')
+        managed = False   # ← ESTA LÍNEA ES LA CLAVE
+
+
+

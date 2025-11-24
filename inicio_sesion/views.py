@@ -15,7 +15,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 from django.views.decorators.http import require_GET
 
 
-from .models import ArtistProfile, LikeMedia, PlayList, PlayListSong, Song, Users
+from .models import ArtistProfile, LikeMedia, PlayList, PlayListSong, Song, Users, Followers
 
 logger = logging.getLogger(__name__)
 
@@ -339,16 +339,34 @@ def playlist_getAll(request):
             likes_qs.filter(user=user).values_list("object_id", flat=True)
         )
 
+
+
         for p in base:
             pid = p["id"]
             p["likes_count"] = counts.get(pid, 0)
             p["liked"] = pid in user_liked_ids
+            # Añadimos los datos del usuario
+            userCreated = Users.objects.values('user', 'avatar', 'type').get(pk=p["idUser"])
+            userLogueado = Users.objects.values('id','user', 'avatar', 'type').get(user=user)
+            p["userCreated"] = userCreated["user"]
+            p["isfollow"] = sigue(userLogueado["id"],p["idUser"])
 
         return JsonResponse(base, safe=False)
 
     except Exception as e:
         logger.exception("Error en playlist_getAll")
         return JsonResponse({"error": str(e)}, status=500)
+
+
+
+
+def sigue(seguidor_id: int, seguido_id: int) -> bool:
+    return Followers.objects.filter(
+        seguidor_id=seguidor_id,
+        seguido_id=seguido_id
+    ).exists()
+
+
 
 
 @csrf_exempt
@@ -1027,3 +1045,24 @@ def playlist_collaborator_remove(request, playlist_id, user_id):
         return JsonResponse({"removed": True})
     else:
         return JsonResponse({"removed": False, "error": "not_found"}, status=404)
+
+
+
+@csrf_exempt
+def setFollows(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    seguidor_id = request.POST.get('seguidor_id')
+    seguido_id  = request.POST.get('seguido_id')
+    action      = request.POST.get('action')  # 'follow' o 'unfollow'
+
+    if not all([seguidor_id, seguido_id]):
+        return JsonResponse({'error': 'Faltan IDs'}, status=400)
+
+    if action == 'unfollow':
+        Followers.objects.filter(seguidor_id=seguidor_id, seguido_id=seguido_id).delete()
+        return JsonResponse({'followed': False})
+
+    Followers.objects.get_or_create(seguidor_id=seguidor_id, seguido_id=seguido_id)
+    return JsonResponse({'followed': True})

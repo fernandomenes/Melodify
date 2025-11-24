@@ -25,6 +25,7 @@ urlpatterns = [
     path("playlist/addsong/", v.add_song_to_playlist, name="add-song-to-playlist"),
     path("playlist/removeSong/", v.remove_song_from_playlist, name="remove-song-from-playlist"),
     path("playlist/getuserid/", v.get_user_id, name='get_user_id'),
+    path("playlist/setFollows/", v.setFollows, name='setFollows'),
 
 
     # Likes

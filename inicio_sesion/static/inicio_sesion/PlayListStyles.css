@@ -1,15 +1,32 @@
 /* Botones reutilizables (rosa) */
 .btnRoundPlaylist{
-    width:70px;
-    height: 25px;
+    width:55px;
+    height: 20px;
     background-color:#ff0066;
     color:#fff;
     border:none;
-    border-radius:7px;
+    border-radius:4px;
+    font-size: 11px;
+    cursor:pointer;
+}
+.btnRoundPlaylist:hover{
+    background-color: #fa5b9a;
+}
+
+
+.btnRoundFollow{
+    width:55px;
+    height: 20px;
+    background-color:transparent;
+    color:#fff;
+    border-radius:5px;
     font-size: 10px;
     cursor:pointer;
 }
-.btnRoundPlaylist:hover{ background-color: #fa5b9a; }
+.btnRoundFollow:hover{
+    background-color: #60bad9;
+}
+
 
 
 .btnAddPlaylist {
@@ -132,4 +149,38 @@
 }
 .playlist-form .btn-cancel:hover {
     background-color: #666;
+}
+
+
+/* efecto glow para el nombre de la playlist*/
+
+
+/* Nombre con efecto glow moderno y más grande */
+.glow-namePL {
+    margin-bottom: 12px;
+    margin-top: 65px;
+    font-size: 30px;                    /* Más grande */
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: 1.2px;
+
+    /* Efecto glow azul neón (brilla hermoso en fondos oscuros) */
+    text-shadow:
+            0 0 10px rgba(140, 0, 255, 0.8),
+            0 0 20px rgba(159, 2, 211, 0.8),
+            0 0 40px rgba(110, 0, 154, 0.8),
+            0 0 60px rgba(61, 1, 96, 0.8);
+
+    transition: all 0.4s ease;
+    user-select: none;                  /* Evita que se seleccione al hacer doble clic */
+}
+
+/* Efecto más intenso al pasar el mouse */
+.glow-namePL:hover {
+    text-shadow:
+            0 0 15px rgba(59, 130, 246, 1),
+            0 0 30px rgba(59, 130, 246, 0.9),
+            0 0 50px rgba(59, 130, 246, 0.7),
+            0 0 80px rgba(59, 130, 246, 0.5);
+    transform: translateY(-3px);
 }
