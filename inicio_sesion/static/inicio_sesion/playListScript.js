@@ -4,9 +4,9 @@
 // ============================================================================
 
 let currentViewPlaylist = "allPlayList"; // "allPlayList" | "allSongsPlayList"
-let content             = null;
-let USERNAME            = null;
-let USERID              = null;
+let content = null;
+let USERNAME = null;
+let USERID = null;
 
 // Caché de nombres de playlist (id -> nombre visible)
 const PL_NAME = new Map();
@@ -77,9 +77,7 @@ function emitPlaylistsChanged() {
 function notifyPlaylistSongChange(added, playlistName) {
   const name = (playlistName || "").trim();
 
-  if (
-    typeof window.__melodifyShowPlaylistToast === "function"
-  ) {
+  if (typeof window.__melodifyShowPlaylistToast === "function") {
     window.__melodifyShowPlaylistToast(added, name);
     return;
   }
@@ -167,7 +165,6 @@ function clickBackBtnPlaylist() {
  */
 async function getUSerIdLogin(username) {
   const url = `/playlist/getuserid/?user=${encodeURIComponent(username)}`;
-
   try {
     const response = await fetch(url);
     const data = await response.json();
@@ -382,6 +379,8 @@ function showPlaylists() {
     data.forEach((p) => {
       const pid = String(p.id);
       const uid = String(p.idUser);
+      const pUserCreated = String(p.userCreated);
+      const isFollow = Boolean(p.isfollow);
 
       const pname = (p.name || `Playlist ${pid}`).trim();
       PL_NAME.set(pid, pname);
@@ -396,6 +395,8 @@ function showPlaylists() {
       const nameDiv = document.createElement("div");
       nameDiv.innerHTML = `<strong>${pname}</strong>`;
       nameDiv.style.marginBottom = "8px";
+      nameDiv.classList.add("glow-namePL");
+      nameDiv.style.cursor = "default";
       li.appendChild(nameDiv);
 
       const mediaContainer = document.createElement("div");
@@ -442,6 +443,50 @@ function showPlaylists() {
 
       mediaContainer.appendChild(buttonsDiv);
       li.appendChild(mediaContainer);
+
+      const imgUser = document.createElement("img");
+      imgUser.src = "/static/inicio_sesion/icon_user.png";
+      imgUser.width = 11;
+      imgUser.height = 18;
+
+      const nameCreatorDiv = document.createElement("div");
+      nameCreatorDiv.innerHTML = `<strong>${pUserCreated}</strong>`;
+      nameCreatorDiv.style.marginBottom = "8px";
+
+      const btnFollow = document.createElement("button");
+      btnFollow.className = "btnRoundFollow";
+      btnFollow.style.border = "1px solid #6dd7fa";
+      if (isFollow) {
+        btnFollow.textContent = "UnFollow";
+        btnFollow.style.backgroundColor = "#0290be";
+      } else {
+        btnFollow.textContent = "Follow";
+      }
+
+      btnFollow.addEventListener("click", () => {
+        setFollow(USERID, uid, isFollow);
+        btnFollow.textContent = "UnFollow";
+        btnFollow.style.backgroundColor = "#0290be";
+      });
+
+      const divContenH = document.createElement("div");
+      divContenH.style.display = "flex";
+      divContenH.style.flexDirection = "row";
+      divContenH.style.marginLeft = "10px";
+      divContenH.style.justifyContent = "flex-start";
+      divContenH.style.gap = "8px";
+      divContenH.appendChild(imgUser);
+      divContenH.appendChild(nameCreatorDiv);
+
+      console.log("loginUser:", USERID);
+      console.log("userPl:", uid);
+
+      if (USERID.toString() !== uid.toString()) {
+        divContenH.appendChild(btnFollow);
+      }
+
+      li.appendChild(divContenH);
+
       content.appendChild(li);
 
       editBtn.addEventListener("click", () => {
@@ -455,7 +500,7 @@ function showPlaylists() {
     });
   }
 
-  // Carga de playlists desde backend
+  // Carga de playlists desde el backend
   fetch(
     `/playlist/getAllList/?u=${encodeURIComponent(
       getSessionUsername()
@@ -470,6 +515,7 @@ function showPlaylists() {
       let data = null;
       try {
         data = await r.json();
+        console.log("Response playlists:", data);
       } catch (err) {
         const text = await r.text().catch(() => "");
         console.error(
@@ -506,28 +552,22 @@ function showPlaylists() {
         document.dispatchEvent(
           new CustomEvent("melodify:playlists:loaded", { detail: { lists } })
         );
-        document.addEventListener(
-          "melodify:playlists:loaded",
-          async () => {
-            try {
-              if (
-                (document.getElementById("main-content")?.dataset?.view ||
-                  "") === "home"
-              ) {
-                HOME_SONGS_CACHE = null;
-                const allSongs = await fetchAllSongsForHome();
-                renderHomeArtists(allSongs, false);
-                renderHomeSongs(allSongs, false);
-                aplicarMensajePlaylistsHome();
-              }
-            } catch (e) {
-              console.warn(
-                "HOME: refresh tras playlists:loaded falló",
-                e
-              );
+        document.addEventListener("melodify:playlists:loaded", async () => {
+          try {
+            if (
+              (document.getElementById("main-content")?.dataset?.view || "") ===
+              "home"
+            ) {
+              HOME_SONGS_CACHE = null;
+              const allSongs = await fetchAllSongsForHome();
+              renderHomeArtists(allSongs, false);
+              renderHomeSongs(allSongs, false);
+              aplicarMensajePlaylistsHome();
             }
+          } catch (e) {
+            console.warn("HOME: refresh tras playlists:loaded falló", e);
           }
-        );
+        });
       } catch {}
 
       renderPlaylists(lists, null);
@@ -864,7 +904,7 @@ function showAlertSongSelector(btn, idPlaylist, totalSongs, playlistName) {
   popup.id = "song-selector-popup";
   popup.style.position = "absolute";
   popup.style.left = rect.right + window.scrollX + "px";
-  popup.style.top = rect.top + window.scrollY + "px";
+  popup.style.top = rect.top + window.scrollY + 350 + "px";
   popup.style.transform = "translateY(-50%)";
   popup.style.backgroundColor = "#1a1a1a";
   popup.style.border = "1px solid #333";
@@ -1365,20 +1405,38 @@ async function removeCollaborator(playlistId, userId) {
 }
 
 // ---------------------------------------------------------------------------
-// Puntos de entrada globales
+// Follow de creador de playlist
 // ---------------------------------------------------------------------------
 
+async function setFollow(seguidor_id, seguido_id, isFollowing) {
+  const form = new FormData();
+  form.append("seguidor_id", seguidor_id);
+  form.append("seguido_id", seguido_id);
+  form.append("action", isFollowing ? "unfollow" : "follow");
+
+  const res = await fetch("/playlist/setFollows/", {
+    method: "POST",
+    headers: {},
+    body: form,
+  });
+  const data = await res.json();
+  console.log("response seguir:", data);
+}
+
+/* =========================================================================
+   Puntos de entrada globales para uso desde Home/Buscador/Muro/Reproductor
+   ========================================================================= */
 window.initPlayList = initPlayList;
 window.openAddToPlaylistForSong = openAddToPlaylistForSong;
 window.addSongToPlaylistFromSearch = addSongToPlaylistFromSearch;
 window.addSongToPlaylist = addSongToPlaylist;
 window.verSongs = verSongs;
 window.showPlaylists = showPlaylists;
+window.setFollow = setFollow;
 
 // ---------------------------------------------------------------------------
 // Puentes defensivos en window (por si el bundler carga en distinto orden)
 // ---------------------------------------------------------------------------
-
 (() => {
   const g = window;
   try {

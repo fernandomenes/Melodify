@@ -7,6 +7,7 @@ Modelos principales de Melodify:
 - LikeMedia: likes genéricos sobre distintos tipos de objeto (Song, PlayList, ...).
 - FollowArtist: relación de seguimiento entre usuarios y artistas.
 - PlaylistCollaborator: colaboradores de playlists (editor / viewer).
+- Followers: tabla legada de seguidores (no gestionada por migraciones).
 """
 
 from django.core.validators import FileExtensionValidator, MaxLengthValidator
@@ -289,6 +290,8 @@ class PlaylistCollaborator(models.Model):
         Users,
         on_delete=models.CASCADE,
         related_name="playlist_collaborations",
+        null=True,  
+        blank=True,  
     )
     role = models.CharField(
         max_length=16,
@@ -307,3 +310,27 @@ class PlaylistCollaborator(models.Model):
 
     def __str__(self) -> str:
         return f"Collab {self.user.user} -> playlist {self.playlist_id} ({self.role})"
+
+
+class Followers(models.Model):
+    """
+    Tabla legada de seguidores (no gestionada por migraciones).
+
+    Se mantiene para compatibilidad con la BD existente.
+    """
+    seguidor = models.ForeignKey(
+        "Users",
+        related_name="following",
+        on_delete=models.CASCADE,
+    )
+    seguido = models.ForeignKey(
+        "Users",
+        related_name="followers",
+        on_delete=models.CASCADE,
+    )
+    followed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "Followers"
+        unique_together = ("seguidor", "seguido")
+        managed = False   

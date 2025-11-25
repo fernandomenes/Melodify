@@ -102,10 +102,14 @@ def _user_can_edit_playlist(user, playlist):
         return True
 
     # Colaborador (semántica de editor)
-    return PlaylistCollaborator.objects.filter(
-        playlist_id=playlist.id,
-        collaborator_user=user.user,
-    ).exists()
+    try:
+        return PlaylistCollaborator.objects.filter(
+            playlist_id=playlist.id,
+            user=user,
+        ).exists()
+    except Exception:
+        logger.exception("_user_can_edit_playlist: error consultando colaboradores")
+        return False
 
 
 # ======================================================================
@@ -373,7 +377,7 @@ def playlist_getAll(request):
         try:
             collab_playlist_ids = set(
                 PlaylistCollaborator.objects.filter(
-                    collaborator_user=target_user.user
+                    user=target_user
                 ).values_list("playlist_id", flat=True)
             )
         except Exception:
@@ -389,7 +393,7 @@ def playlist_getAll(request):
         try:
             session_collab_ids = set(
                 PlaylistCollaborator.objects.filter(
-                    collaborator_user=session_user.user
+                    user=session_user
                 ).values_list("playlist_id", flat=True)
             )
         except Exception:
@@ -470,13 +474,31 @@ def playlist_getAll(request):
         logger.exception("playlist_getAll: error obteniendo owners de playlists")
         owners = {}
 
+    # Artistas seguidos por el usuario en sesión (para isfollow)
+    followed_artist_ids = set()
+    if session_user and user_ids:
+        try:
+            followed_artist_ids = set(
+                FollowArtist.objects.filter(
+                    follower=session_user,
+                    artist_id__in=user_ids,
+                ).values_list("artist_id", flat=True)
+            )
+        except Exception:
+            logger.exception("playlist_getAll: error obteniendo FollowArtist")
+            followed_artist_ids = set()
+
     for p in base:
         pid = p["id"]
         owner_id = p.get("idUser")
 
         p["likes_count"] = counts.get(pid, 0)
         p["liked"] = pid in liked_ids
-        p["owner_username"] = owners.get(owner_id, "")
+
+        owner_username = owners.get(owner_id, "")
+        p["owner_username"] = owner_username
+        p["userCreated"] = owner_username  # usado por el frontend
+
         is_mine = bool(target_id is not None and owner_id == target_id)
         p["isMine"] = is_mine
         p["isPublic"] = not p["isprivate"]
@@ -493,6 +515,9 @@ def playlist_getAll(request):
                 can_edit = True
         p["canEdit"] = can_edit
 
+        # ¿el usuario en sesión sigue al creador de esta playlist?
+        p["isfollow"] = bool(session_user and owner_id in followed_artist_ids)
+
     return JsonResponse(base, safe=False)
 
 
@@ -503,6 +528,58 @@ def playlist_getAllList(request):
     (/playlist/getAllList/). Reutiliza playlist_getAll.
     """
     return playlist_getAll(request)
+
+
+def sigue(seguidor_id: int, seguido_id: int) -> bool:
+    """Helper genérico de seguimiento basado en FollowArtist."""
+    try:
+        return FollowArtist.objects.filter(
+            follower_id=seguidor_id,
+            artist_id=seguido_id,
+        ).exists()
+    except Exception:
+        logger.exception("Error en sigue()")
+        return False
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def setFollows(request):
+    """
+    Endpoint usado por el frontend para seguir/dejar de seguir
+    al creador de una playlist.
+    """
+    seguidor_id = request.POST.get("seguidor_id")
+    seguido_id = request.POST.get("seguido_id")
+    action = (request.POST.get("action") or "").strip()  # 'follow' o 'unfollow'
+
+    if not seguidor_id or not seguido_id:
+        return JsonResponse({"error": "Faltan IDs"}, status=400)
+
+    try:
+        seguidor_id_int = int(seguidor_id)
+        seguido_id_int = int(seguido_id)
+    except ValueError:
+        return JsonResponse({"error": "IDs inválidos"}, status=400)
+
+    try:
+        follower = Users.objects.get(id=seguidor_id_int)
+        artist = Users.objects.get(id=seguido_id_int)
+    except Users.DoesNotExist:
+        return JsonResponse({"error": "Usuario no encontrado"}, status=404)
+
+    if action == "unfollow":
+        FollowArtist.objects.filter(
+            follower=follower,
+            artist=artist,
+        ).delete()
+        return JsonResponse({"followed": False})
+
+    FollowArtist.objects.get_or_create(
+        follower=follower,
+        artist=artist,
+    )
+    return JsonResponse({"followed": True})
 
 
 @csrf_exempt
@@ -671,7 +748,6 @@ def delete_playlist(request, playlist_id):
         )
 
     except PlayList.DoesNotExist:
-        # En teoría no se alcanza con get_object_or_404, pero se deja por seguridad
         return JsonResponse({"error": "Playlist no encontrada"}, status=404)
     except Exception:
         logger.exception("Error en delete_playlist")
@@ -1253,7 +1329,7 @@ def playlist_collaborators_list(request, playlist_id):
     """
     Devuelve la lista de colaboradores de una playlist (solo owner o admin).
 
-    Usa PlaylistCollaborator (playlist_id + collaborator_user).
+    Usa PlaylistCollaborator (playlist_id + user FK).
     """
     session_user = _get_session_user_obj(request)
     pl = get_object_or_404(PlayList, id=playlist_id)
@@ -1270,20 +1346,19 @@ def playlist_collaborators_list(request, playlist_id):
     if not (is_owner or is_admin):
         return JsonResponse({"error": "forbidden"}, status=403)
 
-    cols = PlaylistCollaborator.objects.filter(playlist_id=playlist_id)
-
-    usernames = [c.collaborator_user for c in cols]
-    users_qs = Users.objects.filter(user__in=usernames)
-    by_username = {u.user: u for u in users_qs}
+    cols = PlaylistCollaborator.objects.filter(
+        playlist_id=playlist_id
+    ).select_related("user")
 
     result = []
     for c in cols:
-        u = by_username.get(c.collaborator_user)
+        u = c.user
         result.append(
             {
                 "user_id": u.id if u else None,
-                "username": c.collaborator_user,
-                "added_at": c.added_at.isoformat(),
+                "username": u.user if u else "",
+                "role": c.role,
+                "added_at": c.created_at.isoformat(),
             }
         )
 
@@ -1295,7 +1370,7 @@ def playlist_collaborator_add(request, playlist_id):
     """
     Añade un colaborador (username) a una playlist (solo owner o admin).
 
-    Guarda playlist_id + collaborator_user (username).
+    Guarda playlist_id + user (FK) + role.
     """
     session_user = _get_session_user_obj(request)
     if not session_user:
@@ -1320,6 +1395,10 @@ def playlist_collaborator_add(request, playlist_id):
     if not username:
         return JsonResponse({"error": "username_required"}, status=400)
 
+    role = (data.get("role") or "").strip() or "viewer"
+    if role not in ("viewer", "editor"):
+        role = "viewer"
+
     try:
         target = Users.objects.get(user=username)
     except Users.DoesNotExist:
@@ -1328,13 +1407,19 @@ def playlist_collaborator_add(request, playlist_id):
     try:
         col, created = PlaylistCollaborator.objects.get_or_create(
             playlist_id=playlist_id,
-            collaborator_user=target.user,
+            user=target,
+            defaults={"role": role},
         )
+        if not created and col.role != role:
+            col.role = role
+            col.save(update_fields=["role"])
+
         return JsonResponse(
             {
                 "added": True,
                 "user_id": target.id,
                 "username": target.user,
+                "role": col.role,
                 "created": created,
             }
         )
@@ -1347,7 +1432,7 @@ def playlist_collaborator_remove(request, playlist_id, user_id):
     """
     Elimina la colaboración de un usuario en una playlist (solo owner o admin).
 
-    user_id es el ID en Users; internamente se borra por username (collaborator_user).
+    user_id es el ID en Users.
     """
     session_user = _get_session_user_obj(request)
     if not session_user:
@@ -1370,7 +1455,7 @@ def playlist_collaborator_remove(request, playlist_id, user_id):
 
     deleted, _ = PlaylistCollaborator.objects.filter(
         playlist_id=playlist_id,
-        collaborator_user=target.user,
+        user=target,
     ).delete()
 
     if deleted:
