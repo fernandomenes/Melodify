@@ -21,6 +21,7 @@
 
   <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
+
   <style>
     #like-toast{
       position:fixed;
@@ -41,6 +42,124 @@
       opacity:1;
       transform:translateX(-50%) translateY(0);
     }
+
+    .page-muro .song-like-btn{
+      background:rgba(255,255,255,0.03);
+      border:1px solid rgba(255,255,255,0.18);
+      color:#f5f5f5;
+      border-radius:999px;
+      width:22px;
+      height:22px;
+      padding:0;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      font-size:14px;
+      line-height:1;
+      cursor:pointer;
+      transition:
+        background-color .16s ease,
+        color .16s ease,
+        border-color .16s ease,
+        box-shadow .16s ease,
+        transform .12s ease;
+    }
+
+    .page-muro .song-like-btn.is-liked,
+    .page-muro .song-like-btn.liked,
+    .page-muro .song-like-btn.active{
+      background:#ff0066;
+      border-color:#ff0066;
+      color:#050505;
+      box-shadow:0 0 10px rgba(255,79,163,0.7);
+      transform:translateY(-1px) scale(1.03);
+    }
+
+    /* Panel de estadísticas del muro */
+    .page-muro .muro-stats-panel{
+      margin:4px 0 14px;
+      padding:10px 14px;
+      border-radius:12px;
+      background:radial-gradient(circle at top left,#ff4fa3 0,#2b2336 40%,#141414 100%);
+      border:1px solid rgba(255,255,255,0.12);
+      display:flex;
+      flex-wrap:wrap;
+      gap:16px;
+      align-items:flex-start;
+    }
+    .page-muro .muro-stat{
+      min-width:130px;
+    }
+    .page-muro .muro-stat-label{
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      opacity:.8;
+      margin-bottom:2px;
+    }
+    .page-muro .muro-stat-value{
+      font-size:18px;
+      font-weight:600;
+    }
+    .page-muro .muro-stat-value span{
+      font-size:13px;
+      font-weight:400;
+      opacity:.8;
+      margin-left:4px;
+    }
+
+    /* Playlists del artista en el muro */
+    .page-muro #artist-playlists-section{
+      margin:0 0 18px;
+    }
+    .page-muro .artist-playlists-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+      gap:10px;
+    }
+      .page-muro .artist-pl-card{
+      background:#1b1b1b;
+      border:1px solid #2b2b2b;
+      border-radius:10px;
+      padding:10px 12px;
+      cursor:pointer;
+      transition:
+        background-color .18s ease,
+        box-shadow .18s ease,
+        transform .12s ease;
+    }
+    .page-muro .artist-pl-card.is-active{
+      background:#23172e;
+      border-color:var(--accent,#ff4fa3);
+      box-shadow:
+        0 0 0 1px rgba(255,79,163,0.6),
+        0 0 16px rgba(255,79,163,0.45);
+      transform:translateY(-1px);
+    }
+
+    .page-muro .artist-pl-card--likes{
+  border-color:#f5c542;             
+  box-shadow:0 0 0 1px rgba(245,197,66,0.45);
+}
+
+    .page-muro .artist-pl-name{
+      font-weight:600;
+      margin-bottom:4px;
+    }
+    .page-muro .artist-pl-meta{
+      font-size:12px;
+      opacity:.8;
+    }
+
+    @media (max-width: 700px){
+      .page-muro .muro-stats-panel{
+        padding:10px 10px;
+        gap:12px;
+      }
+      .page-muro .muro-stat{
+        min-width:110px;
+      }
+    }
   </style>
 </head>
 <body class="page-muro">
@@ -55,6 +174,11 @@
     </nav>
   </div>
 </header>
+<section id="muro-followers-list"
+         class="card"
+         style="display:none; margin:0 0 12px;"
+         aria-label="Lista de seguidores">
+</section>
 
 <aside id="menuLateral">
   <div class="logo" id="toggle-menu">
@@ -84,7 +208,13 @@
       data-username="{{ session_user }}"
       data-avatar="{{ session_avatar_url }}"
       data-description="{{ session_description|default:'artista default' }}"
-      data-created-at="{{ session_created_at|default:'—' }}">
+      data-created-at="{{ session_created_at|default:'—' }}"
+      data-initial-view="{{ initial_view|default:'mi-muro' }}"
+      data-artist-username="{{ artist.user }}"
+      data-url-follow-artist="{% url 'muro_toggle_follow' artist.user %}"
+      data-artist-following="{% if is_following_artist %}1{% else %}0{% endif %}"
+      data-url-followers-fragment="{% url 'muro_followers_fragment' artist.user %}">
+
   <button id="menu-toggle-btn" type="button">☰</button>
   <a id="back-btn" class="back" href="{% url 'home' %}?no_spa=1" title="Volver a inicio" aria-label="Regresar">←</a>
 
@@ -96,7 +226,20 @@
         <div class="avatar" aria-hidden="true"></div>
       {% endif %}
       <div style="flex:1;">
-        <h1 style="margin:0">{{ artist.user }}</h1>
+        <h1 style="margin:0; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <span>{{ artist.user }}</span>
+
+          {% if session_user and not is_owner %}
+            <button
+              type="button"
+              id="btn-follow-artist"
+              class="btn"
+              data-following="{% if is_following_artist %}1{% else %}0{% endif %}">
+              {% if is_following_artist %}Siguiendo{% else %}Seguir{% endif %}
+            </button>
+          {% endif %}
+        </h1>
+
         {% if is_owner %}
           <p class="muted" style="margin:4px 0 0">Este es tu muro público como artista en Melodify.</p>
         {% else %}
@@ -183,8 +326,80 @@
       </div>
     {% endif %}
 
+{# ======================= Playlists del artista ======================== #}
+{% if artist_likes_playlist or artist_public_playlists %}
+  <section id="artist-playlists-section" aria-label="Playlists del artista">
+    <h3 style="margin:0 0 10px">Playlists del artista</h3>
+    <div class="artist-playlists-grid">
+      {% if artist_likes_playlist %}
+        <article class="artist-pl-card artist-pl-card--likes"
+                 data-pl-id="{{ artist_likes_playlist.id }}">
+          <div class="artist-pl-name">Music that i love</div>
+          <div class="artist-pl-meta">
+            {{ artist_likes_playlist.songs_count|default:0 }}
+            canción{{ artist_likes_playlist.songs_count|default:0|pluralize:"es" }}
+          </div>
+        </article>
+      {% endif %}
+
+      {% for pl in artist_public_playlists %}
+        <article class="artist-pl-card"
+                 data-pl-id="{{ pl.id }}">
+          <div class="artist-pl-name">{{ pl.name }}</div>
+          <div class="artist-pl-meta">
+            {{ pl.songs_count|default:0 }} canción{{ pl.songs_count|default:0|pluralize:"es" }}
+            &middot;
+            {{ pl.likes_count|default:0 }} like{{ pl.likes_count|default:0|pluralize:"s" }}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+
+<section id="artist-playlist-songs-wrapper"
+         aria-label="Playlist seleccionada"
+         style="display:none"></section>
+
+
     <section aria-label="Canciones">
       <h3 style="margin:0 0 12px">Canciones</h3>
+
+      {% if songs %}
+        <div class="muro-stats-panel" aria-label="Estadísticas del muro del artista">
+          <div class="muro-stat">
+            <div class="muro-stat-label">Me gusta totales</div>
+            <div class="muro-stat-value">
+              {{ muro_total_likes|default:0 }}
+              <span>en este muro</span>
+            </div>
+          </div>
+
+          {% if session_user %}
+            <div class="muro-stat">
+              <div class="muro-stat-label">Tus Me gusta aquí</div>
+              <div class="muro-stat-value">
+                {{ muro_user_liked_songs|default:0 }}
+                <span>canciones</span>
+              </div>
+            </div>
+          {% endif %}
+
+       <div class="muro-stat">
+  <div class="muro-stat-label">Seguidores</div>
+  <div class="muro-stat-value" id="muro-followers-count">
+    {{ muro_followers_count|default:0 }}
+  </div>
+  <button type="button"
+          id="btn-show-followers"
+          class="btn btn-small"
+          style="margin-top:4px;">
+    Ver lista
+  </button>
+</div>
+
+        </div>
+      {% endif %}
 
       {% if is_owner %}
         <div class="toolbar" id="muro-bulk-toolbar">
@@ -235,12 +450,12 @@
                     {% if session_user %}
                       <button
                         type="button"
-                        class="song-like-btn"
+                        class="song-like-btn{% if s.is_liked %} is-liked active liked{% endif %}"
                         data-song-id="{{ s.id }}"
                         data-liked="{% if s.is_liked %}1{% else %}0{% endif %}"
                         onclick="toggleSongLikeFromMuro(event, '{{ s.id }}', this)"
-                        aria-label="Añadir o quitar de tus Me gusta">
-                        ♡
+                        aria-label="{% if s.is_liked %}Quitar de tus Me gusta{% else %}Añadir a tus Me gusta{% endif %}">
+                        {% if s.is_liked %}♥{% else %}♡{% endif %}
                       </button>
 
                       <button type="button"
@@ -314,6 +529,20 @@
 <script>window.MELODIFY_LOGOUT_URL = "{{ logout_url|default:'/logout/' }}";</script>
 
 <div id="like-toast" aria-live="polite"></div>
+
+<script>
+  window.__ARTIST_PUBLIC_PLAYLISTS__ = {{ artist_public_playlists_json|default:"[]"|safe }};
+  window.__ARTIST_LIKES_PLAYLIST__ = {{ artist_likes_playlist_json|default:"{}"|safe }};
+</script>
+
+  <script>
+    window.__ARTIST_PUBLIC_PLAYLISTS__ = JSON.parse(
+      '{{ artist_public_playlists_json|escapejs }}'
+    );
+    window.__ARTIST_LIKES_PLAYLIST__ = JSON.parse(
+      '{{ artist_likes_playlist_json|escapejs }}'
+    );
+  </script>
 
 <script defer src="{% static 'muro/muro.js' %}?v={% now 'U' %}"></script>
 <script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>

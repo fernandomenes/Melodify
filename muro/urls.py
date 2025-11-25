@@ -44,5 +44,10 @@ urlpatterns = [
         va.playlists_fragment,
         name="muro_playlists_fragment",
     ),
-
+path("artista/<str:username>/seguir/", va.toggle_follow_artist, name="muro_toggle_follow"),
+    path(
+        "muro/<str:username>/followers/fragment/",
+        va.artist_followers_fragment,
+        name="muro_followers_fragment",
+    ),
 ]

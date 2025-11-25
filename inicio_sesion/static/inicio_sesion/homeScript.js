@@ -1,23 +1,33 @@
 // ============================================================================
 // Melodify – Home SPA
-// Menú lateral, navegación de vistas, integración con MDFCore y toasts de likes.
+// Menú lateral, navegación principal e integración con MDFCore/toasts.
 // ============================================================================
 
 const __SPA_DISABLED__ = !!window.__DISABLE_HOME_SCRIPT__;
 
+// ---------------------------------------------------------------------------
+// Modo sin SPA: sólo quitar la clase de colapso de menú
+// ---------------------------------------------------------------------------
 if (__SPA_DISABLED__) {
   document.addEventListener("DOMContentLoaded", () => {
     const mc = document.getElementById("main-content");
     if (mc) mc.classList.remove("menuLateral-collapsed");
   });
 } else {
+  // -------------------------------------------------------------------------
+  // Modo SPA completo
+  // -------------------------------------------------------------------------
   document.addEventListener("DOMContentLoaded", async () => {
-    // Carga dinámica del módulo del reproductor
+    // -----------------------------------------------------------------------
+    // Carga dinámica del reproductor (reproductor.js)
+    // -----------------------------------------------------------------------
     let RP;
     try {
-      const src = window.REPRODUCTOR_SRC || "/static/reproductor/reproductor.js?v=1";
+      const src =
+        window.REPRODUCTOR_SRC || "/static/reproductor/reproductor.js?v=1";
       RP = await import(src);
     } catch {
+      // Fallback mínimo si el módulo falla o no carga
       RP = {
         stopReproductorIfLoaded: async () => {},
         renderMenuReproductor: async () => {},
@@ -25,37 +35,76 @@ if (__SPA_DISABLED__) {
       };
     }
 
+    // Mini helper de querySelector
     const $ = (s, r = document) => r.querySelector(s);
 
+    // -----------------------------------------------------------------------
     // CSRF helpers
+    // -----------------------------------------------------------------------
     function getCookie(name) {
-      const m = document.cookie.match(new RegExp("(^|;)\\s*" + name + "=([^;]*)"));
+      const m = document.cookie.match(
+        new RegExp("(^|;)\\s*" + name + "=([^;]*)")
+      );
       return m ? decodeURIComponent(m[2]) : "";
     }
+
     function getCSRF() {
       return (
-        document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") ||
-        getCookie("csrftoken")
+        document
+          .querySelector('meta[name="csrf-token"]')
+          ?.getAttribute("content") || getCookie("csrftoken")
       );
     }
 
+    // -----------------------------------------------------------------------
+    // Utilidades de normalización (mayúsculas, acentos, etc.)
+    // -----------------------------------------------------------------------
     const nfdLower = (s) =>
-      String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      String(s || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+
+    // Expuesto global para otros módulos
     window.nfdLower = nfdLower;
 
+    // -----------------------------------------------------------------------
+    // Refresco de playlists personales para el Home
+    // -----------------------------------------------------------------------
+    /**
+     * Vuelve a pedir las playlists personales del usuario para:
+     *  - tener window._playlists actualizado
+     *  - marcar si el usuario tiene playlists personales (para hints del Home)
+     */
     async function refreshHomePlaylists() {
       try {
-        const r = await fetch("/playlist/getAllList/", {
+        // Usuario en sesión
+        const main = document.getElementById("main-content");
+        const uname =
+          (main && main.dataset && main.dataset.username) ||
+          (document.querySelector('meta[name="username"]') || {}).content ||
+          "";
+
+        // URL filtrada por usuario, con cache-buster
+        const url = uname
+          ? `/playlist/getAllList/?u=${encodeURIComponent(uname)}&t=${Date.now()}`
+          : `/playlist/getAllList/?t=${Date.now()}`;
+
+        const r = await fetch(url, {
           credentials: "same-origin",
           cache: "no-store",
           headers: { "X-Requested-With": "fetch" },
         });
+
         const arr = r.ok ? await r.json() : [];
         const real = Array.isArray(arr)
           ? arr.filter((pl) => nfdLower(pl?.name) !== "mi musica")
           : [];
+
+        // Playlists personales detectadas
         window._playlists = arr;
         window.__HOME_HAS_PERSONAL_PLAYLISTS__ = real.length > 0;
+
         if (typeof aplicarMensajePlaylistsHome === "function") {
           aplicarMensajePlaylistsHome();
         }
@@ -64,7 +113,9 @@ if (__SPA_DISABLED__) {
       }
     }
 
-    // Referencias DOM
+    // -----------------------------------------------------------------------
+    // Referencias DOM base
+    // -----------------------------------------------------------------------
     const menuLateral = $("#menuLateral");
     const mainContent = $("#main-content");
     const header = $("#header");
@@ -73,7 +124,13 @@ if (__SPA_DISABLED__) {
     const toggleLogo = $("#toggle-menu");
     const botonBack = $("#back-btn");
 
-    // Toast para likes
+    // -----------------------------------------------------------------------
+    // Toast global de Home (like / acciones varias)
+    // -----------------------------------------------------------------------
+    /**
+     * Toast global asociado a #like-toast.
+     * Se usa para mensajes cortos en Home, likes, playlists, etc.
+     */
     window.__melodifyShowLikeToast = function (message) {
       let toast = document.getElementById("like-toast");
       if (!toast) {
@@ -91,70 +148,124 @@ if (__SPA_DISABLED__) {
       );
     };
 
-    // Gestión de likes en Home
-    window.__melodifyToggleLikeFromHome = async function (ev, songId) {
-      try {
-        ev?.preventDefault?.();
-        ev?.stopPropagation?.();
-      } catch {}
-      const btn = ev?.currentTarget || ev?.target;
-      const id = songId || btn?.dataset?.songId;
-      if (!id) return;
+    // -----------------------------------------------------------------------
+    // Helpers de likes en Home (capa visual + caché)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Aplica el estado visual de "me gusta" a un botón de Home.
+     */
+    function applyHomeLikeVisual(btn, liked) {
+      if (!btn) return;
 
       if (!btn.dataset.iconOriginal) {
         btn.dataset.iconOriginal = (btn.textContent || "").trim() || "♡";
       }
 
-      const prev = btn.dataset.liked === "1";
-      const now = !prev;
-      btn.dataset.liked = now ? "1" : "0";
+      btn.dataset.liked = liked ? "1" : "0";
       btn.textContent = btn.dataset.iconOriginal;
-      btn.classList.remove("is-liked", "liked", "active");
 
-      window.__melodifyShowLikeToast?.(
-        now ? "Agregado a tus me gusta" : "Quitado de tus me gusta"
+      btn.classList.toggle("liked", liked);
+      btn.classList.toggle("is-liked", liked);
+      btn.classList.toggle("active", liked);
+
+      btn.setAttribute(
+        "aria-label",
+        liked ? "Quitar de tus me gusta" : "Agregar a tus me gusta"
+      );
+    }
+
+    /**
+     * Actualiza el modelo global window._likes desde Home cuando cambia un like.
+     * Sólo almacena el id de la canción para mantenerlo sencillo.
+     */
+    function updateLikesCacheFromHome(songId, liked) {
+      const idNum = Number(songId);
+      if (!idNum) return;
+
+      if (!Array.isArray(window._likes)) {
+        window._likes = [];
+      }
+
+      const idx = window._likes.findIndex(
+        (s) => s && String(s.id) === String(idNum)
       );
 
-      // Preferir MDFCore si está disponible
-      let didServer = false;
-      try {
-        if (
-          window.MDFCore &&
-          typeof window.MDFCore.toggleLikeFromReproductor === "function"
-        ) {
-          await window.MDFCore.toggleLikeFromReproductor(ev, id);
-          didServer = true;
+      if (liked) {
+        if (idx === -1) {
+          // Se guarda solo el id
+          window._likes.push({ id: idNum });
         }
-      } catch (e) {
-        console.warn("HOME: MDFCore.toggleLikeFromReproductor falló:", e);
+      } else {
+        if (idx !== -1) {
+          window._likes.splice(idx, 1);
+        }
       }
+    }
 
-      // Fallback al backend si no se pudo usar MDFCore
-      if (!didServer) {
-        try {
-          const csrf = getCSRF();
-          const res = await fetch(`/api/like/song/${encodeURIComponent(id)}/`, {
-            method: "POST",
-            credentials: "same-origin",
-            headers: {
-              "X-Requested-With": "fetch",
-              "Content-Type": "application/json",
-              ...(csrf ? { "X-CSRFToken": csrf } : {}),
-            },
-            body: "{}",
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        } catch (e) {
-          console.error("HOME: fallback POST like falló:", e);
-          btn.dataset.liked = prev ? "1" : "0";
-          window.__melodifyShowLikeToast?.("No se pudo actualizar el like.");
-        }
+    // -----------------------------------------------------------------------
+    // Sincronización global de likes (evento melodify:likes:changed)
+    // -----------------------------------------------------------------------
+
+    // Primer listener: sólo sincroniza la caché global de likes
+    document.addEventListener("melodify:likes:changed", (ev) => {
+      try {
+        const detail = ev?.detail || {};
+        if (!detail.songId) return;
+        updateLikesCacheFromHome(detail.songId, !!detail.liked);
+      } catch (e) {
+        console.warn("HOME: error al sincronizar likes:", e);
       }
+    });
+
+    // Sincronizar likes globales -> caché + botones en Home
+    document.addEventListener("melodify:likes:changed", (ev) => {
+      try {
+        const detail = ev?.detail || {};
+        if (!detail.songId) return;
+
+        const songId = String(detail.songId);
+        const liked = !!detail.liked;
+
+        // Actualizar caché global de likes
+        updateLikesCacheFromHome(songId, liked);
+
+        // Actualizar cualquier botón de Home que corresponda a esa canción
+        const btns = document.querySelectorAll(
+          `.song-like-btn[data-song-id="${CSS.escape(songId)}"]`
+        );
+        btns.forEach((btn) => {
+          applyHomeLikeVisual(btn, liked);
+        });
+      } catch (e) {
+        console.warn("HOME: error al sincronizar likes:", e);
+      }
+    });
+
+    // -----------------------------------------------------------------------
+    // Toggle de likes en Home (actualmente deshabilitado)
+    // -----------------------------------------------------------------------
+    /**
+     * Stub: si algo intenta hacer toggle de likes directamente en Home,
+     * se ignora y se muestra un mensaje. Se deja la firma para evitar errores.
+     */
+    window.__melodifyToggleLikeFromHome = async function (ev, _songId) {
+      try {
+        ev?.preventDefault?.();
+        ev?.stopPropagation?.();
+      } catch {}
+      console.info("Likes deshabilitados en Home (se ignora el click).");
+      window.__melodifyShowLikeToast?.(
+        "Los likes están deshabilitados por ahora."
+      );
     };
 
+    // Si no hay contenedores principales, no tiene sentido continuar
     if (!mainContent || !contentDiv) return;
 
-    // Datos del contexto
+    // -----------------------------------------------------------------------
+    // Datos del contexto (rol, usuario, URLs básicas)
+    // -----------------------------------------------------------------------
     const searchForm = $("#search-form");
     const searchInput = $("#search-input");
     const searchPanel = $("#search-panel");
@@ -179,8 +290,95 @@ if (__SPA_DISABLED__) {
     const URL_ALL_SONGS_JSON =
       mainContent.dataset.urlAllSongsJson || "/api/all-songs/";
 
+    // -----------------------------------------------------------------------
+    // Likes iniciales para Home (sets por id y por URL de audio)
+    // -----------------------------------------------------------------------
+    let HOME_LIKED_IDS = new Set();
+    let HOME_LIKED_AUDIO = new Set();
+
+    /**
+     * VERSIÓN 1 de ensureInitialLikesForHome:
+     * Intenta rellenar HOME_LIKED_IDS / HOME_LIKED_AUDIO desde:
+     *  - window._likes
+     *  - endpoint "Mi música"
+     *
+     * NOTA: Más abajo hay otra definición de ensureInitialLikesForHome
+     * (mantengo ambas para no cambiar el comportamiento actual).
+     */
+    async function ensureInitialLikesForHome() {
+      // Si ya tenemos datos, no hacemos nada
+      if (HOME_LIKED_IDS.size || HOME_LIKED_AUDIO.size) {
+        return;
+      }
+
+      // Si algún otro módulo ya llenó window._likes, aprovéchalo
+      const likesGlobal = Array.isArray(window._likes) ? window._likes : [];
+      if (likesGlobal.length) {
+        likesGlobal.forEach((s) => {
+          if (!s) return;
+          if (typeof s === "number" || typeof s === "string") {
+            HOME_LIKED_IDS.add(String(s));
+            return;
+          }
+          const cand =
+            s.id ??
+            s.song_id ??
+            s.songId ??
+            s.cancion_id ??
+            (s.song && (s.song.id ?? s.song.pk)) ??
+            (s.cancion && (s.cancion.id ?? s.cancion.pk));
+          if (cand != null) HOME_LIKED_IDS.add(String(cand));
+        });
+        return;
+      }
+
+      // Fallback: pedir al backend "Mi música"
+      if (!URL_MI_MUSICA_JSON) return;
+
+      try {
+        const res = await fetch(URL_MI_MUSICA_JSON, {
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: { "X-Requested-With": "fetch" },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        const raw =
+          (Array.isArray(data?.songs) && data.songs) ||
+          (Array.isArray(data) ? data : []);
+
+        raw.forEach((r) => {
+          const norm = normalizeSongHome(r);
+          if (!norm) return;
+          if (norm.id != null) HOME_LIKED_IDS.add(String(norm.id));
+          if (norm.audioUrl) HOME_LIKED_AUDIO.add(norm.audioUrl);
+        });
+
+        // También rellenamos window._likes para otros módulos
+        if (!Array.isArray(window._likes) || !window._likes.length) {
+          window._likes = Array.from(HOME_LIKED_IDS).map((id) => ({
+            id: Number(id),
+          }));
+        }
+
+        console.debug(
+          "HOME: likes iniciales cargados",
+          HOME_LIKED_IDS.size,
+          "por id; audio:",
+          HOME_LIKED_AUDIO.size
+        );
+      } catch (e) {
+        console.warn("HOME: no se pudieron obtener likes iniciales", e);
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // URLs base para muros (plantillas de rutas)
+    // -----------------------------------------------------------------------
     const URL_MURO_PUBLICO_TEMPLATE =
-      mainContent.dataset.urlMuroPublicoTemplate || "/artista/ARTISTA_PLACEHOLDER/";
+      mainContent.dataset.urlMuroPublicoTemplate ||
+      "/artista/ARTISTA_PLACEHOLDER/";
 
     const URL_MURO_BASE = mainContent.dataset.urlMuroBase || "/muro/";
 
@@ -191,30 +389,105 @@ if (__SPA_DISABLED__) {
       hashView ||
       mainContent.dataset.initialView ||
       "home"
-    )
-      .trim();
+    ).trim();
 
+    // Deducir rol de administrador si no viene explícito
     if (!ROLE) {
-      const h1 = document.querySelector(".page h1")?.textContent?.toLowerCase() || "";
-      if (h1.includes("gestion") || h1.includes("gestión")) ROLE = "administrador";
+      const h1 =
+        document.querySelector(".page h1")?.textContent?.toLowerCase() || "";
+      if (h1.includes("gestion") || h1.includes("gestión"))
+        ROLE = "administrador";
     }
 
     let currentView = null;
     let historyStack = [];
 
-    // Playlists inyectadas (JSON embebido en la página)
+    // -----------------------------------------------------------------------
+    // Playlists embebidas como JSON (si existen)
+    // -----------------------------------------------------------------------
     let playlists = [];
     try {
       const jsonEl = $("#playlists-data-json");
       playlists = JSON.parse(jsonEl?.textContent || "[]");
     } catch {}
+
     const HOME_HAS_PERSONAL_PLAYLISTS = Array.isArray(playlists)
       ? playlists.some((pl) => nfdLower(pl?.name) !== "mi musica")
       : false;
+
     window._playlists = playlists;
     window.__HOME_HAS_PERSONAL_PLAYLISTS__ = HOME_HAS_PERSONAL_PLAYLISTS;
 
-    // Utilidades generales
+    // -----------------------------------------------------------------------
+    // Likes iniciales (VERSIÓN 2 de ensureInitialLikesForHome)
+    // -----------------------------------------------------------------------
+    /**
+     * VERSIÓN 2 de ensureInitialLikesForHome:
+     * Esta redefinición es más simple: rellena window._likes directamente.
+     *
+     * IMPORTANTE:
+     *   - Sobrescribe la versión anterior por ser otra function con el mismo
+     *     nombre en el mismo ámbito.
+     *   - Se deja tal cual para no cambiar la semántica actual del archivo.
+     */
+    async function ensureInitialLikesForHome() {
+      // Si ya hay likes en memoria, no hacemos nada
+      if (Array.isArray(window._likes) && window._likes.length > 0) return;
+
+      // 1) Intentar leer de un JSON embebido (si lo llegas a tener)
+      try {
+        const el = document.getElementById("likes-data-json");
+        if (el && el.textContent.trim()) {
+          const parsed = JSON.parse(el.textContent);
+          const arr =
+            (Array.isArray(parsed?.likes) && parsed.likes) ||
+            (Array.isArray(parsed) ? parsed : []);
+          const likes = arr
+            .filter((x) => x && x.id != null)
+            .map((x) => ({ id: Number(x.id) }));
+          if (likes.length) {
+            window._likes = likes;
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("HOME: error leyendo likes-data-json", e);
+      }
+
+      // 2) Fallback: pedir al backend la "Mi música" del usuario
+      if (!URL_MI_MUSICA_JSON) return;
+
+      try {
+        const res = await fetch(URL_MI_MUSICA_JSON, {
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: { "X-Requested-With": "fetch" },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+        const raw =
+          (Array.isArray(data?.songs) && data.songs) ||
+          (Array.isArray(data) ? data : []);
+
+        const likes = [];
+        for (const s of raw) {
+          if (s && s.id != null) {
+            likes.push({ id: Number(s.id) });
+          }
+        }
+
+        if (likes.length) {
+          window._likes = likes;
+        }
+      } catch (e) {
+        console.warn("HOME: no se pudieron obtener likes iniciales", e);
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Utilidades generales (escape HTML, fecha, etc.)
+    // -----------------------------------------------------------------------
     function escapeHtml(s) {
       return String(s ?? "")
         .replace(/&/g, "&amp;")
@@ -222,14 +495,13 @@ if (__SPA_DISABLED__) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
     }
-function soloFecha(raw) {
-  const s = String(raw || "").trim();
-  if (!s) return "—";
 
-  // si viene "2025-11-03 22:12" -> "2025-11-03"
-  const [fecha] = s.split(" ");
-  return fecha || "—";
-}
+    function soloFecha(raw) {
+      const s = String(raw || "").trim();
+      if (!s) return "—";
+      const [fecha] = s.split(" ");
+      return fecha || "—";
+    }
 
     function showContent(html) {
       contentDiv.innerHTML = html;
@@ -243,6 +515,9 @@ function soloFecha(raw) {
     const pickFirst = (...c) =>
       c.find((v) => typeof v === "string" && v.trim().length) || "";
 
+    // -----------------------------------------------------------------------
+    // Normalización de objetos Song para Home (audioUrl, cover, etc.)
+    // -----------------------------------------------------------------------
     function normalizeSongHome(song) {
       if (!song) return null;
 
@@ -262,10 +537,10 @@ function soloFecha(raw) {
         song.source,
         song.stream_url,
         song.streamUrl,
-        song?.audio?.url,
-        song?.file?.url,
-        song?.media?.audio,
-        song?.media?.url
+        song && song.audio && song.audio.url,
+        song && song.file && song.file.url,
+        song && song.media && song.media.audio,
+        song && song.media && song.media.url
       );
       if (!audio) return null;
 
@@ -276,9 +551,9 @@ function soloFecha(raw) {
           song.cover,
           song.thumbnail,
           song.thumb,
-          song?.cover?.url,
-          song?.image?.url,
-          song?.media?.cover
+          song && song.cover && song.cover.url,
+          song && song.image && song.image.url,
+          song && song.media && song.media.cover
         ) || "/static/inicio_sesion/img_song.png";
 
       const title = pickFirst(song.title, song.name) || "—";
@@ -291,6 +566,36 @@ function soloFecha(raw) {
         ) || "—";
       const genre = pickFirst(song.genre, song.genero, song.gen) || "";
 
+      const likeUrl = pickFirst(
+        song.likeUrl,
+        song.like_url,
+        song.api_like_url,
+        song.toggle_like_url,
+        song.url_like,
+        song.urls && song.urls.like,
+        song.links && song.links.like
+      );
+
+      // Detectar si el backend ya manda un flag de "liked"
+      let liked;
+      try {
+        const likeFields = [
+          "liked",
+          "is_liked",
+          "isLiked",
+          "me_gusta",
+          "en_mis_me_gusta",
+        ];
+        for (const field of likeFields) {
+          if (Object.prototype.hasOwnProperty.call(song, field)) {
+            liked = !!song[field]; // true / false
+            break;
+          }
+        }
+      } catch {
+        liked = undefined;
+      }
+
       return {
         id: song.id ?? null,
         title,
@@ -298,9 +603,14 @@ function soloFecha(raw) {
         coverUrl: cover,
         audioUrl: audio,
         genre,
+        likeUrl: likeUrl || "",
+        liked, // puede ser true, false o undefined
       };
     }
 
+    // -----------------------------------------------------------------------
+    // Dedupe de listas (por id/audioUrl)
+    // -----------------------------------------------------------------------
     function dedupByKey(arr, keyFn) {
       const seen = new Set();
       const out = [];
@@ -313,6 +623,9 @@ function soloFecha(raw) {
       return out;
     }
 
+    // -----------------------------------------------------------------------
+    // Colecta canciones desde playlists en memoria
+    // -----------------------------------------------------------------------
     function collectAllSongsForHome() {
       const basePlaylists =
         Array.isArray(window._playlists) && window._playlists.length
@@ -331,50 +644,80 @@ function soloFecha(raw) {
       );
     }
 
+    // -----------------------------------------------------------------------
+    // Comprobación de si una canción está en Me Gusta (Home)
+    // -----------------------------------------------------------------------
     function homeIsSongLiked(id) {
       const idStr = String(id ?? "");
       if (!idStr) return false;
+
+      // 1) Primero, por id en los sets de Home
+      if (HOME_LIKED_IDS.has(idStr)) return true;
+
+      // 2) Intentar por audioUrl (por si los IDs no coinciden)
+      try {
+        const song =
+          Array.isArray(HOME_SONGS_CACHE) &&
+          HOME_SONGS_CACHE.find((s) => s && String(s.id ?? "") === idStr);
+        if (song && song.audioUrl && HOME_LIKED_AUDIO.has(song.audioUrl)) {
+          return true;
+        }
+      } catch {}
+
+      // 3) Fallback: modelo global window._likes, en varios formatos
       const likes = Array.isArray(window._likes) ? window._likes : [];
-      return likes.some(
-        (s) => s && s.id != null && String(s.id) === idStr
-      );
+      return likes.some((s) => {
+        if (!s) return false;
+
+        if (typeof s === "number" || typeof s === "string") {
+          return String(s) === idStr;
+        }
+
+        const cand =
+          s.id ??
+          s.song_id ??
+          s.songId ??
+          s.cancion_id ??
+          (s.song && (s.song.id ?? s.song.pk)) ??
+          (s.cancion && (s.cancion.id ?? s.cancion.pk));
+
+        return cand != null && String(cand) === idStr;
+      });
     }
 
+    // -----------------------------------------------------------------------
+    // Render de filas de canciones para Home
+    // -----------------------------------------------------------------------
     function buildHomeSongRow(song) {
       const idStr = song.id != null ? String(song.id) : "";
       const title = escapeHtml(song.title || "—");
       const author = escapeHtml(song.author || "—");
       const cover = escapeHtml(song.coverUrl || "");
       const audio = escapeHtml(song.audioUrl || "");
-      const liked = idStr && homeIsSongLiked(idStr);
 
       const coverHTML = cover
         ? `<img src="${cover}" alt="${title}" class="song-cover">`
         : `<div class="song-cover song-cover--placeholder"></div>`;
 
-      let likeHTML = "";
       let addHTML = "";
 
       if (idStr) {
-        likeHTML = `
-    <button type="button"
-            class="song-like-btn"
-            data-like-scope="home"
-            data-song-id="${idStr}"
-            data-liked="${liked ? "1" : "0"}"
-            aria-label="${liked ? "Quitar de tus me gusta" : "Agregar a tus me gusta"}"
-            onclick="window.__melodifyToggleLikeFromHome && window.__melodifyToggleLikeFromHome(event, '${idStr}')">
-      ♡
-    </button>`;
-
         addHTML = `
-  <button type="button"
-          class="song-add-btn"
-          data-song-id="${idStr}"
-          title="Añadir a playlist"
-          onclick="(window.openAddToPlaylistForSong && window.openAddToPlaylistForSong('${idStr}')) || (window.MDFCore && window.MDFCore.openAddToPlaylistDialog && window.MDFCore.openAddToPlaylistDialog(event, '${idStr}'))">
-    +
-  </button>`;
+          <button type="button"
+                  class="song-add-btn"
+                  data-song-id="${idStr}"
+                  title="Añadir a playlist"
+                  onclick="
+                    if (window.MDFCore && window.MDFCore.openAddToPlaylistDialog) {
+                      window.MDFCore.openAddToPlaylistDialog(event, '${idStr}');
+                    } else if (window.MDFPlaylists && window.MDFPlaylists.openAddToPlaylistDialog) {
+                      window.MDFPlaylists.openAddToPlaylistDialog(event, '${idStr}');
+                    } else if (window.openAddToPlaylistForSong) {
+                      window.openAddToPlaylistForSong('${idStr}');
+                    }
+                  ">
+            +
+          </button>`;
       }
 
       return `
@@ -388,7 +731,6 @@ function soloFecha(raw) {
           <div class="song-info">
             <div class="song-title">
               ${title}
-              ${likeHTML}
               ${addHTML}
             </div>
             <div class="song-author">${author}</div>
@@ -409,6 +751,9 @@ function soloFecha(raw) {
       wrap.innerHTML = subset.map(buildHomeSongRow).join("");
     }
 
+    // -----------------------------------------------------------------------
+    // Artistas destacados en Home (a partir de canciones)
+    // -----------------------------------------------------------------------
     function extractFeaturedArtistsFromSongs(allSongs, maxCount = 5) {
       const map = new Map();
       for (const s of Array.isArray(allSongs) ? allSongs : []) {
@@ -460,10 +805,14 @@ function soloFecha(raw) {
 
     let HOME_SONGS_CACHE = null;
 
+    // -----------------------------------------------------------------------
+    // Carga de todas las canciones para Home (varias fuentes)
+    // -----------------------------------------------------------------------
     async function fetchAllSongsForHome() {
       if (Array.isArray(HOME_SONGS_CACHE) && HOME_SONGS_CACHE.length)
         return HOME_SONGS_CACHE;
 
+      // 1) Preferir endpoint global si existe
       if (URL_ALL_SONGS_JSON) {
         try {
           const res = await fetch(URL_ALL_SONGS_JSON, {
@@ -491,6 +840,7 @@ function soloFecha(raw) {
         }
       }
 
+      // 2) Si hay playlists cargadas en memoria
       if (Array.isArray(window._playlists) && window._playlists.length) {
         const fromPlaylists = collectAllSongsForHome();
         if (fromPlaylists.length) {
@@ -499,8 +849,19 @@ function soloFecha(raw) {
         }
       }
 
+      // 3) Fallback: pedir playlists y sus canciones
       try {
-        const res = await fetch("/playlist/getAllList/", {
+        const main = document.getElementById("main-content");
+        const uname =
+          (main && main.dataset && main.dataset.username) ||
+          (document.querySelector('meta[name="username"]') || {}).content ||
+          "";
+
+        const url = uname
+          ? `/playlist/getAllList/?u=${encodeURIComponent(uname)}&t=${Date.now()}`
+          : `/playlist/getAllList/?t=${Date.now()}`;
+
+        const res = await fetch(url, {
           credentials: "same-origin",
           cache: "no-store",
           headers: { "X-Requested-With": "fetch" },
@@ -549,6 +910,7 @@ function soloFecha(raw) {
         console.error("HOME: error en fetchAllSongsForHome", e);
       }
 
+      // 4) Último recurso: solo playlists locales
       const local = collectAllSongsForHome();
       HOME_SONGS_CACHE = local;
       return HOME_SONGS_CACHE;
@@ -570,6 +932,9 @@ function soloFecha(raw) {
       grid.innerHTML = artists.map(buildArtistCard).join("");
     }
 
+    // -----------------------------------------------------------------------
+    // Utilidad de debounce (búsqueda)
+    // -----------------------------------------------------------------------
     function debounce(func, wait) {
       let timeout;
       return function executedFunction(...args) {
@@ -582,6 +947,9 @@ function soloFecha(raw) {
       };
     }
 
+    // -----------------------------------------------------------------------
+    // Búsqueda (UI mínima: hint sobre el search-panel)
+    // -----------------------------------------------------------------------
     function initSearch() {
       const sf = $("#search-form");
       const si = $("#search-input");
@@ -630,6 +998,9 @@ function soloFecha(raw) {
       }
     }
 
+    // -----------------------------------------------------------------------
+    // Mensaje de hint para playlists en Home
+    // -----------------------------------------------------------------------
     function aplicarMensajePlaylistsHome() {
       const hint = document.getElementById("home-playlist-hint");
       if (!hint) return;
@@ -640,7 +1011,9 @@ function soloFecha(raw) {
       }
     }
 
-    // Render de vistas
+    // -----------------------------------------------------------------------
+    // Render de vista HOME
+    // -----------------------------------------------------------------------
     async function renderMenuHome() {
       mainContent.dataset.view = "home";
 
@@ -681,6 +1054,7 @@ function soloFecha(raw) {
 
           <p id="home-playlist-hint" class="home-playlist-hint"
              style="display:none;color:#b3b3b3;font-size:0.85rem;margin:4px 0 8px;">
+            Aún no tienes playlists personales. Crea una en la sección “PlayList” para empezar a organizar tu música.
           </p>
 
           <div class="songs-wrap" id="home-songs-wrap"></div>
@@ -691,6 +1065,9 @@ function soloFecha(raw) {
       showContent(html);
 
       try {
+        // Aseguramos tener la caché de likes lista ANTES de pintar
+        await ensureInitialLikesForHome();
+
         const allSongs = await fetchAllSongsForHome();
         renderHomeArtists(allSongs, false);
         renderHomeSongs(allSongs, false);
@@ -699,7 +1076,8 @@ function soloFecha(raw) {
         const btnArtists = document.querySelector(".btnVerArtistas");
         if (btnArtists) {
           btnArtists.addEventListener("click", () => {
-            const expanded = btnArtists.getAttribute("data-expanded") === "true";
+            const expanded =
+              btnArtists.getAttribute("data-expanded") === "true";
             const next = !expanded;
             btnArtists.setAttribute("data-expanded", String(next));
             btnArtists.textContent = next ? "Ver menos" : "Ver todos";
@@ -710,7 +1088,8 @@ function soloFecha(raw) {
         const btnSongs = document.querySelector(".btnVerCanciones");
         if (btnSongs) {
           btnSongs.addEventListener("click", () => {
-            const expanded = btnSongs.getAttribute("data-expanded") === "true";
+            const expanded =
+              btnSongs.getAttribute("data-expanded") === "true";
             const next = !expanded;
             btnSongs.setAttribute("data-expanded", String(next));
             btnSongs.textContent = next ? "Ver menos" : "Ver todos";
@@ -722,6 +1101,9 @@ function soloFecha(raw) {
       }
     }
 
+    // -----------------------------------------------------------------------
+    // Vista Playlists “simple” (fallback si no existe módulo avanzado)
+// -----------------------------------------------------------------------
     function renderMenuPlaylists() {
       mainContent.dataset.view = "playlist";
       const P = Array.isArray(window._playlists) ? window._playlists : [];
@@ -734,7 +1116,9 @@ function soloFecha(raw) {
           <li><a href="${URL_MI_MURO}?no_spa=1" data-external="true">Mi música (muro)</a></li>
           ${P.map(
             (pl) =>
-              `<li data-playlist-id="${pl.id}">${escapeHtml(pl.name || "—")}</li>`
+              `<li data-playlist-id="${pl.id}">${escapeHtml(
+                pl.name || "—"
+              )}</li>`
           ).join("")}
         </ul>`;
         } else {
@@ -750,7 +1134,9 @@ function soloFecha(raw) {
         <ul class="item-list">
           ${P.map(
             (pl) =>
-              `<li data-playlist-id="${pl.id}">${escapeHtml(pl.name || "—")}</li>`
+              `<li data-playlist-id="${pl.id}">${escapeHtml(
+                pl.name || "—"
+              )}</li>`
           ).join("")}
         </ul>`;
         } else {
@@ -762,6 +1148,9 @@ function soloFecha(raw) {
       showContent(html);
     }
 
+    // -----------------------------------------------------------------------
+    // Vista Perfil
+    // -----------------------------------------------------------------------
     function renderMenuPerfil() {
       mainContent.dataset.view = "perfil";
 
@@ -783,10 +1172,11 @@ function soloFecha(raw) {
             )}</p>`
           : "";
       const fechaHTML = `<p style="margin:0 0 4px;">Registrado: ${escapeHtml(
-      soloFecha(CREATED_AT)
+        soloFecha(CREATED_AT)
       )}</p>`;
 
-      const html = `
+      const html =
+        `
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;">
           <h2 style="margin:0;">Perfil</h2>
         </div>
@@ -810,7 +1200,9 @@ function soloFecha(raw) {
       showContent(html);
     }
 
-    // Permisos de menú según rol
+    // -----------------------------------------------------------------------
+    // Permisos de menú según rol (ocultar/mostrar items)
+// -----------------------------------------------------------------------
     function aplicarPermisosMenu() {
       const hideAll = (view) => {
         document
@@ -852,6 +1244,9 @@ function soloFecha(raw) {
       }
     }
 
+    // -----------------------------------------------------------------------
+    // Toggle del menú lateral
+    // -----------------------------------------------------------------------
     function clickMenuToggleBtn() {
       menuLateral?.classList.toggle("collapsed");
       mainContent.classList.toggle("menuLateral-collapsed");
@@ -864,15 +1259,21 @@ function soloFecha(raw) {
     menuToggleBtn?.addEventListener("click", clickMenuToggleBtn);
     toggleLogo?.addEventListener("click", clickMenuToggleBtn);
 
+    // -----------------------------------------------------------------------
+    // Navegación externa (enlaces con data-external="true")
+    // -----------------------------------------------------------------------
     document.addEventListener(
       "click",
       (e) => {
         const a = e.target.closest?.('a[data-external="true"]');
-        if (a) return;
+        if (a) return; // Se deja seguir al navegador
       },
       true
     );
 
+    // -----------------------------------------------------------------------
+    // Menú de usuario (avatar arriba a la derecha)
+// -----------------------------------------------------------------------
     const userTrigger = $("#user-trigger");
     const userMenu = $("#user-menu");
 
@@ -894,6 +1295,9 @@ function soloFecha(raw) {
       });
     }
 
+    // -----------------------------------------------------------------------
+    // Clicks en los ítems del menú lateral (Home/Playlist/Reproductor/Perfil)
+// -----------------------------------------------------------------------
     document
       .querySelectorAll("#menuLateral .menu-item[data-view]")
       .forEach((item) => {
@@ -920,6 +1324,9 @@ function soloFecha(raw) {
     }
     window.activarItemMenu = activarItemMenu;
 
+    // -----------------------------------------------------------------------
+    // Botón "atrás" en la UI
+    // -----------------------------------------------------------------------
     function clickBackBtn() {
       switch (currentView) {
         case "playlist":
@@ -943,6 +1350,9 @@ function soloFecha(raw) {
       clickBackBtn();
     });
 
+    // -----------------------------------------------------------------------
+    // Router SPA principal
+    // -----------------------------------------------------------------------
     async function navegarSPA(view) {
       currentView = view;
       mainContent.dataset.view = view || "";
@@ -1018,6 +1428,9 @@ function soloFecha(raw) {
     }
     window.navegarSPA = navegarSPA;
 
+    // -----------------------------------------------------------------------
+    // Decorador de botones "peligrosos" (eliminar, borrar, etc.)
+// -----------------------------------------------------------------------
     function decorateDangerButtons(root = document) {
       const attrMatches = root.querySelectorAll(
         'button[name*="delete" i], button[id*="delete" i], button[data-action="delete"], button[data-danger],' +
@@ -1045,10 +1458,14 @@ function soloFecha(raw) {
           const hrefDelete = (el.getAttribute?.("href") || "")
             .toLowerCase()
             .includes("eliminar");
-          if (looksDelete || hrefDelete) el.classList.add("btnDanger", "btnPeligro");
+          if (looksDelete || hrefDelete)
+            el.classList.add("btnDanger", "btnPeligro");
         });
     }
 
+    // -----------------------------------------------------------------------
+    // Avatar y nombre en el header
+    // -----------------------------------------------------------------------
     function aplicarAvatarHeader() {
       const iconEl = $("#user-trigger .user-icon");
       const nameEl = $("#username");
@@ -1063,6 +1480,9 @@ function soloFecha(raw) {
       }
     }
 
+    // -----------------------------------------------------------------------
+    // Inicialización principal de la SPA
+    // -----------------------------------------------------------------------
     async function inicializarApp() {
       if (!USERNAME) USERNAME = "Usuario";
 
@@ -1071,6 +1491,7 @@ function soloFecha(raw) {
       setTimeout(aplicarPermisosMenu, 0);
 
       initSearch();
+      await ensureInitialLikesForHome();
 
       try {
         if (window.MDFCore?.getAudio?.()?.src) {
@@ -1129,135 +1550,143 @@ function soloFecha(raw) {
       }
     }
 
+    // -----------------------------------------------------------------------
+    // Observador para aplicar permisos de menú al cambiar items
+    // -----------------------------------------------------------------------
     if (menuLateral) {
       const mo = new MutationObserver(() => aplicarPermisosMenu());
       mo.observe(menuLateral, { childList: true, subtree: true });
     }
 
+    // -----------------------------------------------------------------------
+    // Vinculación con cambios de playlists
+    // -----------------------------------------------------------------------
     await refreshHomePlaylists();
     document.addEventListener(
       "melodify:playlists:changed",
       refreshHomePlaylists
     );
 
+    // Lanzar inicialización principal
     await inicializarApp();
   });
 }
 
 // ============================================================================
 // Fallback global para añadir a playlist desde Home/Buscador
+// Sólo si no existe ya openAddToPlaylistForSong en otra parte.
 // ============================================================================
 
-window.openAddToPlaylistForSong = async function (songId) {
-  try {
-    if (!songId) return;
-  } catch {}
-
-  const nLower =
-    window.nfdLower ||
-    ((s) =>
-      String(s || "")
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase());
-
-  if (!window.__HOME_HAS_PERSONAL_PLAYLISTS__) {
-    window.__melodifyShowLikeToast?.(
-      "No tienes playlists personales. Crea una en la sección de playlists."
-    );
+if (!window.openAddToPlaylistForSong) {
+  window.openAddToPlaylistForSong = async function (songId) {
     try {
-      if (typeof window.activarItemMenu === "function")
-        window.activarItemMenu("playlist");
-      if (typeof window.navegarSPA === "function")
-        await window.navegarSPA("playlist");
+      if (!songId) return;
     } catch {}
-    return;
-  }
 
-  if (window.MDFCore?.openAddToPlaylistDialog) {
-    try {
-      return window.MDFCore.openAddToPlaylistDialog(null, songId);
-    } catch {}
-  }
+    const nLower =
+      window.nfdLower ||
+      ((s) =>
+        String(s || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase());
 
-  const P = Array.isArray(window._playlists) ? window._playlists : [];
-  const reales = P.filter((pl) => nLower(pl?.name) !== "mi musica");
-
-  if (!reales.length) {
-    window.__melodifyShowLikeToast?.(
-      "Crea una playlist personal para poder agregar canciones."
-    );
-    try {
-      if (typeof window.activarItemMenu === "function")
-        window.activarItemMenu("playlist");
-      if (typeof window.navegarSPA === "function")
-        await window.navegarSPA("playlist");
-    } catch {}
-    return;
-  }
-
-  if (reales.length > 1) {
-    window.__melodifyShowLikeToast?.(
-      "Abre la sección Playlists para elegir a cuál agregar."
-    );
-    try {
-      if (typeof window.activarItemMenu === "function")
-        window.activarItemMenu("playlist");
-      if (typeof window.navegarSPA === "function")
-        await window.navegarSPA("playlist");
-    } catch {}
-    return;
-  }
-
-  let target = reales[0];
-
-  try {
-    const r = await fetch(`/playlist/${encodeURIComponent(target.id)}/songs/`, {
-      credentials: "same-origin",
-      cache: "no-store",
-      headers: { "X-Requested-With": "fetch" },
-    });
-    const data = r.ok ? await r.json() : { songs: [] };
-    const position =
-      (Array.isArray(data?.songs) ? data.songs.length : 0) + 1;
-
-    const res = await fetch(`/playlist/addsong/`, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: {
-        "X-Requested-With": "fetch",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        playlist_id: target.id,
-        song_id: Number(songId),
-        position,
-      }),
-    });
-
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    window.__melodifyShowLikeToast?.(
-      `Agregada a la playlist "${target.name}".`
-    );
-  } catch (e) {
-    console.error("HOME: no se pudo agregar a playlist:", e);
-    window.__melodifyShowLikeToast?.(
-      "No se pudo agregar a la playlist. Te llevo a Playlists."
-    );
-    try {
-      if (typeof window.activarItemMenu === "function")
-        window.activarItemMenu("playlist");
-      if (typeof window.navegarSPA === "function")
-        await window.navegarSPA("playlist");
-    } catch {
+    if (!window.__HOME_HAS_PERSONAL_PLAYLISTS__) {
+      window.__melodifyShowLikeToast?.(
+        "No tienes playlists personales. Crea una en la sección de playlists."
+      );
       try {
-        await window.navegarSPA?.("reproductor");
+        if (typeof window.activarItemMenu === "function")
+          window.activarItemMenu("playlist");
+        if (typeof window.navegarSPA === "function")
+          await window.navegarSPA("playlist");
       } catch {}
+      return;
     }
-  }
-};
 
-// Integración con MDFCore para abrir diálogo de playlists
+    // Fallback sin MDFCore (llama directo al backend)
+    const P = Array.isArray(window._playlists) ? window._playlists : [];
+    const reales = P.filter((pl) => nLower(pl?.name) !== "mi musica");
+
+    if (!reales.length) {
+      window.__melodifyShowLikeToast?.(
+        "Crea una playlist personal para poder agregar canciones."
+      );
+      try {
+        if (typeof window.activarItemMenu === "function")
+          window.activarItemMenu("playlist");
+        if (typeof window.navegarSPA === "function")
+          await window.navegarSPA("playlist");
+      } catch {}
+      return;
+    }
+
+    if (reales.length > 1) {
+      window.__melodifyShowLikeToast?.(
+        "Abre la sección Playlists para elegir a cuál agregar."
+      );
+      try {
+        if (typeof window.activarItemMenu === "function")
+          window.activarItemMenu("playlist");
+        if (typeof window.navegarSPA === "function")
+          await window.navegarSPA("playlist");
+      } catch {}
+      return;
+    }
+
+    let target = reales[0];
+
+    try {
+      const r = await fetch(`/playlist/${encodeURIComponent(target.id)}/songs/`, {
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { "X-Requested-With": "fetch" },
+      });
+      const data = r.ok ? await r.json() : { songs: [] };
+      const position =
+        (Array.isArray(data?.songs) ? data.songs.length : 0) + 1;
+
+      const res = await fetch(`/playlist/addsong/`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "X-Requested-With": "fetch",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          playlist_id: target.id,
+          song_id: Number(songId),
+          position,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      window.__melodifyShowLikeToast?.(
+        `Agregada a la playlist "${target.name}".`
+      );
+    } catch (e) {
+      console.error("HOME: no se pudo agregar a playlist:", e);
+      window.__melodifyShowLikeToast?.(
+        "No se pudo agregar a la playlist. Te llevo a Playlists."
+      );
+      try {
+        if (typeof window.activarItemMenu === "function")
+          window.activarItemMenu("playlist");
+        if (typeof window.navegarSPA === "function")
+          await window.navegarSPA("playlist");
+      } catch {
+        try {
+          await window.navegarSPA?.("reproductor");
+        } catch {}
+      }
+    }
+  };
+}
+
+// ============================================================================
+// Integración con MDFCore: apertura de diálogo de playlists (fallback)
+// ============================================================================
+
 window.MDFCore = window.MDFCore || {};
 if (!window.MDFCore.openAddToPlaylistDialog) {
   window.MDFCore.openAddToPlaylistDialog = function (_ev, songId) {

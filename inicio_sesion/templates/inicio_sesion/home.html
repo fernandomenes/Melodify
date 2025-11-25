@@ -1,11 +1,13 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="es">
-  <meta name="username" content="{{ session_user }}">
-
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="username" content="{{ session_user }}">
+  <meta name="user-id" content="{{ request.user.id }}">
+    <meta name="api-like-song" content="/api/like/song/__ID__/" />
+
   <title>Melodify</title>
 
   <!-- Fuentes -->
@@ -19,12 +21,16 @@
   <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
 
+  <!-- Ruta del módulo principal del reproductor (lo importa homeScript.js) -->
   <script>
     window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
   </script>
+  <!-- Acciones del reproductor (likes + playlists: borrar, visibilidad, etc.) -->
+  <script type="module" src="{% static 'reproductor/reproductor-actions.js' %}?v={% now 'U' %}"></script>
 
-  <!-- UI de playlists -->
+  <!-- UI de playlists (modales, etc.) -->
   <script src="{% static 'inicio_sesion/playListScript.js' %}"></script>
+  <script src="{% static 'reproductor/reproductor-playlists.js' %}?v={% now 'U' %}"></script>
   <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
 </head>
 
@@ -133,6 +139,10 @@
   </script>
 
   <!-- Scripts principales -->
+
+  <!-- Lógica de playlists generadas por el sistema (Top10, Discover, Historial) -->
+  <script defer src="{% static 'reproductor/reproductor-discover.js' %}?v={% now 'U' %}"></script>
+
   <!-- Barra flotante del reproductor -->
   <script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
 

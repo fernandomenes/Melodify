@@ -1,10 +1,13 @@
 // static/muro/muro.js
-// Muro del artista: reproducción básica, selección, borrado, subida, likes y playlists.
+// ============================================================================
+// Melodify – Muro del artista
+// Reproducción básica, selección, borrado, subida, likes y playlists.
+// ============================================================================
 
 (function () {
   "use strict";
 
-  // Helpers DOM y CSRF
+  // Helpers DOM y cabeceras comunes
   const $  = (sel, ctx = document) => ctx.querySelector(sel);
   const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
   const H  = { "X-Requested-With": "fetch" };
@@ -21,10 +24,10 @@
     );
   }
 
-  // Reproductor usado en el muro (stub o MDFCore)
+  // Reproductor usado en el muro (stub local o MDFCore global)
   let muroPlayer = null;
 
-  // Toast local de likes / playlists
+  // Toast local para likes / playlists
   let likeToastTimer = null;
 
   function showLikeToast(message) {
@@ -86,8 +89,8 @@
     }
 
     function buildQueueFromCard(card) {
-      const root = card.closest("#songs-grid") || document;
-      queueCards = Array.from(root.querySelectorAll(".js-song-card"));
+      const rootGrid = card.closest("#songs-grid") || document;
+      queueCards = Array.from(rootGrid.querySelectorAll(".js-song-card"));
       queue      = queueCards.map(datasetToTrack);
       index      = Math.max(0, queueCards.indexOf(card));
     }
@@ -129,7 +132,6 @@
       });
     }
 
-    // Eventos del <audio> interno
     audio.addEventListener("timeupdate", () => {
       dispatch("melodify:time", {
         currentTime: audio.currentTime || 0,
@@ -154,7 +156,6 @@
       if (queue.length > 0) playIndex(index + 1);
     });
 
-    // API mínima MDFCore para el muro
     const core = {
       __fromMuro: true,
 
@@ -212,7 +213,7 @@
     }
   })();
 
-  // Elementos del muro
+  // Elementos base del muro
   const root = document.getElementById("muro-content");
   if (!root) return;
 
@@ -239,11 +240,22 @@
 
   const main = document.getElementById("main-content");
   const URLS = {
-    bulkDelete: main?.dataset?.urlMuroBulk     || "/mi-muro/canciones/eliminar-multiples/",
+    bulkDelete:
+      main?.dataset?.urlMuroBulk || "/mi-muro/canciones/eliminar-multiples/",
     undo:       main?.dataset?.urlRevertirMuro || "/mi-muro/undo/",
+    follow:     main?.dataset?.urlFollowArtist || "",
+    followersFragment:
+      main?.dataset?.urlFollowersFragment || "",
   };
 
-  // Barra de "Deshacer"
+  const ARTIST = {
+    username: main?.dataset?.artistUsername || "",
+    isFollowing:
+      main?.dataset?.artistFollowing === "1" ||
+      main?.dataset?.artistFollowing === "true",
+  };
+
+  // Barra de "Deshacer" (undo)
   function showUndo(label) {
     const bar = $("#undo-bar", root);
     const lbl = $("#undo-label", root);
@@ -285,7 +297,7 @@
     });
   }
 
-  // Selección de canciones
+  // Selección múltiple de canciones
   const selected     = new Set();
   const removedCache = new Map();
 
@@ -359,7 +371,7 @@
     });
   }
 
-  // Checkboxes (selección múltiple)
+  // Checkboxes de selección múltiple
   root.addEventListener("change", (e) => {
     const t = e.target;
     if (!t) return;
@@ -504,7 +516,7 @@
     }
   });
 
-  // Undo
+  // Undo de acciones en el muro
   undoForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
     try {
@@ -523,7 +535,7 @@
         });
         if (frag.childNodes.length && grid) {
           grid.prepend(frag);
-          bindSongCardsToGlobalPlayer(grid);
+          bindSongCardsToGlobalPlayer(root);
         }
         removedCache.clear();
         resetSelection();
@@ -537,7 +549,7 @@
     }
   });
 
-  // Menú lateral (mismo comportamiento que en Home, pero local al muro)
+  // Menú lateral del muro
   (function setupMuroMenuToggle() {
     const btnToggle   = document.getElementById("menu-toggle-btn");
     const logoToggle  = document.getElementById("toggle-menu");
@@ -556,7 +568,7 @@
         ?.classList.toggle("menuLateral-collapsed", collapsed);
     }
 
-    // Estado inicial: barra lateral OCULTA (colapsada)
+    // Estado inicial: barra lateral oculta
     applyCollapsed(true);
 
     function handleToggleClick() {
@@ -564,11 +576,9 @@
       applyCollapsed(!nowCollapsed);
     }
 
-    // Botón ☰ y logo de la barra lateral
     btnToggle?.addEventListener("click", handleToggleClick);
     logoToggle?.addEventListener("click", handleToggleClick);
   })();
-
 
   // Menú de usuario y logout
   (function userMenu() {
@@ -608,14 +618,14 @@
             return;
           }
         } catch {
-          // fallback
+          // fallback a redirección directa
         }
         location.href = url;
       });
     }
   })();
 
-  // Subida de canción con barra de progreso (subida normal)
+  // Subida de canción con barra de progreso (modo AJAX opcional)
   (function singleUploadProgress() {
     const form = document.getElementById("form-upload");
     if (!form) return;
@@ -647,7 +657,6 @@
       if (form.dataset.ajax !== "1") return;
       e.preventDefault();
 
-      // limpia mensaje previo
       showInlineMsg("", "error");
 
       const fd   = new FormData(form);
@@ -656,7 +665,6 @@
 
       xhr.open("POST", form.action, true);
       if (csrf) xhr.setRequestHeader("X-CSRFToken", csrf);
-      // Marcamos como "fetch" para que el backend devuelva JSON
       xhr.setRequestHeader("X-Requested-With", "fetch");
 
       xhr.upload.onprogress = (ev) => {
@@ -692,17 +700,14 @@
 
         if (xhr.status >= 200 && xhr.status < 300) {
           setPct(100);
-          // En éxito simplemente recargamos para ver la nueva canción en el grid
           setTimeout(() => location.reload(), 500);
           return;
         }
 
-        // Error: quitar barra y re-habilitar botón
         btn?.removeAttribute("disabled");
         bar?.classList.remove("is-visible");
 
         if (data && typeof data.error === "string" && data.error) {
-          // Mensaje de validación del backend (título inválido, duplicado, etc.)
           showInlineMsg(data.error, "error");
         } else {
           const msg =
@@ -717,89 +722,86 @@
     });
   })();
 
-  // Likes desde el muro (sin estilos especiales)
-  window.toggleSongLikeFromMuro = function (evt, songId, btn) {
-    if (evt) {
-      evt.preventDefault();
-      evt.stopPropagation();
-    }
+  // Likes en el muro (UI)
+  function setLikeUIForSong(idStr, liked) {
+    if (!idStr) return;
+    document
+      .querySelectorAll(`.song-like-btn[data-song-id="${idStr}"]`)
+      .forEach((btn) => {
+        btn.dataset.liked = liked ? "1" : "0";
+        btn.classList.toggle("liked", liked);
+        btn.classList.toggle("is-liked", liked);
+        btn.classList.toggle("active", liked);
+        btn.textContent = liked ? "♥" : "♡";
+        btn.setAttribute(
+          "aria-label",
+          liked ? "Quitar de tus Me gusta" : "Añadir a tus Me gusta"
+        );
+      });
+  }
+
+  // Toggle de like desde el muro
+  window.toggleSongLikeFromMuro = async function (evt, songId, btn) {
+    try {
+      evt?.preventDefault?.();
+      evt?.stopPropagation?.();
+    } catch {}
+
     if (!btn && evt && evt.target) {
-      btn = evt.target;
+      btn = evt.target.closest(".song-like-btn");
     }
 
-    const rawId =
+    const idStr = String(
       songId ||
       (btn && (btn.dataset.songId || btn.getAttribute("data-song-id"))) ||
-      "";
-    const idNum = Number(rawId);
+      ""
+    ).trim();
+    if (!idStr) return;
+
+    const idNum = Number(idStr);
     if (!idNum || Number.isNaN(idNum)) return;
 
-    if (
-      window.MDFCore &&
-      typeof window.MDFCore.toggleLikeFromReproductor === "function"
-    ) {
-      window.MDFCore.toggleLikeFromReproductor(evt, idNum, btn);
-      return;
-    }
+    const anyBtn =
+      btn ||
+      document.querySelector(`.song-like-btn[data-song-id="${idStr}"]`);
 
-    const csrftoken = getCSRF();
+    const prevLiked = anyBtn?.dataset?.liked === "1";
+    const nowLiked  = !prevLiked;
 
-    fetch(`/api/like/song/${idNum}/`, {
-      method: "POST",
-      headers: {
-        "X-CSRFToken": csrftoken || "",
-        "X-Requested-With": "fetch",
-      },
-      credentials: "same-origin",
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        const liked = !!data.liked;
+    setLikeUIForSong(idStr, nowLiked);
+    showLikeToast(
+      nowLiked ? "Añadida a tus Me gusta" : "Quitada de tus Me gusta"
+    );
 
-        const allButtons = document.querySelectorAll(
-          `.song-like-btn[data-song-id="${idNum}"]`
-        );
-        allButtons.forEach((b) => {
-          b.dataset.liked = liked ? "1" : "0";
-
-          const txt = (b.textContent || "").trim();
-          if (txt === "♥" || txt === "♡" || txt === "") {
-            b.textContent = "♡";
-          }
-        });
-
-        showLikeToast(
-          liked ? "Añadida a tus Me gusta" : "Quitada de tus Me gusta"
-        );
-
-        if (
-          window.MDFCore &&
-          typeof window.MDFCore.syncLikeModelFromClient === "function"
-        ) {
-          let meta = null;
-          const row =
-            (btn && btn.closest && btn.closest(".js-song-card")) || null;
-          if (row) {
-            const ds = row.dataset || {};
-            meta = {
-              id:       ds.songId   || String(idNum),
-              title:    ds.title    || "",
-              artist:   ds.artist   || "",
-              audioUrl: ds.audioUrl || "",
-              coverUrl: ds.coverUrl || "",
-              genre:    ds.genre    || "",
-            };
-          }
-          try {
-            window.MDFCore.syncLikeModelFromClient(String(idNum), liked, meta);
-          } catch (err) {
-            console.warn("No se pudo sincronizar likes con MDFCore (muro):", err);
-          }
-        }
-      })
-      .catch((err) => {
-        console.error("Error al dar like a la canción desde el muro:", err);
+    try {
+      const csrf = getCSRF();
+      const res = await fetch(`/api/like/song/${encodeURIComponent(idNum)}/`, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": csrf || "",
+          "X-Requested-With": "fetch",
+        },
+        credentials: "same-origin",
       });
+
+      if (!res.ok) {
+        setLikeUIForSong(idStr, prevLiked);
+        showLikeToast("No se pudo actualizar el like.");
+        return;
+      }
+
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      if (ct.includes("application/json")) {
+        const data = await res.json().catch(() => null);
+        if (data && typeof data.liked !== "undefined") {
+          setLikeUIForSong(idStr, !!data.liked);
+        }
+      }
+    } catch (err) {
+      console.error("MURO: error al hacer POST de like:", err);
+      setLikeUIForSong(idStr, prevLiked);
+      showLikeToast("No se pudo actualizar el like.");
+    }
   };
 
   // Diálogo de playlists desde el muro
@@ -828,14 +830,291 @@
     alert("No se encontró la función para agregar a playlist.");
   };
 
-  // Init del muro
+  // Botón de seguir / dejar de seguir artista
+  function setupFollowButton() {
+    const btn = document.getElementById("btn-follow-artist");
+    if (!btn || !URLS.follow || !ARTIST.username) return;
+
+    const counter = document.getElementById("muro-followers-count");
+
+    function applyState(following, followers) {
+      btn.dataset.following = following ? "1" : "0";
+      btn.textContent = following ? "Siguiendo" : "Seguir";
+      btn.classList.toggle("is-following", following);
+      if (counter && typeof followers === "number") {
+        counter.textContent = String(followers);
+      }
+    }
+
+    const initialFollowers = Number(counter?.textContent || 0);
+    applyState(ARTIST.isFollowing, initialFollowers);
+
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+
+      const prevFollowing = btn.dataset.following === "1";
+      const optimisticFollowing = !prevFollowing;
+      applyState(optimisticFollowing);
+
+      try {
+        const res = await fetch(URLS.follow, {
+          method: "POST",
+          headers: { ...H, "X-CSRFToken": getCSRF() },
+          credentials: "same-origin",
+        });
+
+        if (!res.ok) {
+          applyState(prevFollowing, initialFollowers);
+          showLikeToast("No se pudo actualizar el seguimiento.");
+          return;
+        }
+
+        const data = await res.json().catch(() => null);
+        if (data && typeof data.following !== "undefined") {
+          ARTIST.isFollowing = !!data.following;
+          applyState(ARTIST.isFollowing, data.followers);
+          showLikeToast(
+            ARTIST.isFollowing
+              ? "Ahora sigues a este artista"
+              : "Dejaste de seguir al artista"
+          );
+        } else {
+          applyState(prevFollowing, initialFollowers);
+          showLikeToast("No se pudo actualizar el seguimiento.");
+        }
+      } catch (err) {
+        console.error("MURO: error al seguir artista:", err);
+        applyState(prevFollowing, initialFollowers);
+        showLikeToast("No se pudo actualizar el seguimiento.");
+      }
+    });
+  }
+
+  // Lista de seguidores (carga perezosa desde el backend)
+  function setupFollowersList() {
+    const btn = document.getElementById("btn-show-followers");
+    const box = document.getElementById("muro-followers-list");
+    if (!btn || !box || !URLS.followersFragment) return;
+
+    let visible = false;
+
+    async function loadAndToggle() {
+      if (!visible && !box.dataset.loaded) {
+        try {
+          box.innerHTML =
+            '<p class="muted" style="margin:0;">Cargando seguidores…</p>';
+
+          const res = await fetch(URLS.followersFragment, {
+            credentials: "same-origin",
+            headers: H,
+          });
+          const html = await res.text();
+          box.innerHTML = html;
+          box.dataset.loaded = "1";
+        } catch (e) {
+          console.error("MURO: error cargando seguidores:", e);
+          box.innerHTML =
+            '<p class="muted" style="margin:0;">No se pudo cargar la lista de seguidores.</p>';
+        }
+      }
+
+      visible = !visible;
+      box.style.display = visible ? "block" : "none";
+      btn.textContent = visible ? "Ocultar lista" : "Ver lista";
+    }
+
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      loadAndToggle();
+    });
+  }
+
+  // Viewer de playlists del artista (likes + públicas)
+  function setupArtistPlaylistViewer() {
+    const sec     = document.getElementById("artist-playlists-section");
+    const wrapper = document.getElementById("artist-playlist-songs-wrapper");
+    if (!sec || !wrapper) return;
+
+    const publicPL = Array.isArray(window.__ARTIST_PUBLIC_PLAYLISTS__)
+      ? window.__ARTIST_PUBLIC_PLAYLISTS__
+      : [];
+    const likesPL =
+      window.__ARTIST_LIKES_PLAYLIST__ &&
+      typeof window.__ARTIST_LIKES_PLAYLIST__ === "object"
+        ? window.__ARTIST_LIKES_PLAYLIST__
+        : null;
+
+    const playlistById = new Map();
+    publicPL.forEach((pl) => {
+      if (pl && typeof pl.id !== "undefined") {
+        playlistById.set(String(pl.id), pl);
+      }
+    });
+    if (likesPL && typeof likesPL.id !== "undefined") {
+      playlistById.set(String(likesPL.id), likesPL);
+    }
+
+    function setActivePlaylistCard(plId) {
+      const cards  = sec.querySelectorAll(".artist-pl-card");
+      const target = plId != null ? String(plId) : "";
+      cards.forEach((c) => {
+        const id = c.dataset.plId || "";
+        if (target && id === target) {
+          c.classList.add("is-active");
+        } else {
+          c.classList.remove("is-active");
+        }
+      });
+    }
+
+    function escapeHtml(str) {
+      return String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function clearView() {
+      wrapper.innerHTML = "";
+      wrapper.style.display = "none";
+    }
+
+    function renderPlaylist(pl) {
+      if (!pl) {
+        clearView();
+        return;
+      }
+
+      wrapper.innerHTML = "";
+      wrapper.style.display = "block";
+
+      const header = document.createElement("div");
+      header.className = "artist-pl-songs-header";
+      header.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px;">
+          <h3 style="margin:0;font-size:16px;">Playlist: ${escapeHtml(pl.name || "")}</h3>
+          <button type="button" class="btn btn-small" data-action="artist-pl-close">Cerrar</button>
+        </div>
+      `;
+      wrapper.appendChild(header);
+
+      const songs = Array.isArray(pl.songs) ? pl.songs : [];
+      if (!songs.length) {
+        const p = document.createElement("p");
+        p.className = "muted";
+        p.textContent = "Esta playlist no tiene canciones públicas.";
+        wrapper.appendChild(p);
+        return;
+      }
+
+      const grid2 = document.createElement("div");
+      grid2.className = "grid artist-pl-songs-grid";
+
+      songs.forEach((song) => {
+        if (!song) return;
+
+        const card = document.createElement("article");
+        card.className = "song js-song-card";
+
+        const title = song.title || "—";
+        const artist =
+          song.author || song.artist_display_name || "—";
+        const genre = song.genre || "";
+        const audioUrl = song.audioUrl || song.audio_url || "";
+        const coverUrl = song.coverUrl || song.cover_url || "";
+
+        if (song.id != null) card.dataset.songId = String(song.id);
+        card.dataset.title = title;
+        card.dataset.artist = artist;
+        if (genre) card.dataset.genre = genre;
+        if (audioUrl) card.dataset.audioUrl = audioUrl;
+        if (coverUrl) card.dataset.coverUrl = coverUrl;
+
+        card.innerHTML = `
+          <div class="row js-song-main">
+            ${
+              coverUrl
+                ? `<img class="preview" src="${escapeHtml(coverUrl)}" alt="Portada de ${escapeHtml(
+                    title
+                  )}" loading="lazy">`
+                : `<div class="preview" aria-hidden="true"></div>`
+            }
+            <div>
+              <div class="song-title" style="font-weight:600;">${escapeHtml(
+                title
+              )}</div>
+              <div class="muted">${escapeHtml(artist)}</div>
+              ${
+                genre
+                  ? `<div class="muted">Género: ${escapeHtml(genre)}</div>`
+                  : ""
+              }
+            </div>
+          </div>
+        `;
+        grid2.appendChild(card);
+      });
+
+      wrapper.appendChild(grid2);
+      bindSongCardsToGlobalPlayer(wrapper);
+    }
+
+    // Click en cards de playlists
+    sec.addEventListener("click", (e) => {
+      const card = e.target.closest(".artist-pl-card");
+      if (!card) return;
+
+      const id = card.dataset.plId;
+      if (!id) return;
+
+      const pl = playlistById.get(String(id));
+      renderPlaylist(pl);
+      setActivePlaylistCard(id);
+    });
+
+    // Botón "Cerrar" del viewer
+    wrapper.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-action='artist-pl-close']");
+      if (btn) {
+        clearView();
+        setActivePlaylistCard(null);
+      }
+    });
+
+    // Estado inicial del viewer:
+    // - Prioriza "Music that i love" si tiene canciones.
+    // - En su defecto, primera playlist pública con canciones.
+    let initial = null;
+    if (likesPL && Array.isArray(likesPL.songs) && likesPL.songs.length) {
+      initial = likesPL;
+    } else {
+      initial =
+        publicPL.find(
+          (pl) => pl && Array.isArray(pl.songs) && pl.songs.length
+        ) || null;
+    }
+
+    if (initial && typeof initial.id !== "undefined") {
+      renderPlaylist(initial);
+      setActivePlaylistCard(String(initial.id));
+    }
+  }
+
+  // Inicialización principal del muro
   function initMuro() {
     window.__MDF_FORMS_HIDE_BAR__ = false;
     document.dispatchEvent(new CustomEvent("melodify:bar:shouldShow"));
+
     updateUI();
     if (grid) {
       bindSongCardsToGlobalPlayer(root);
     }
+
+    setupFollowButton();
+    setupFollowersList();
+    setupArtistPlaylistViewer();
   }
 
   if (document.readyState === "loading") {

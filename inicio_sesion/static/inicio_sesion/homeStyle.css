@@ -1,6 +1,4 @@
-/* ==========================================================================
-   Reset básico y tipografía
-   ========================================================================== */
+/* Reset básico y tipografía */
 *{
   margin:0;
   padding:0;
@@ -15,13 +13,11 @@ body{
   color:#efeeee;
 }
 
-/* ==========================================================================
-   Encabezado superior fijo y buscador principal
-   ========================================================================== */
+/* Encabezado superior fijo y buscador principal */
 #header{
   position:fixed;
   top:0;
-  left:220px;                         /* alineado con el menú lateral */
+  left:220px;
   right:0;
   height:64px;
   display:flex;
@@ -30,7 +26,6 @@ body{
   padding:0 20px;
   z-index:90;
   transition:left .3s ease;
-
   background-color:#000;
   box-shadow:none;
   border-bottom:1px solid #262626;
@@ -73,9 +68,7 @@ body{
   }
 }
 
-/* ==========================================================================
-   Información de usuario (avatar y menú)
-   ========================================================================== */
+/* Información de usuario (avatar y menú) */
 .user-info{
   display:flex;
   align-items:center;
@@ -119,16 +112,14 @@ body{
 }
 #user-menu a:hover{ background-color:#393b3b; }
 
-/* ==========================================================================
-   Logo e identidad visual
-   ========================================================================== */
+/* Logo e identidad visual */
 .logo{
   padding-left:10px;
   font-size:24px;
   font-weight:bold;
   cursor:pointer;
   background-color:#000;
-  text-align:justify-all;
+  text-align:left;
   border-bottom:1px solid #363636;
 }
 .logo-image{
@@ -142,9 +133,7 @@ body{
   font-family:'Pacifico', cursive;
 }
 
-/* ==========================================================================
-   Menú lateral principal
-   ========================================================================== */
+/* Menú lateral principal */
 #menuLateral{
   position:fixed;
   top:0;
@@ -190,22 +179,20 @@ body{
 .menu-item.active:hover{ background-color:#ff2a7f; }
 .menu-item:active{ transform:translateY(1px); }
 
-/* ==========================================================================
-   Contenido principal (SPA)
-   ========================================================================== */
+/* Contenido principal (SPA) */
 #main-content{
   flex:1;
   position:relative;
-  margin-left:240px;                  /* espacio para el menú lateral */
-  margin-top:64px;                    /* altura del encabezado fijo */
-  height:calc(100vh - 64px);          /* área desplazable */
+  margin-left:240px;
+  margin-top:64px;
+  height:calc(100vh - 64px);
   padding:20px;
   overflow-y:auto;
   transition:margin-left .3s ease;
 }
 #main-content.menuLateral-collapsed{ margin-left:0; }
 
-/* Botón para abrir el menú cuando está oculto */
+/* Botón para abrir el menú lateral en móvil */
 #menu-toggle-btn{
   position:fixed;
   top:15px;
@@ -223,9 +210,7 @@ body{
 }
 #main-content.menuLateral-collapsed #menu-toggle-btn{ display:block; }
 
-/* ==========================================================================
-   Botón de retroceso universal
-   ========================================================================== */
+/* Botón de retroceso */
 a.back,
 a.back:link,
 a.back:visited{
@@ -245,7 +230,7 @@ a.back:visited{
 a.back:hover,
 a.back:focus{ background:#262626; }
 
-/* Visibilidad del botón de retroceso según la vista */
+/* Visibilidad del botón de retroceso según vista */
 #back-btn{ display:inline-flex; }
 #main-content[data-view="home"] #back-btn,
 #main-content[data-initial-view="home"]:not([data-view]) #back-btn,
@@ -253,21 +238,17 @@ a.back:focus{ background:#262626; }
   display:none !important;
 }
 
-/* ==========================================================================
-   Home: lista de canciones
-   ========================================================================== */
-.song-item{
+/* Home: lista de canciones simple */
+#main-content[data-view="home"] .song-item{
   padding:10px 16px;
   background:#212121;
   border-radius:2px;
   margin:8px 0;
   cursor:pointer;
 }
-.song-item:hover{ background:#393b3b; }
+#main-content[data-view="home"] .song-item:hover{ background:#393b3b; }
 
-/* ==========================================================================
-   Botones reutilizables
-   ========================================================================== */
+/* Botones reutilizables generales */
 .btnPeligro{ background-color:#b00020; }
 .btnPeligro:hover{ background-color:#c62828; }
 .btnChico{
@@ -276,9 +257,7 @@ a.back:focus{ background:#262626; }
   font-size:1em;
 }
 
-/* ==========================================================================
-   FABs (muro del artista y gestión)
-   ========================================================================== */
+/* FABs (muro y gestión) */
 .fab-muro,
 .fab-gestion{
   position:fixed;
@@ -322,9 +301,7 @@ a.back:focus{ background:#262626; }
   }
 }
 
-/* ==========================================================================
-   Panel de búsqueda (autosuggest del encabezado)
-   ========================================================================== */
+/* Panel de búsqueda (autosuggest encabezado) */
 .search-panel{
   position:absolute;
   top:100%;
@@ -368,7 +345,7 @@ a.back:focus{ background:#262626; }
   color:#888;
 }
 
-/* Canción con acciones (like y agregar) */
+/* Ítems de canción en panel de búsqueda */
 .search-item-song{
   display:flex;
   align-items:center;
@@ -397,9 +374,7 @@ a.back:focus{ background:#262626; }
   color:#ff0066;
 }
 
-/* ==========================================================================
-   Home: todas las canciones y botón "Agregar a playlist"
-   ========================================================================== */
+/* Home: contenedor “todas las canciones” */
 .home-all-songs{
   margin-top:16px;
   padding:12px 14px 14px;
@@ -422,7 +397,7 @@ a.back:focus{ background:#262626; }
   margin:6px 0 16px;
 }
 
-/* Título y chip "+" en línea (home y reproductor) */
+/* Título de canción y chip "+" (home y reproductor) */
 .rep-left .song-title,
 .home-all-songs .song-title{
   display:inline-flex;
@@ -431,7 +406,7 @@ a.back:focus{ background:#262626; }
   flex-wrap:wrap;
 }
 
-/* Botón circular "+" reutilizable (home y reproductor) */
+/* Botón circular "+" reutilizable */
 .rep-left .song-title .song-add-btn,
 .home-all-songs .song-title .song-add-btn{
   border-radius:999px;
@@ -441,16 +416,13 @@ a.back:focus{ background:#262626; }
   height:22px;
   padding:0;
   margin-left:2px;
-
   display:inline-flex;
   align-items:center;
   justify-content:center;
-
   font-size:14px;
   line-height:1;
   font-weight:600;
   color:var(--accent, #ff4fa3);
-
   cursor:pointer;
   outline:none;
   transition:
@@ -480,7 +452,7 @@ a.back:focus{ background:#262626; }
   box-shadow:0 0 4px rgba(0,0,0,0.8);
 }
 
-/* Botón "Ver todas" */
+/* Botón “Ver todas” en home */
 .btnVerTodas{
   margin-top:10px;
   padding:6px 12px;
@@ -494,10 +466,7 @@ a.back:focus{ background:#262626; }
 }
 .btnVerTodas:hover{ background:#2a2a2a; }
 
-/* ==========================================================================
-   Scrollbars en tema oscuro
-   ========================================================================== */
-/* Firefox */
+/* Scrollbars en tema oscuro */
 body,
 #main-content,
 #menuLateral,
@@ -506,7 +475,7 @@ body,
   scrollbar-color:#444 #050505;
 }
 
-/* WebKit */
+/* Scrollbars en tema oscuro */
 body::-webkit-scrollbar,
 #main-content::-webkit-scrollbar,
 #menuLateral::-webkit-scrollbar,
@@ -535,9 +504,7 @@ body::-webkit-scrollbar-thumb:hover,
   background:linear-gradient(180deg, #ff2a7f, #9c6bff);
 }
 
-/* ==========================================================================
-   Home: tarjetas de artistas 
-   ========================================================================== */
+/* Home: tarjetas de artistas */
 .home-featured-artists{
   margin-top:20px;
   margin-bottom:6px;
@@ -629,7 +596,7 @@ body::-webkit-scrollbar-thumb:hover,
   color:#ffe9b6;
 }
 
-/* Nombre del artista */
+/* Nombre y tagline del artista */
 .home-artist-name{
   margin-top:4px;
   font-weight:600;
@@ -646,6 +613,7 @@ body::-webkit-scrollbar-thumb:hover,
   opacity:.9;
 }
 
+/* Toast de likes */
 #like-toast{
   position:fixed;
   left:50%;
@@ -665,8 +633,8 @@ body::-webkit-scrollbar-thumb:hover,
   opacity:1;
   transform:translateX(-50%) translateY(0);
 }
-.page-home .home-all-songs .song-like-btn,
-.page-home .home-all-songs .song-like-btn.is-liked {
+
+#main-content[data-view="home"] .home-all-songs .song-like-btn{
   background:rgba(255,255,255,0.03);
   border:1px solid rgba(255,255,255,0.18);
   color:#f5f5f5;
@@ -677,4 +645,24 @@ body::-webkit-scrollbar-thumb:hover,
   display:inline-flex;
   align-items:center;
   justify-content:center;
+  font-size:14px;
+  line-height:1;
+  cursor:pointer;
+  transition:
+    background-color .16s ease,
+    color .16s ease,
+    border-color .16s ease,
+    box-shadow .16s ease,
+    transform .12s ease;
+}
+
+/* Home: estado activo de botón “me gusta” */
+#main-content[data-view="home"] .home-all-songs .song-like-btn.is-liked,
+#main-content[data-view="home"] .home-all-songs .song-like-btn.liked,
+#main-content[data-view="home"] .home-all-songs .song-like-btn.active{
+  background:#ff0066 !important;
+  border-color:#ff0066 !important;
+  color:#050505 !important;
+  box-shadow:0 0 10px rgba(255,79,163,0.7);
+  transform:translateY(-1px) scale(1.03);
 }
