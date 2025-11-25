@@ -1,6 +1,6 @@
-# inicio_sesion/urls.py
 from django.urls import include, path
 from . import views as v
+from . import views_likes
 
 urlpatterns = [
     path("", v.pantallaPrincipal, name="principal"),
@@ -13,7 +13,7 @@ urlpatterns = [
 
     # Secciones
     path("gestion/", include("gestion.urls")),
-    path("", include("muro.urls")),  
+    path("", include("muro.urls")),
 
     # Playlists
     path("playlist/getAllList/", v.playlist_getAll, name="getAllList"),
@@ -24,19 +24,43 @@ urlpatterns = [
     path("playlist/allsongs/", v.get_all_songs, name="get-all-songs"),
     path("playlist/addsong/", v.add_song_to_playlist, name="add-song-to-playlist"),
     path("playlist/removeSong/", v.remove_song_from_playlist, name="remove-song-from-playlist"),
-    path("playlist/getuserid/", v.get_user_id, name='get_user_id'),
-    path("playlist/setFollows/", v.setFollows, name='setFollows'),
+    path("playlist/getuserid/", v.get_user_id, name="get_user_id"),
+    path("playlist/setFollows/", v.setFollows, name="setFollows"),
 
-
-    # Likes
-    path("api/like/song/<int:song_id>/", v.like_song, name="api_like_song"),
-    path("api/like/playlist/<int:playlist_id>/", v.like_playlist, name="api_like_playlist"),
+    # Playlists virtuales / datos para el reproductor
     path("mis-likes/json/", v.mis_likes_json, name="mis_likes_json"),
     path("api/all-songs/", v.get_all_songs, name="all_songs_json"),
+    path(
+        "api/followed-artists/playlists/",
+        v.followed_artists_playlists_json,
+        name="followed_artists_playlists_json",
+    ),
+
+    path(
+        "api/like/song/<int:song_id>/",
+        views_likes.api_toggle_like_song,
+        name="api_like_song",
+    ),
+    path(
+        "api/like/playlist/<int:playlist_id>/",
+        views_likes.api_toggle_like_playlist,
+        name="api_like_playlist",
+    ),
 
     # Colaboradores
-    path("playlist/<int:playlist_id>/collaborators/", v.playlist_collaborators_list, name="playlist_collaborators_list"),
-    path("playlist/<int:playlist_id>/collaborators/add/", v.playlist_collaborator_add, name="playlist_collaborator_add"),
-    path("playlist/<int:playlist_id>/collaborators/remove/<int:user_id>/", v.playlist_collaborator_remove, name="playlist_collaborator_remove"),
-    
+    path(
+        "playlist/<int:playlist_id>/collaborators/",
+        v.playlist_collaborators_list,
+        name="playlist_collaborators_list",
+    ),
+    path(
+        "playlist/<int:playlist_id>/collaborators/add/",
+        v.playlist_collaborator_add,
+        name="playlist_collaborator_add",
+    ),
+    path(
+        "playlist/<int:playlist_id>/collaborators/remove/<int:user_id>/",
+        v.playlist_collaborator_remove,
+        name="playlist_collaborator_remove",
+    ),
 ]

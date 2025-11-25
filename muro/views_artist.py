@@ -1,30 +1,16 @@
 # muro/views_artist.py
 # ============================================================================
-# Melodify — Vistas del muro de artista
-#
-# Vistas de servidor para:
-#   - Muro público y privado del artista.
-#   - CRUD de canciones (subida, edición, eliminado, undo).
-#   - Subida masiva de múltiples audios.
-#   - Endpoints JSON de integración con el reproductor central.
-#   - Fragmentos HTML para futuras secciones (playlists del artista).
+# Melodify — Vistas del muro de artista.
+# Muro público/privado, CRUD de canciones, subida masiva, endpoints JSON
+# y fragmentos HTML relacionados.
 # ============================================================================
 
 """
-Vistas del muro de artista: sección pública/propia, gestión de canciones (CRUD),
+Vistas del muro de artista: muro público/privado, gestión de canciones,
 subida masiva y fragmentos de UI relacionados.
 
-Este módulo concentra toda la lógica específica del "muro" de artista:
-
-- Vistas públicas y privadas del muro (muro_publico / mi_muro).
-- Subida, edición, eliminación y undo de canciones individuales.
-- Subida masiva de canciones a partir de múltiples archivos.
-- Endpoints JSON para integrar el muro con el reproductor central.
-- Pequeños fragmentos de HTML para futuras secciones (playlists del artista).
-
-La intención es que la lógica de negocio quede contenida aquí y el resto de
-la app (inicio_sesion, reproductor, etc.) consuma estos endpoints de forma
-predecible.
+Centraliza la lógica de negocio del muro para que el resto de la aplicación
+consuma estos endpoints de forma consistente.
 """
 
 import json
@@ -40,17 +26,59 @@ from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import transaction
+from django.db.models import Count, Q
+
+from django.contrib.contenttypes.models import ContentType
 from django.http import (
     HttpResponse,
     HttpResponseBadRequest,
     JsonResponse,
 )
+from django.core.exceptions import FieldDoesNotExist
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
 from inicio_sesion import base as base
 from inicio_sesion.auth_helpers import _get_user_role, _is_artist, _require_session_user
-from inicio_sesion.models import ArtistProfile, Song, Users, LikeMedia
+from inicio_sesion.models import (
+    ArtistProfile,
+    Song,
+    Users,
+    LikeMedia,
+    PlayList,
+    PlayListSong,
+)
+
+try:
+    from inicio_sesion.models import FollowArtist
+except Exception:
+    FollowArtist = None
+
+# Detecta los nombres de los FK en PlayListSong de forma tolerante
+try:
+    _PLS_PLAYLIST_FIELD = None
+    _PLS_SONG_FIELD = None
+
+    # FK hacia PlayList
+    for fname in ("playlist", "idPlaylist", "idPlayList"):
+        try:
+            PlayListSong._meta.get_field(fname)
+            _PLS_PLAYLIST_FIELD = fname
+            break
+        except FieldDoesNotExist:
+            continue
+
+    # FK hacia Song
+    for fname in ("song", "idSong", "idCancion"):
+        try:
+            PlayListSong._meta.get_field(fname)
+            _PLS_SONG_FIELD = fname
+            break
+        except FieldDoesNotExist:
+            continue
+except Exception:
+    _PLS_PLAYLIST_FIELD = None
+    _PLS_SONG_FIELD = None
 
 # =============================================================================
 # Configuración / constantes
@@ -65,11 +93,13 @@ _MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 # Extensiones de audio permitidas en la subida masiva
 _ALLOWED_EXTS = {"mp3", "wav", "ogg", "m4a", "flac"}
 
-# Si es True, se aplica un filtro más estricto a los títulos
+# Filtro estricto de títulos
 STRICT_TITLE_FILTER = True
 
-# Longitud máxima permitida para los títulos de canción 
+# Longitud máxima permitida para los títulos de canción
 MAX_SONG_TITLE_LEN = 27
+
+
 # =============================================================================
 # Helpers generales
 # =============================================================================
@@ -90,37 +120,23 @@ def _is_fetch(request) -> bool:
 
 def _redirect_login_clean(request):
     """
-    Limpia mensajes pendientes en el sistema de `messages` y redirige al login.
-
-    Esta función se usa cuando no hay usuario de sesión pero queremos
-    evitar que se queden mensajes "colgados" antes de mandar al login.
+    Limpia mensajes pendientes y redirige al login.
     """
     for _ in messages.get_messages(request):
-        # Consumimos todos los mensajes sin mostrarlos.
         pass
     return redirect("login")
 
 
 def _storage():
     """
-    Devuelve el storage a utilizar para archivos de audio/portadas.
-
-    Si en `inicio_sesion.base` se define `_AUDIO_STORAGE`, se usa ese.
-    De lo contrario, se recurre al storage por defecto de Django.
+    Devuelve el storage configurado para archivos de audio/portadas.
     """
     return getattr(base, "_AUDIO_STORAGE", default_storage)
 
 
 def _safe_file_url(field) -> str:
     """
-    Devuelve una URL "segura" para un FileField/ImageField.
-
-    - Si el campo no tiene valor, devuelve cadena vacía.
-    - Intenta usar `field.url` normalmente.
-    - Si falla, intenta reconstruir la URL mediante el storage configurado.
-    - Como último recurso, devuelve `str(field)`.
-
-    Esto evita que fallos de storage/URL rompan las vistas o el JSON.
+    Devuelve una URL segura para un FileField/ImageField.
     """
     if not field:
         return ""
@@ -136,13 +152,34 @@ def _safe_file_url(field) -> str:
     return str(field) if field else ""
 
 
+def _song_to_dict(song: Song) -> dict:
+    """
+    Convierte una instancia de Song en un dict para JSON/JS,
+    incluyendo alias usados en otras vistas/JS.
+    """
+    artist_name = getattr(song, "artist_display_name", "") or ""
+    audio_url = _safe_file_url(getattr(song, "audio_file", None)) or ""
+    cover_url = _safe_file_url(getattr(song, "cover_image", None)) or ""
+
+    return {
+        "id": song.id,
+        "title": song.title,
+        "artist_display_name": artist_name,
+        "author": artist_name,  # alias usado en templates/JS
+
+        "audioUrl": audio_url,
+        "audio_url": audio_url,  # alias legacy
+
+        "coverUrl": cover_url,
+        "cover_url": cover_url,  # alias legacy
+
+        "genre": getattr(song, "genre", "") or "",
+    }
+
+
 def _delete_storage_entry(file_or_url) -> None:
     """
     Elimina una entrada del storage a partir del FileField o de su nombre/URL.
-
-    - Normaliza el nombre en caso de que venga ya con el `base_url` incluido.
-    - Ignora silenciosamente cualquier error (no queremos romper flujo
-      de usuario por fallos puntuales de almacenamiento).
     """
     try:
         storage = _storage()
@@ -155,18 +192,12 @@ def _delete_storage_entry(file_or_url) -> None:
         if name:
             storage.delete(name)
     except Exception:
-        # Los errores de borrado no deben bloquear el flujo del usuario.
         pass
 
 
 def _delete_song_files(song: Song) -> None:
     """
     Elimina del storage los archivos asociados a una canción.
-
-    - Borra el archivo de audio (audio_file).
-    - Borra la portada (cover_image) si existe.
-
-    No elimina la instancia de Song en la base de datos, solo sus archivos.
     """
     storage = _storage()
     try:
@@ -187,47 +218,150 @@ def _delete_song_files(song: Song) -> None:
 def _get_artist_profile_by_username(username: str) -> Optional[ArtistProfile]:
     """
     Devuelve el ArtistProfile asociado a un username, o None si no existe.
-
-    Esta función encapsula la lógica de obtención del perfil de artista
-    y maneja las excepciones de DoesNotExist de forma silenciosa.
     """
     try:
         user = Users.objects.get(user=username)
         return user.artist_profile
     except (Users.DoesNotExist, ArtistProfile.DoesNotExist):
         return None
-def _put_gestion_undo(request, label: str, data: dict) -> None:
+
+
+def _collect_song_likes_for_muro(songs, session_username: str | None):
     """
-    Registra en sesión la última acción de Gestión (admin) para poder deshacerla
-    desde /gestion/ o cualquier plantilla que tenga la barra #undo-bar.
+    Anota en cada Song:
+      - s.is_liked
+      - s.likes_count
+
+    Devuelve estadísticas agregadas.
     """
-    request.session["gestion_undo"] = data
-    request.session["gestion_undo_label"] = label
-    request.session.modified = True
+    if not songs:
+        return {"total_likes": 0, "user_liked_songs": 0, "user_liked_ids": set()}
+
+    ct_song = ContentType.objects.get_for_model(Song)
+    song_ids = [s.id for s in songs]
+
+    likes_qs = LikeMedia.objects.filter(
+        content_type=ct_song,
+        object_id__in=song_ids,
+    )
+
+    counts_by_song = {
+        row["object_id"]: row["c"]
+        for row in likes_qs.values("object_id").annotate(c=Count("id"))
+    }
+
+    user_liked_ids: set[int] = set()
+    if session_username:
+        user_liked_ids = set(
+            likes_qs.filter(user__user=session_username)
+            .values_list("object_id", flat=True)
+        )
+
+    total_likes = 0
+    for s in songs:
+        song_likes = counts_by_song.get(s.id, 0)
+        s.likes_count = song_likes
+        s.is_liked = s.id in user_liked_ids
+        total_likes += song_likes
+
+    return {
+        "total_likes": total_likes,
+        "user_liked_songs": len(user_liked_ids),
+        "user_liked_ids": user_liked_ids,
+    }
+
+
+def _collect_follow_stats_for_artist(artist_user: Users, session_username: str | None):
+    """
+    Devuelve estadísticas de seguidores para el muro del artista.
+    """
+    if not FollowArtist or not artist_user:
+        return {"followers": 0, "is_following": False}
+
+    try:
+        followers_qs = FollowArtist.objects.filter(artist=artist_user)
+        followers_count = followers_qs.count()
+
+        is_following = False
+        if session_username:
+            is_following = followers_qs.filter(
+                follower__user=session_username
+            ).exists()
+
+        return {"followers": followers_count, "is_following": is_following}
+    except Exception:
+        return {"followers": 0, "is_following": False}
+
+
+def _build_likes_playlist_for_username(username: str, limit_to_songs=None):
+    """
+    Construye una playlist virtual "Music that i love" a partir de los likes
+    de un usuario. Puede limitarse a una lista concreta de canciones.
+    """
+    if not username:
+        return None
+
+    try:
+        ct_song = ContentType.objects.get_for_model(Song)
+    except Exception:
+        return None
+
+    liked_qs = LikeMedia.objects.filter(
+        content_type=ct_song,
+        user__user=username,
+    )
+
+    if limit_to_songs:
+        song_ids = [s.id for s in limit_to_songs]
+        liked_qs = liked_qs.filter(object_id__in=song_ids)
+
+    liked_ids = list(liked_qs.values_list("object_id", flat=True))
+    if not liked_ids:
+        return None
+
+    liked_songs_qs = Song.objects.filter(
+        id__in=liked_ids,
+        visibility="public",
+    ).only(
+        "id",
+        "title",
+        "artist_display_name",
+        "audio_file",
+        "cover_image",
+        "genre",
+    )
+
+    liked_songs: list[dict] = []
+    for s in liked_songs_qs:
+        data = _song_to_dict(s)
+        if not data["audioUrl"]:
+            continue
+        liked_songs.append(data)
+
+    if not liked_songs:
+        return None
+
+    return {
+        "id": f"pl:likes:{username}",
+        "name": "Music that i love",
+        "songs_count": len(liked_songs),
+        "songs": liked_songs,
+    }
 
 
 # =============================================================================
 # Heurísticas de título / hash
 # =============================================================================
 
-# Expresiones regulares para detectar nombres tipo hash/UUID/base64
 _GUID_RE = re.compile(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", re.I)
 _HEX_LONG_RE = re.compile(r"[0-9a-f]{16,}", re.I)
 _B64ISH_RE = re.compile(r"^[A-Za-z0-9+/]{24,}={0,2}$")
 
-# Conjunto de caracteres que consideramos "palabras" (incluye acentos y ñ)
 _WORD_CHARS = "a-záéíóúñü"
 _VOWELS = "aeiouáéíóú"
 
 
 def _normalize_base(filename: str) -> str:
-    """
-    Normaliza el nombre base de un archivo para usarlo como título candidato.
-
-    - Quita la extensión.
-    - Sustituye guiones, guiones bajos y puntos por espacios.
-    - Colapsa espacios múltiples en uno solo.
-    """
     base = os.path.splitext(filename)[0]
     base = re.sub(r"[_\-\.]+", " ", base)
     base = re.sub(r"\s+", " ", base).strip()
@@ -235,13 +369,6 @@ def _normalize_base(filename: str) -> str:
 
 
 def _clean_title(filename: str) -> str:
-    """
-    Limpia un nombre de archivo para convertirlo en título:
-
-    - Elimina prefijos numéricos tipo "01 - ", "1) " al inicio.
-    - Reemplaza guiones/barras bajas por espacios.
-    - Devuelve 'Nueva canción' si el resultado queda vacío.
-    """
     name = os.path.splitext(filename)[0]
     name = re.sub(r"^\s*\d+[)\-._\s]+", "", name)
     name = name.replace("_", " ").replace("-", " ").strip()
@@ -249,23 +376,10 @@ def _clean_title(filename: str) -> str:
 
 
 def _title_candidate_from_filename(filename: str) -> str:
-    """
-    Obtiene un título candidato a partir del nombre de archivo:
-
-    Combina la limpieza básica (`_clean_title`) con la normalización
-    de espacios (`_normalize_base`).
-    """
     return _normalize_base(_clean_title(filename))
 
 
 def _looks_random(name: str) -> bool:
-    """
-    Heurística para detectar si un nombre parece aleatorio:
-
-    - Coincide con el patrón de un UUID.
-    - Contiene un tramo largo de hexadecimales.
-    - Coincide con una cadena tipo base64 larga.
-    """
     if _GUID_RE.fullmatch(name):
         return True
     if _HEX_LONG_RE.search(name):
@@ -276,21 +390,6 @@ def _looks_random(name: str) -> bool:
 
 
 def _title_is_sensible(title: str) -> tuple[bool, str]:
-    """
-    Valida si un título es "sensato" para exposición al usuario.
-
-    Devuelve:
-        (True, "") si el título pasa las heurísticas.
-        (False, motivo) en caso contrario.
-
-    Criterios (cuando STRICT_TITLE_FILTER es True):
-    - Longitud mínima (>= 3).
-    - Longitud máxima (<= MAX_SONG_TITLE_LEN).
-    - No parece un hash/UUID/base64 (_looks_random).
-    - No es una cadena sin vocales larga (tipo 'FJNRK').
-    - Proporción aceptable de letras vs dígitos/símbolos.
-    - Contiene alguna palabra reconocible (3+ letras).
-    """
     if not STRICT_TITLE_FILTER:
         return True, ""
 
@@ -312,26 +411,21 @@ def _title_is_sensible(title: str) -> tuple[bool, str]:
         return False, "demasiados números/símbolos"
 
     tokens = title.split()
-    long_words = [t for t in tokens if re.fullmatch(rf"[{_WORD_CHARS}]{{3,}}", t, flags=re.I)]
+    long_words = [
+        t
+        for t in tokens
+        if re.fullmatch(rf"[{_WORD_CHARS}]{{3,}}", t, flags=re.I)
+    ]
     if not long_words:
         return False, "no contiene palabras reconocibles"
 
-    # límite duro por longitud para no romper la UI
     if len(title) > MAX_SONG_TITLE_LEN:
         return False, f"demasiado largo (máx. {MAX_SONG_TITLE_LEN} caracteres)"
 
     return True, ""
 
+
 def _sha256_file(django_file) -> str:
-    """
-    Calcula el hash SHA-256 de un archivo subido (UploadedFile / InMemoryUploadedFile).
-
-    - Lee el archivo en chunks mediante `django_file.chunks()`.
-    - Intenta devolver el puntero al inicio con `seek(0)`, si es posible.
-    - Devuelve el digest en formato hexadecimal (str de 64 chars).
-
-    Este hash se usa para detectar duplicados de audio del mismo artista.
-    """
     h = sha256()
     for chunk in django_file.chunks():
         h.update(chunk)
@@ -350,26 +444,15 @@ def _sha256_file(django_file) -> str:
 @require_http_methods(["GET"])
 def muro_publico(request, username: str):
     """
-    Muro público de un artista.
-
-    Flujo:
-    - Si `username` corresponde a un Users(type='artista'), se renderiza el
-      muro como antes (canciones públicas del artista + descripción).
-    - Si no existe o no es artista, se muestra una página amigable de
-      "artista no encontrado" con status HTTP 404.
-
-    Además:
-    - Se construye, para el usuario en sesión (si existe), una playlist JSON
-      "Mi música" para integrar con el reproductor central.
-    - Se inyectan datos de la sesión (avatar, descripción propia, fecha de alta)
-      para personalizar la barra superior.
+    Muro público de un artista con secciones de likes, seguidores y playlists.
     """
-    # Intentamos encontrar al artista
-    artist_user = Users.objects.filter(user=username, type__iexact="artista").first()
+    # Buscar artista
+    artist_user = Users.objects.filter(
+        user=username,
+        type__iexact="artista",
+    ).first()
 
-    # =====================================================================
-    # CASO: artista NO registrado -> página de "no encontrado"
-    # =====================================================================
+    # Artista no encontrado: responde 404 con plantilla específica
     if not artist_user:
         session_user = request.session.get("user", "")
         session_role = request.session.get("role", "")
@@ -377,7 +460,7 @@ def muro_publico(request, username: str):
 
         session_avatar_url = ""
         session_artist_desc = ""
-        session_created_at = ""
+        session_created_at = None
 
         if session_user:
             try:
@@ -385,10 +468,12 @@ def muro_publico(request, username: str):
                 if getattr(u, "avatar", None):
                     session_avatar_url = _safe_file_url(u.avatar)
                 if getattr(u, "created_at", None):
-                    session_created_at = u.created_at.strftime("%Y-%m-%d %H:%M")
+                    session_created_at = u.created_at
                 if role_lower == "artista":
                     try:
-                        session_artist_desc = (u.artist_profile.description or "").strip()
+                        session_artist_desc = (
+                            u.artist_profile.description or ""
+                        ).strip()
                     except ArtistProfile.DoesNotExist:
                         session_artist_desc = ""
             except Users.DoesNotExist:
@@ -402,21 +487,23 @@ def muro_publico(request, username: str):
             "session_description": session_artist_desc,
             "session_created_at": session_created_at,
         }
-        # status=404 para que siga siendo “no encontrado” pero con página amigable
-        return render(request, "muro/artista_no_encontrado.html", ctx, status=404)
+        return render(
+            request,
+            "muro/artista_no_encontrado.html",
+            ctx,
+            status=404,
+        )
 
-    # =====================================================================
-    # CASO NORMAL: artista registrado -> muro como antes
-    # =====================================================================
+    # Descripción del muro y canciones públicas
     try:
         prof = artist_user.artist_profile
         wall_description = (prof.description or "").strip()
     except ArtistProfile.DoesNotExist:
         wall_description = ""
 
-    # ================== Canciones públicas del artista ==================
     songs_qs = Song.objects.filter(
-        owner_user=username, visibility="public"
+        owner_user=username,
+        visibility="public",
     ).only(
         "id",
         "title",
@@ -426,19 +513,16 @@ def muro_publico(request, username: str):
         "audio_file",
         "genre",
     )
-
-    # Lo convertimos a lista para poder iterar y añadir flags
     songs = list(songs_qs)
 
-    # ================== Marcar likes del usuario actual ==================
+    # Datos de sesión para header
     session_user = request.session.get("user", "")
     session_role = request.session.get("role", "")
     role_lower = (session_role or "").lower()
 
-    # Estos se usan en más partes, así que los dejamos como estaban
     session_avatar_url = ""
     session_artist_desc = ""
-    session_created_at = ""
+    session_created_at = None
 
     if session_user:
         try:
@@ -446,38 +530,42 @@ def muro_publico(request, username: str):
             if getattr(u, "avatar", None):
                 session_avatar_url = _safe_file_url(u.avatar)
             if getattr(u, "created_at", None):
-                session_created_at = u.created_at.strftime("%Y-%m-%d %H:%M")
+                session_created_at = u.created_at
             if role_lower == "artista":
                 try:
-                    session_artist_desc = (u.artist_profile.description or "").strip()
+                    session_artist_desc = (
+                        u.artist_profile.description or ""
+                    ).strip()
                 except ArtistProfile.DoesNotExist:
                     session_artist_desc = ""
         except Users.DoesNotExist:
             pass
 
-    # ⚠️ Ajusta este filtro si tu LikeMedia usa otros campos.
-    liked_ids = set()
-    if session_user and songs:
-        try:
-            liked_ids = set(
-                LikeMedia.objects.filter(
-                    user__user=session_user,   # FK a Users.user
-                    song__in=songs,
-                    is_like=True,
-                ).values_list("song_id", flat=True)
-            )
-        except Exception:
-            liked_ids = set()
+    # Likes y seguidores
+    like_stats = _collect_song_likes_for_muro(songs, session_user or None)
+    likes_for_js = [
+        {"id": s.id}
+        for s in songs
+        if getattr(s, "is_liked", False)
+    ]
 
-    # Inyectar flag en cada Song para la plantilla
-    for s in songs:
-        s.is_liked = s.id in liked_ids
+    follow_stats = _collect_follow_stats_for_artist(
+        artist_user, session_user or None
+    )
 
-    # Playlist "Mi música" para el propietario (integración con reproductor)
+    # Playlist "Mi música" (artista logueado)
     playlists = []
     if role_lower == "artista" and session_user:
-        qs = Song.objects.filter(owner_user=session_user, visibility="public").only(
-            "id", "title", "artist_display_name", "audio_file", "cover_image", "genre"
+        qs = Song.objects.filter(
+            owner_user=session_user,
+            visibility="public",
+        ).only(
+            "id",
+            "title",
+            "artist_display_name",
+            "audio_file",
+            "cover_image",
+            "genre",
         )
         songs_json = [
             {
@@ -492,17 +580,133 @@ def muro_publico(request, username: str):
         ]
         playlists.append({"id": 1, "name": "Mi música", "songs": songs_json})
 
-    # Datos de undo (el borrado/creación más reciente en el muro)
+    # Datos de undo del muro
     undo_muro_data = request.session.get("mi_muro_undo")
     if undo_muro_data and undo_muro_data.get("owner") != session_user:
-        # Si el owner almacenado no es el usuario actual, descartamos el undo
         undo_muro_data = None
-    undo_muro_label = request.session.get("mi_muro_undo_label") if undo_muro_data else None
+    undo_muro_label = (
+        request.session.get("mi_muro_undo_label") if undo_muro_data else None
+    )
 
+    # Playlists públicas del artista + "Music that i love"
+    artist_public_playlists: list[dict] = []
+    artist_likes_playlist: dict | None = None
+
+    # Playlists públicas del artista
+    try:
+        id_user_field = PlayList._meta.get_field("idUser")
+    except Exception:
+        id_user_field = None
+
+    artist_playlists_qs = PlayList.objects.none()
+    try:
+        if id_user_field is not None:
+            from django.db.models import (
+                ForeignKey,
+                OneToOneField,
+                IntegerField,
+                BigIntegerField,
+                AutoField,
+                CharField,
+            )
+
+            if isinstance(id_user_field, (ForeignKey, OneToOneField)):
+                artist_playlists_qs = PlayList.objects.filter(idUser=artist_user)
+            elif isinstance(id_user_field, (IntegerField, BigIntegerField, AutoField)):
+                artist_playlists_qs = PlayList.objects.filter(idUser=artist_user.id)
+            elif isinstance(id_user_field, CharField):
+                artist_playlists_qs = PlayList.objects.filter(idUser=artist_user.user)
+
+        artist_playlists_qs = artist_playlists_qs.exclude(isprivate=True).only(
+            "id",
+            "name",
+        )
+    except Exception:
+        artist_playlists_qs = PlayList.objects.none()
+    try:
+        ct_playlist = ContentType.objects.get_for_model(PlayList)
+    except Exception:
+        ct_playlist = None
+
+    for pl in artist_playlists_qs:
+        # Canciones de esta playlist
+        try:
+            playlist_songs = PlayListSong.objects.filter(
+                playlist_id=pl.id
+            ).order_by("position")
+        except Exception:
+            playlist_songs = PlayListSong.objects.none()
+
+        song_ids = [ps.song_id for ps in playlist_songs]
+
+        pl_songs: list[dict] = []
+        if song_ids:
+            songs_qs = Song.objects.filter(
+                id__in=song_ids,
+                visibility="public",
+            ).only(
+                "id",
+                "title",
+                "artist_display_name",
+                "genre",
+                "audio_file",
+                "cover_image",
+            )
+
+            # Mapa para respetar el orden definido en PlayListSong
+            songs_map = {s.id: s for s in songs_qs}
+
+            for ps in playlist_songs:
+                s = songs_map.get(ps.song_id)
+                if not s:
+                    continue
+
+                data = _song_to_dict(s)
+                if not data["audioUrl"]:
+                    continue
+
+                pl_songs.append(data)
+
+        # Likes de la playlist
+        likes_count = 0
+        if ct_playlist is not None:
+            try:
+                likes_count = LikeMedia.objects.filter(
+                    content_type=ct_playlist,
+                    object_id=pl.id,
+                ).count()
+            except Exception:
+                likes_count = 0
+
+        artist_public_playlists.append(
+            {
+                "id": pl.id,
+                "name": pl.name,
+                "songs_count": len(pl_songs),
+                "likes_count": likes_count,
+                "songs": pl_songs,
+            }
+        )
+
+    # Playlist "Music that i love"
+    artist_likes_playlist = _build_likes_playlist_for_username(
+        artist_user.user,
+        limit_to_songs=None,
+    )
+
+    # Si el artista no tiene gustos, se usan los del usuario de sesión
+    # limitados a canciones de este muro.
+    if not artist_likes_playlist and session_user:
+        artist_likes_playlist = _build_likes_playlist_for_username(
+            session_user,
+            limit_to_songs=songs,
+        )
+
+    # Contexto final
     ctx = {
         "artist": artist_user,
         "description": wall_description,
-        "songs": songs,  # <- la lista con s.is_liked rellenado
+        "songs": songs,
         "is_owner": (session_user == username),
         "session_user": session_user,
         "session_role": session_role,
@@ -513,6 +717,29 @@ def muro_publico(request, username: str):
         "initial_view": "mi-muro",
         "undo_muro_data": undo_muro_data,
         "undo_muro_label": undo_muro_label,
+        "likes_json": json.dumps(likes_for_js, ensure_ascii=False),
+        "muro_total_likes": like_stats.get("total_likes", 0),
+        "muro_user_liked_songs": like_stats.get("user_liked_songs", 0),
+        "muro_followers_count": follow_stats.get("followers", 0),
+        "is_following_artist": follow_stats.get("is_following", False),
+        # Playlists del artista
+        "artist_public_playlists": artist_public_playlists,
+        "artist_likes_playlist": artist_likes_playlist,
+        "artist_public_playlists_json": json.dumps(
+            artist_public_playlists, ensure_ascii=False
+        ),
+        "artist_likes_playlist_json": json.dumps(
+            artist_likes_playlist or {}, ensure_ascii=False
+        ),
+        # Alias para compatibilidad con JS/plantillas antiguos
+        "artist_playlists": artist_public_playlists,
+        "artist_playlists_json": json.dumps(
+            artist_public_playlists, ensure_ascii=False
+        ),
+        "music_that_i_love": artist_likes_playlist,
+        "music_that_i_love_json": json.dumps(
+            artist_likes_playlist or {}, ensure_ascii=False
+        ),
     }
 
     return render(request, "muro/muro_artista.html", ctx)
@@ -520,14 +747,6 @@ def muro_publico(request, username: str):
 
 @require_http_methods(["GET"])
 def mi_muro(request):
-    """
-    Atajo para que el artista autenticado vea su propio muro.
-
-    - Requiere usuario de sesión.
-    - Requiere que el rol sea de artista.
-    - Internamente delega en `muro_publico` con su propio username,
-      para reutilizar la misma plantilla y la misma lógica de contexto.
-    """
     username = _require_session_user(request)
     if not username:
         return _redirect_login_clean(request)
@@ -544,22 +763,7 @@ def mi_muro(request):
 @require_http_methods(["POST"])
 def subir_cancion_en_muro(request):
     """
-    Subida de canción desde el muro del artista.
-
-    El campo artist_display_name ya no proviene del formulario: se fija siempre
-    al nombre de usuario autenticado (username), para garantizar consistencia
-    con el artista propietario.
-
-    Lógica principal:
-    - Valida login + rol de artista.
-    - Limpia/valida el título (o lo infiere del nombre de archivo).
-    - Verifica duplicados por título y por hash de audio (SHA-256).
-    - Guarda audio y portada en el storage configurado.
-    - Crea la instancia Song y registra una operación de undo en sesión.
-
-    Respuesta:
-    - Si la petición es vía fetch (X-Requested-With=fetch), devuelve JSON.
-    - De lo contrario, redirige al muro con mensajes de Django.
+    Subida de una canción desde el muro del artista.
     """
     username = _require_session_user(request)
     if not username:
@@ -569,7 +773,6 @@ def subir_cancion_en_muro(request):
     is_fetch = _is_fetch(request)
 
     def _json_err(msg, status=400):
-        """Helper interno para respuestas de error JSON homogéneas."""
         return JsonResponse({"ok": False, "error": msg}, status=status)
 
     title = (request.POST.get("title") or "").strip()
@@ -577,12 +780,10 @@ def subir_cancion_en_muro(request):
     audio = request.FILES.get("audio_file")
     cover = request.FILES.get("cover_image")
 
-    # El autor principal SIEMPRE será el usuario logueado
     artist_display_name = username
 
-    # ======================= Validación de título =======================
+    # Título
     if not title:
-        # Permitimos inferirlo a partir del nombre del archivo de audio
         if audio:
             candidate = _title_candidate_from_filename(audio.name)
             ok_title, why = _title_is_sensible(candidate)
@@ -590,37 +791,52 @@ def subir_cancion_en_muro(request):
                 title = candidate
             else:
                 msg = f"Título inválido ({why})."
-                return _json_err(msg) if is_fetch else _redirect_error(request, msg, "mi_muro")
+                return _json_err(msg) if is_fetch else _redirect_error(
+                    request, msg, "mi_muro"
+                )
         else:
             msg = "Título requerido"
-            return _json_err(msg) if is_fetch else _redirect_error(request, msg, "mi_muro")
+            return _json_err(msg) if is_fetch else _redirect_error(
+                request, msg, "mi_muro"
+            )
     else:
         ok_title, why = _title_is_sensible(title)
         if not ok_title:
             msg = f"Título no válido ({why})."
-            return _json_err(msg) if is_fetch else _redirect_error(request, msg, "mi_muro")
+            return _json_err(msg) if is_fetch else _redirect_error(
+                request, msg, "mi_muro"
+            )
 
-    # ======================= Audio obligatorio ==========================
+    # Audio obligatorio
     if audio is None:
         msg = "El archivo de audio es obligatorio."
-        return _json_err(msg) if is_fetch else _redirect_error(request, msg, "mi_muro")
+        return _json_err(msg) if is_fetch else _redirect_error(
+            request, msg, "mi_muro"
+        )
 
-    # ======================= Duplicados / límites =======================
-    if Song.objects.filter(owner_user=username, visibility="public", title__iexact=title).exists():
+    # Duplicados / límites
+    if Song.objects.filter(
+        owner_user=username, visibility="public", title__iexact=title
+    ).exists():
         msg = "Ya tienes una canción con ese título."
-        return _json_err(msg) if is_fetch else _redirect_error(request, msg, "mi_muro")
+        return _json_err(msg) if is_fetch else _redirect_error(
+            request, msg, "mi_muro"
+        )
 
     if getattr(audio, "size", 0) > _MAX_FILE_SIZE:
         msg = f"El archivo excede {int(_MAX_FILE_SIZE/1024/1024)} MB."
-        return _json_err(msg) if is_fetch else _redirect_error(request, msg, "mi_muro")
+        return _json_err(msg) if is_fetch else _redirect_error(
+            request, msg, "mi_muro"
+        )
 
-    # Detecta duplicados por contenido (hash SHA-256 del audio)
     audio_digest = _sha256_file(audio)
     if audio_digest and Song.objects.filter(
         owner_user=username, visibility="public", audio_sha256=audio_digest
     ).exists():
         msg = "Ya subiste este mismo audio antes."
-        return _json_err(msg) if is_fetch else _redirect_error(request, msg, "mi_muro")
+        return _json_err(msg) if is_fetch else _redirect_error(
+            request, msg, "mi_muro"
+        )
 
     storage = _storage()
     try:
@@ -633,11 +849,9 @@ def subir_cancion_en_muro(request):
             cover_name = f"uploaded_covers/cover_{username}_{uuid4().hex}{cover_ext}"
 
         with transaction.atomic():
-            # Guardamos archivos en storage
             saved_audio = storage.save(audio_name, audio)
             saved_cover = storage.save(cover_name, cover) if cover_name else None
 
-            # Creamos la Song asociada al artista/owner actual
             song = Song.objects.create(
                 title=title,
                 artist_display_name=artist_display_name,
@@ -649,7 +863,6 @@ def subir_cancion_en_muro(request):
                 genre=genre,
             )
 
-        # Registramos undo: si el usuario se arrepiente, puede eliminar la canción
         undo_label = f"Se subió “{song.title}”."
         _put_undo_muro(
             request,
@@ -666,7 +879,11 @@ def subir_cancion_en_muro(request):
                         "title": song.title,
                         "artist_display_name": song.artist_display_name,
                         "owner_user": song.owner_user,
-                        "created_at": (song.created_at.isoformat() if song.created_at else ""),
+                        "created_at": (
+                            song.created_at.isoformat()
+                            if song.created_at
+                            else ""
+                        ),
                         "audio_url": _safe_file_url(song.audio_file),
                         "cover_url": _safe_file_url(song.cover_image),
                         "genre": getattr(song, "genre", "") or "",
@@ -680,18 +897,19 @@ def subir_cancion_en_muro(request):
 
     except ValidationError:
         msg = "Formato no admitido."
-        return _json_err(msg) if is_fetch else _redirect_error(request, msg, "mi_muro")
+        return _json_err(msg) if is_fetch else _redirect_error(
+            request, msg, "mi_muro"
+        )
     except Exception:
         msg = "Error al subir la canción."
-        return _json_err(msg) if is_fetch else _redirect_error(request, msg, "mi_muro")
+        return _json_err(msg) if is_fetch else _redirect_error(
+            request, msg, "mi_muro"
+        )
 
 
 def _redirect_error(request, msg: str, to_name: str):
     """
-    Helper para redirigir mostrando un mensaje de error (no fetch).
-
-    - Si la petición no es `fetch`, añade el mensaje al sistema de mensajes.
-    - Redirige a la vista identificada por `to_name`.
+    Registra un mensaje de error y redirige a una vista nombrada.
     """
     if not _is_fetch(request):
         messages.error(request, msg)
@@ -700,11 +918,7 @@ def _redirect_error(request, msg: str, to_name: str):
 
 def _put_undo_muro(request, label: str, data: dict) -> None:
     """
-    Almacena en sesión la última operación de undo disponible para el muro.
-
-    Se guardan dos claves:
-    - 'mi_muro_undo': dict con la información necesaria para revertir.
-    - 'mi_muro_undo_label': texto descriptivo que se muestra al usuario.
+    Guarda datos de undo para operaciones en el muro del artista.
     """
     request.session["mi_muro_undo"] = data
     request.session["mi_muro_undo_label"] = label
@@ -713,7 +927,7 @@ def _put_undo_muro(request, label: str, data: dict) -> None:
 
 def _clear_undo_muro(request) -> None:
     """
-    Elimina de la sesión cualquier estado de undo del muro de artista.
+    Limpia los datos de undo del muro del artista.
     """
     request.session.pop("mi_muro_undo", None)
     request.session.pop("mi_muro_undo_label", None)
@@ -723,18 +937,7 @@ def _clear_undo_muro(request) -> None:
 @require_http_methods(["GET", "POST"])
 def editar_mi_cancion_en_muro(request, song_id: int):
     """
-    Edición de una canción desde el muro del artista.
-
-    El artist_display_name ya no se edita aquí: queda fijado al valor existente
-    (normalmente el username del dueño). Solo se permite cambiar título, género
-    y portada.
-
-    Flujo:
-    - Valida login + rol de artista.
-    - Comprueba que la canción pertenece al usuario.
-    - En POST, valida título y conflictos de nombres duplicados.
-    - Gestiona sustitución/eliminación de portada en el storage.
-    - Guarda cambios y retorna al muro del artista.
+    Edición de una canción del muro del artista.
     """
     username = _require_session_user(request)
     if not username:
@@ -757,7 +960,6 @@ def editar_mi_cancion_en_muro(request, song_id: int):
                 messages.error(request, "El título es obligatorio.")
             return redirect("editar_mi_cancion_en_muro", song_id=song.id)
 
-        # Nueva validación de título (incluye longitud máxima)
         ok_title, why = _title_is_sensible(new_title)
         if not ok_title:
             if not _is_fetch(request):
@@ -767,7 +969,6 @@ def editar_mi_cancion_en_muro(request, song_id: int):
         try:
             storage = _storage()
             with transaction.atomic():
-                # Evita duplicados de título dentro del mismo owner
                 if (
                     Song.objects.filter(
                         owner_user=username,
@@ -778,14 +979,16 @@ def editar_mi_cancion_en_muro(request, song_id: int):
                     .exists()
                 ):
                     if not _is_fetch(request):
-                        messages.error(request, "Ya tienes otra canción con ese título.")
-                    return redirect("editar_mi_cancion_en_muro", song_id=song.id)
+                        messages.error(
+                            request, "Ya tienes otra canción con ese título."
+                        )
+                    return redirect(
+                        "editar_mi_cancion_en_muro", song_id=song.id
+                    )
 
-                # Actualizamos título y género; el autor se mantiene igual
                 song.title = new_title
                 song.genre = new_genre
 
-                # Manejo de portada: borrar, reemplazar o conservar
                 if remove_cov:
                     _delete_storage_entry(song.cover_image)
                     song.cover_image = None
@@ -797,7 +1000,6 @@ def editar_mi_cancion_en_muro(request, song_id: int):
                     )
                     song.cover_image = saved
 
-                # Ya no incluimos artist_display_name en update_fields
                 song.save(update_fields=["title", "cover_image", "genre"])
 
             if not _is_fetch(request):
@@ -805,22 +1007,18 @@ def editar_mi_cancion_en_muro(request, song_id: int):
             return redirect("mi_muro")
         except Exception:
             if not _is_fetch(request):
-                messages.error(request, "No se pudieron guardar los cambios.")
+                messages.error(
+                    request, "No se pudieron guardar los cambios."
+                )
             return redirect("editar_mi_cancion_en_muro", song_id=song.id)
 
-    # GET: renderizamos el formulario de edición
     return render(request, "muro/editar_mi_cancion.html", {"song": song})
 
 
 @require_http_methods(["POST"])
 def eliminar_cancion(request, song_id: int):
     """
-    Marca una canción del muro como eliminada (soft delete).
-
-    - Requiere artista autenticado.
-    - Solo permite eliminar canciones cuyo owner_user coincide con el usuario.
-    - Si la canción es pública, cambia `visibility` a 'removed'.
-    - Registra un undo de tipo 'restore_song' para poder recuperarla.
+    Marca una canción como eliminada desde el muro del artista.
     """
     username = _require_session_user(request)
     if not username:
@@ -833,6 +1031,7 @@ def eliminar_cancion(request, song_id: int):
         song.visibility = "removed"
         song.save(update_fields=["visibility"])
 
+
     _put_undo_muro(
         request,
         f"Se eliminó “{song.title}”.",
@@ -840,23 +1039,16 @@ def eliminar_cancion(request, song_id: int):
     )
 
     if _is_fetch(request):
-        return JsonResponse({"ok": True, "undo_label": f"Se eliminó “{song.title}”."})
+        return JsonResponse(
+            {"ok": True, "undo_label": f"Se eliminó “{song.title}”."}
+        )
     return redirect("mi_muro")
 
 
 @require_http_methods(["POST"])
 def revertir_mi_cancion(request):
     """
-    Ejecuta la última operación de undo almacenada en sesión para el muro.
-
-    Tipos de undo soportados:
-    - 'restore_song': restaura la visibilidad de una canción eliminada
-      (soft delete -> public).
-    - 'delete_song': elimina definitivamente la canción y sus archivos.
-
-    Seguridad:
-    - Verifica que el owner en la sesión coincida con el usuario actual.
-    - Si la canción ya no existe o no pertenece al usuario, devuelve 403.
+    Revierte la última acción de subir/eliminar canción en el muro del artista.
     """
     username = _require_session_user(request)
     if not username:
@@ -892,12 +1084,11 @@ def revertir_mi_cancion(request):
     if _is_fetch(request):
         return HttpResponse(status=204)
     return redirect("mi_muro")
+
+
 def _put_undo_gestion(request, label: str, data: dict) -> None:
     """
-    Guarda en sesión el último undo global para Gestión (admin).
-
-    Lo leerá la vista de 'gestion' para mostrar la barra de deshacer, y
-    'revertir_accion' para ejecutar la reversión.
+    Guarda datos de undo para operaciones desde Gestión.
     """
     request.session["gestion_undo"] = data
     request.session["gestion_undo_label"] = label
@@ -907,11 +1098,7 @@ def _put_undo_gestion(request, label: str, data: dict) -> None:
 @require_http_methods(["GET", "POST"])
 def subir_cancion(request):
     """
-    Wrapper para compatibilidad con la URL histórica de subida de canción.
-
-    - En POST delega en `subir_cancion_en_muro`.
-    - En GET simplemente redirige al muro del artista (no hay formulario
-      independiente de subida, todo se hace desde el muro).
+    Proxy hacia subir_cancion_en_muro. Acepta GET (redirige) y POST.
     """
     if request.method == "POST":
         return subir_cancion_en_muro(request)
@@ -927,32 +1114,20 @@ def subir_cancion(request):
 @require_http_methods(["GET"])
 def mi_musica_json(request):
     """
-    Devuelve en JSON las canciones públicas del artista autenticado.
-
-    Estructura de respuesta:
-    {
-      "ok": true,
-      "songs": [
-        {
-          "id": ...,
-          "title": ...,
-          "artist_display_name": ...,
-          "audio_url": ...,
-          "cover_url": ...,
-          "genre": ...
-        },
-        ...
-      ]
-    }
-
-    Se utiliza para integrar la playlist "Mi música" con el reproductor.
+    Devuelve en JSON las canciones públicas del usuario autenticado.
     """
     if "user" not in request.session:
         return JsonResponse({"ok": False, "error": "auth"}, status=401)
 
     username = request.session.get("user", "")
     qs = Song.objects.filter(owner_user=username, visibility="public").only(
-        "id", "title", "artist_display_name", "audio_file", "cover_image", "visibility", "genre"
+        "id",
+        "title",
+        "artist_display_name",
+        "audio_file",
+        "cover_image",
+        "visibility",
+        "genre",
     )
     songs = [
         {
@@ -977,26 +1152,6 @@ def mi_musica_json(request):
 def subida_masiva(request):
     """
     Vista para subir múltiples canciones de forma masiva desde el muro.
-
-    GET:
-        Renderiza el formulario de subida masiva.
-
-    POST:
-        - Valida login + rol de artista.
-        - Valida número de archivos y tamaño máximo.
-        - Exige un género (o 'otro' especificado manualmente).
-        - Reutiliza una misma portada opcional (cover_file) para todos los
-          audios subidos.
-        - Para cada archivo:
-            * Verifica extensión permitida.
-            * Aplica heurística de título a partir del nombre de archivo.
-            * Calcula hash SHA-256 para evitar duplicados exactos.
-            * Evita títulos duplicados del mismo artista.
-            * Crea la Song y devuelve resultado por archivo.
-
-    Respuesta:
-        - Si es fetch: JSON con detalle por archivo.
-        - Si es navegación normal: mensaje agregando resumen y redirección.
     """
     username = _require_session_user(request)
     if not username:
@@ -1019,16 +1174,16 @@ def subida_masiva(request):
     if not files:
         return HttpResponseBadRequest("No se enviaron archivos.")
     if len(files) > _MAX_FILES:
-        return HttpResponseBadRequest(f"Máximo permitido: {_MAX_FILES} archivos.")
+        return HttpResponseBadRequest(
+            f"Máximo permitido: {_MAX_FILES} archivos."
+        )
 
-    # Género principal para todas las canciones
     genre = genre_other if default_genre == "_other" else default_genre
     if not genre:
         return HttpResponseBadRequest("Género obligatorio.")
 
     storage = _storage()
 
-    # Leemos la portada una sola vez para reutilizarla en todas las canciones
     cover_bytes = None
     cover_suffix = ""
     if cover_file:
@@ -1047,7 +1202,9 @@ def subida_masiva(request):
     for f in files:
         ext = (Path(f.name).suffix.lower().lstrip(".") or "")
         if ext not in _ALLOWED_EXTS:
-            results.append({"name": f.name, "ok": False, "error": "Extensión no permitida"})
+            results.append(
+                {"name": f.name, "ok": False, "error": "Extensión no permitida"}
+            )
             continue
 
         if getattr(f, "size", 0) > _MAX_FILE_SIZE:
@@ -1060,7 +1217,6 @@ def subida_masiva(request):
             )
             continue
 
-        # Proponemos un título a partir del nombre del archivo
         candidate = _title_candidate_from_filename(f.name)
         ok_title, why = _title_is_sensible(candidate)
         if not ok_title:
@@ -1073,31 +1229,51 @@ def subida_masiva(request):
             )
             continue
 
-        # Calculamos hash para detectar duplicados de contenido
         try:
             sha = _sha256_file(f)
         except Exception:
-            results.append({"name": f.name, "ok": False, "error": "No se pudo leer el archivo"})
+            results.append(
+                {"name": f.name, "ok": False, "error": "No se pudo leer el archivo"}
+            )
             continue
 
-        if Song.objects.filter(owner_user=username, audio_sha256=sha, visibility="public").exists():
-            results.append({"name": f.name, "ok": False, "error": "Duplicado (mismo audio)"})
+        if Song.objects.filter(
+            owner_user=username, audio_sha256=sha, visibility="public"
+        ).exists():
+            results.append(
+                {
+                    "name": f.name,
+                    "ok": False,
+                    "error": "Duplicado (mismo audio)",
+                }
+            )
             continue
 
         title = candidate
-        if Song.objects.filter(owner_user=username, visibility="public", title__iexact=title).exists():
-            results.append({"name": f.name, "ok": False, "error": "Duplicado (mismo título)"})
+        if Song.objects.filter(
+            owner_user=username, visibility="public", title__iexact=title
+        ).exists():
+            results.append(
+                {
+                    "name": f.name,
+                    "ok": False,
+                    "error": "Duplicado (mismo título)",
+                }
+            )
             continue
 
         try:
             with transaction.atomic():
-                # Guardamos audio
-                audio_path = storage.save(f"uploaded_songs/audio_{username}_{sha[:12]}.{ext}", f)
+                audio_path = storage.save(
+                    f"uploaded_songs/audio_{username}_{sha[:12]}.{ext}", f
+                )
 
-                # Si tenemos portada común, la escribimos una vez por canción
                 cover_path = None
                 if cover_bytes:
-                    cf_name = f"uploaded_covers/cover_{username}_{sha[:12]}{cover_suffix or '.jpg'}"
+                    cf_name = (
+                        f"uploaded_covers/cover_{username}_{sha[:12]}"
+                        f"{cover_suffix or '.jpg'}"
+                    )
                     cover_path = storage.save(cf_name, ContentFile(cover_bytes))
 
                 s = Song.objects.create(
@@ -1131,29 +1307,29 @@ def subida_masiva(request):
                 }
             )
         except Exception as e:
-            results.append({"name": f.name, "ok": False, "error": f"Error al guardar: {e}"})
+            results.append(
+                {
+                    "name": f.name,
+                    "ok": False,
+                    "error": f"Error al guardar: {e}",
+                }
+            )
 
     if _is_fetch(request):
         ok_any = any(r.get("ok") for r in results)
         return JsonResponse({"ok": ok_any, "results": results})
 
-    # Navegación normal: comprimimos resultados en un mensaje resumen
     creadas = sum(1 for r in results if r.get("ok"))
     omitidas = len(results) - creadas
     messages.info(request, f"Subida masiva: {creadas} creadas, {omitidas} omitidas.")
     return redirect("muro_subida_masiva")
 
+
 @require_http_methods(["GET", "POST"])
 def subida_masiva_admin_para_artista(request, artist_username: str):
     """
-    Subida masiva de canciones iniciada desde Gestión, pero sembrando contenido
-    en el muro de un artista concreto.
-
-    - Solo la puede usar un administrador.
-    - El owner_user y artist_display_name de las canciones será `artist_username`.
-    - Usa la misma heurística de títulos y validaciones que `subida_masiva`.
+    Subida masiva desde Gestión para cargar canciones a un artista.
     """
-    # 1) Validar admin
     session_username = _require_session_user(request)
     if not session_username:
         return _redirect_login_clean(request)
@@ -1182,7 +1358,6 @@ def subida_masiva_admin_para_artista(request, artist_username: str):
             },
         )
 
-    # 2) POST: procesar subida
     files = request.FILES.getlist("audio_files")
     default_genre = (request.POST.get("genre") or "").strip()
     genre_other = (request.POST.get("genre_other") or "").strip()
@@ -1225,7 +1400,9 @@ def subida_masiva_admin_para_artista(request, artist_username: str):
     for f in files:
         ext = (Path(f.name).suffix.lower().lstrip(".") or "")
         if ext not in _ALLOWED_EXTS:
-            results.append({"name": f.name, "ok": False, "error": "Extensión no permitida"})
+            results.append(
+                {"name": f.name, "ok": False, "error": "Extensión no permitida"}
+            )
             continue
 
         if getattr(f, "size", 0) > _MAX_FILE_SIZE:
@@ -1253,7 +1430,9 @@ def subida_masiva_admin_para_artista(request, artist_username: str):
         try:
             sha = _sha256_file(f)
         except Exception:
-            results.append({"name": f.name, "ok": False, "error": "No se pudo leer el archivo"})
+            results.append(
+                {"name": f.name, "ok": False, "error": "No se pudo leer el archivo"}
+            )
             continue
 
         if Song.objects.filter(
@@ -1331,9 +1510,14 @@ def subida_masiva_admin_para_artista(request, artist_username: str):
                 }
             )
         except Exception as e:
-            results.append({"name": f.name, "ok": False, "error": f"Error al guardar: {e}"})
+            results.append(
+                {
+                    "name": f.name,
+                    "ok": False,
+                    "error": f"Error al guardar: {e}",
+                }
+            )
 
-    # 3) Respuesta + UNDO
     created_ids = [
         r["song"]["id"]
         for r in results
@@ -1353,7 +1537,7 @@ def subida_masiva_admin_para_artista(request, artist_username: str):
                 "kind": "admin_seed_songs",
                 "artist_username": artist_username,
                 "song_ids": created_ids,
-                "actor": session_username,  # <- CLAVE PARA QUE APAREZCA LA BARRA
+                "actor": session_username,
             },
         )
 
@@ -1368,6 +1552,108 @@ def subida_masiva_admin_para_artista(request, artist_username: str):
 
     return redirect("gestion")
 
+
+@require_http_methods(["POST"])
+def toggle_follow_artist(request, username: str):
+    """
+    Activa/desactiva seguir a un artista para el usuario autenticado.
+    """
+    if not FollowArtist:
+        return JsonResponse(
+            {"ok": False, "error": "follow_not_available"},
+            status=400,
+        )
+
+    session_username = request.session.get("user", "")
+    if not session_username:
+        return JsonResponse({"ok": False, "error": "auth"}, status=401)
+
+    if session_username == username:
+        return JsonResponse({"ok": False, "error": "no_self_follow"}, status=400)
+
+    artist_user = Users.objects.filter(
+        user=username,
+        type__iexact="artista",
+    ).first()
+    if not artist_user:
+        return JsonResponse({"ok": False, "error": "artist_not_found"}, status=404)
+
+    follower = Users.objects.filter(user=session_username).first()
+    if not follower:
+        return JsonResponse({"ok": False, "error": "auth"}, status=401)
+
+    try:
+        obj, created = FollowArtist.objects.get_or_create(
+            follower=follower,
+            artist=artist_user,
+        )
+        if created:
+            following = True
+        else:
+            obj.delete()
+            following = False
+
+        followers = FollowArtist.objects.filter(artist=artist_user).count()
+    except Exception:
+        return JsonResponse({"ok": False, "error": "server"}, status=500)
+
+    return JsonResponse(
+        {"ok": True, "following": following, "followers": followers},
+        status=200,
+    )
+
+
+@require_http_methods(["GET"])
+def artist_followers_fragment(request, username: str):
+    """
+    Fragmento HTML con la lista de seguidores de un artista.
+    """
+    if not FollowArtist:
+        return HttpResponse(
+            '<p class="muted" style="margin:0;">Seguidores no disponibles.</p>'
+        )
+
+    artist_user = Users.objects.filter(
+        user=username,
+        type__iexact="artista",
+    ).first()
+    if not artist_user:
+        return HttpResponse(
+            '<p class="muted" style="margin:0;">Artista no encontrado.</p>',
+            status=404,
+        )
+
+    followers_qs = (
+        FollowArtist.objects
+        .filter(artist=artist_user)
+        .select_related("follower")
+        .order_by("follower__user")
+    )
+
+    parts = [
+        '<div class="card" style="margin:8px 0 0;">',
+        '<h4 style="margin:0 0 8px;">Seguidores</h4>',
+    ]
+
+    if not followers_qs.exists():
+        parts.append(
+            '<p class="muted" style="margin:0;">Este artista aún no tiene seguidores.</p>'
+        )
+    else:
+        parts.append('<ul class="simple-list" style="margin:0; padding-left:18px;">')
+        for rel in followers_qs:
+            u = rel.follower
+            uname = getattr(u, "user", "") or ""
+            display = getattr(u, "name", "") or uname
+            parts.append(
+                f"<li>{display} <span class='muted'>@{uname}</span></li>"
+            )
+        parts.append("</ul>")
+
+    parts.append("</div>")
+    return HttpResponse("".join(parts))
+
+
 # =============================================================================
 # Fragmento de playlists (UI)
 # =============================================================================
@@ -1377,9 +1663,6 @@ def subida_masiva_admin_para_artista(request, artist_username: str):
 def playlists_fragment(request):
     """
     Fragmento HTML para la sección de playlists del artista en el muro.
-
-    Actualmente es solo un placeholder estático. La idea es que en el futuro
-    se reemplace por una vista que liste playlists curadas asociadas al artista.
     """
     html = (
         '<div class="card" style="margin:0">'

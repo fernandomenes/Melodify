@@ -323,3 +323,51 @@ select {
   box-shadow: none;
   border-color: var(--btnb);
 }
+#artist-playlists-section {
+  margin-bottom: 20px;
+}
+
+.artist-playlists-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.artist-pl-card {
+  background: #1b1b1b;
+  border: 1px solid #2b2b2b;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.artist-pl-card--likes {
+  border-color: var(--accent, #f472b6);
+  box-shadow: 0 0 0 1px rgba(244, 114, 182, 0.3);
+}
+
+.artist-pl-name {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.artist-pl-meta {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+/* Tarjeta normal de playlist del artista */
+.mdf-artist-pl-item {
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.15s ease;
+}
+
+/* Playlist actualmente abierta */
+.mdf-artist-pl-item.is-active {
+  background: #262137;
+  box-shadow:
+    0 0 0 1px rgba(255, 105, 180, 0.7),
+    0 0 16px rgba(255, 105, 180, 0.4);
+  transform: translateY(-1px);
+}

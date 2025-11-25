@@ -1,10 +1,6 @@
-/* ==========================================================================
-   Melodify Player — Tema, barra del reproductor y vista Reproductor
-   ========================================================================== */
+/* Melodify Player: tema, barra y vista Reproductor */
 
-/* --------------------------------------------------------------------------
-   Variables de tema
-   -------------------------------------------------------------------------- */
+/* Variables de tema */
 :root{
   --bg:#121212; --card:#1b1b1b; --line:#2a2a2a; --muted:#9aa0a6;
   --accent:#7a3cff; --accent-2:#8b5dff; --text:#efeeee;
@@ -12,9 +8,7 @@
   --glow-border:#6f58ff; --glow-outer:rgba(122,60,255,.25);
 }
 
-/* --------------------------------------------------------------------------
-   Barra del reproductor (flotante)
-   -------------------------------------------------------------------------- */
+/* Barra del reproductor (flotante) */
 ._mdf-player-bar{
   position:fixed;
   left:50%;
@@ -27,7 +21,6 @@
   border:1px solid var(--line);
   border-radius:16px;
   display:none;
-  /* Meta (1.2fr) / controles (auto) / bloque derecho (1fr) */
   grid-template-columns:minmax(260px,1.2fr) auto minmax(420px,1fr);
   align-items:center;
   gap:16px;
@@ -62,7 +55,7 @@
   flex:1;
 }
 
-/* Título y autor truncados para evitar solapamiento con los controles */
+/* Título y autor truncados */
 ._mdf-player-title{
   font-weight:700;
   white-space:nowrap;
@@ -160,9 +153,7 @@
   display:inline-block;
 }
 
-/* --------------------------------------------------------------------------
-   Sliders (seek/volume) con relleno
-   -------------------------------------------------------------------------- */
+/* Sliders (seek/volume) */
 ._mdf-player-seek,
 ._mdf-vol{
   -webkit-appearance:none;
@@ -201,9 +192,7 @@
   cursor:pointer;
 }
 
-/* --------------------------------------------------------------------------
-   Progreso circular alrededor de los controles
-   -------------------------------------------------------------------------- */
+/* Progreso circular */
 .mdf-round-progress{ position:relative; }
 ._mdf-circle{
   position:absolute;
@@ -231,11 +220,7 @@
   transition:stroke-dashoffset .12s linear;
 }
 
-/* ==========================================================================
-   Listado de canciones y vista Reproductor
-   ========================================================================== */
-
-/* Listado de canciones (cola/vistas) */
+/* Listado de canciones y vista Reproductor */
 .songs-wrap{
   width:min(1180px, 92vw);
   margin:8px 0 120px;
@@ -294,7 +279,7 @@
   justify-self:end;
 }
 
-/* Botón de reproducción estilo pill */
+/* Botón de reproducción tipo pill */
 .song-actions .play-pill{
   display:inline-flex;
   align-items:center;
@@ -333,7 +318,7 @@
 .rep-left{ min-width:0; }
 .rep-right{ min-width:0; }
 
-/* Paneles de la vista Reproductor (Top10, géneros, playlists, etc.) */
+/* Paneles laterales (Top10, géneros, playlists, etc.) */
 .rep-panel{
   background:var(--card);
   border:1px solid var(--line);
@@ -409,7 +394,7 @@
   border-radius:999px!important;
 }
 
-/* Listas internas del reproductor (Top10, Discover, etc.) */
+/* Listas de reproducción (Top10, Discover, etc.) */
 .rep-list{
   list-style:none;
   margin:0;
@@ -444,7 +429,7 @@
   color:#fff;
 }
 
-/* Panel de estado vacío y margen inferior para no solapar con la barra */
+/* Panel de estado vacío */
 .rep-empty{
   background:var(--card);
   border:1px solid var(--line);
@@ -463,18 +448,14 @@
   margin:8px 0 120px;
 }
 
-/* ==========================================================================
-   Mostrar/ocultar barra y botón flotante
-   ========================================================================== */
-
-/* Estado de la barra cuando se oculta mediante JS */
+/* Mostrar/ocultar barra del reproductor */
 .mdf-bar--hidden{
   transform:translateY(110%);
   opacity:0;
   pointer-events:none;
 }
 
-/* Botón flotante para mostrar/ocultar la barra */
+/* Botón flotante para la barra */
 #mdf-bar-toggle{
   position:fixed;
   right:16px;
@@ -496,22 +477,18 @@
   background:#101010;
 }
 
-/* ==========================================================================
-   Reflow de la barra en tablet/móvil
-   ========================================================================== */
-
-/* Áreas de la grilla (desktop) */
+/* Reflow de la barra en tablet/móvil */
 ._mdf-player-bar{ grid-template-areas:"now ctr right"; }
 ._mdf-now{   grid-area:now; }
 ._mdf-ctrls{ grid-area:ctr; }
 ._mdf-right{ grid-area:right; }
 
-/* Bloque derecho con anchura elástica */
+/* Bloque derecho adaptable */
 ._mdf-right{
   min-width:clamp(260px, 44vw, 420px);
 }
 
-/* ≤ 960px: 2 filas (meta + controles arriba, progreso abajo) */
+/* ≤ 960px: 2 filas */
 @media (max-width:960px){
   ._mdf-player-bar{
     grid-template-columns:1fr auto;
@@ -547,7 +524,7 @@
   }
 }
 
-/* ≤ 400px: se oculta el slider de volumen para ganar espacio */
+/* ≤ 400px: ocultar volumen */
 @media (max-width:400px){
   ._mdf-vol{ display:none !important; }
 }
@@ -568,10 +545,7 @@
   color: #ff0066;
 }
 
-/* ==========================================================================
-   Botón "agregar a playlist"
-   ========================================================================== */
-/* Título y botones en línea con separación adecuada (reproductor + home) */
+/* Botón "agregar a playlist" */
 .rep-left .song-title,
 .home-all-songs .song-title {
   display: inline-flex;
@@ -580,7 +554,6 @@
   flex-wrap: wrap;
 }
 
-/* Botón circular tipo chip con "+" (reproductor + home) */
 .rep-left .song-title .song-add-btn,
 .home-all-songs .song-title .song-add-btn {
   border-radius: 999px;
@@ -590,16 +563,13 @@
   height: 22px;
   padding: 0;
   margin-left: 2px;
-
   display: inline-flex;
   align-items: center;
   justify-content: center;
-
   font-size: 14px;
   line-height: 1;
   font-weight: 600;
   color: var(--accent, #ff4fa3);
-
   cursor: pointer;
   outline: none;
   transition:
@@ -632,3 +602,288 @@
   box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
 }
 
+/* Diálogo genérico Melodify (confirmación) */
+.mdf-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mdf-dialog {
+  background: var(--card, #1b1b1b);
+  border: 1px solid var(--line, #2a2a2a);
+  border-radius: 14px;
+  padding: 18px 20px 14px;
+  min-width: 260px;
+  max-width: 360px;
+  color: var(--text, #efeeee);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
+  font-size: 14px;
+}
+
+.mdf-dialog-title {
+  font-weight: 600;
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.mdf-dialog-message {
+  font-size: 13px;
+  color: var(--muted, #9aa0a6);
+  margin: 0 0 16px;
+}
+
+.mdf-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mdf-dialog-btn {
+  border-radius: 999px;
+  padding: 6px 14px;
+  border: 1px solid var(--line, #2a2a2a);
+  background: #1a1a1a;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    transform 0.08s ease;
+}
+
+.mdf-dialog-btn--ghost {
+  background: transparent;
+}
+
+.mdf-dialog-btn--ghost:hover {
+  background: #202020;
+}
+
+.mdf-dialog-btn--danger {
+  background: #592626;
+  border-color: #743d3d;
+}
+
+.mdf-dialog-btn--danger:hover {
+  background: #6a2d2d;
+}
+
+.mdf-dialog-btn:focus-visible {
+  outline: 2px solid var(--accent, #7a3cff);
+  outline-offset: 2px;
+}
+
+/* Diálogo para agregar canciones a playlist */
+.rep-addsongs-dialog {
+  max-width: 640px;
+}
+
+.rep-addsongs-list {
+  margin-top: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #141414;
+}
+
+.rep-addsongs-row {
+  width: 100%;
+  padding: 8px 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  border-bottom: 1px solid #222;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.rep-addsongs-row:last-child {
+  border-bottom: none;
+}
+.rep-addsongs-row:hover {
+  background: #1e1e1e;
+}
+.rep-addsongs-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rep-addsongs-author {
+  font-size: 0.85rem;
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40%;
+}
+
+.rep-addsongs-row.is-pending {
+  opacity: 0.7;
+  cursor: wait;
+}
+.rep-addsongs-row.is-added {
+  opacity: 0.6;
+  cursor: default;
+}
+.rep-addsongs-row.is-added::after {
+  content: "Añadida";
+  margin-left: 8px;
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+/* CTA de agregar canciones en la vista principal */
+.rep-addsongs-inline {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.rep-addsongs-btn {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #181818;
+  color: #eee;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.rep-addsongs-btn:hover {
+  background: #232323;
+}
+
+/* Botón "+ Nueva" en panel de playlists */
+.rep-add-playlist-btn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--accent, #f472b6);
+  background: var(--accent, #f472b6);
+  color: #0b0b0b;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.rep-add-playlist-btn:hover,
+.rep-add-playlist-btn:focus-visible {
+  background: var(--accent-strong, #fb7185);
+  border-color: var(--accent-strong, #fb7185);
+  box-shadow: 0 0 12px rgba(255, 114, 182, 0.5);
+  transform: translateY(-1px);
+}
+
+.rep-add-playlist-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 0 6px rgba(255, 114, 182, 0.35);
+}
+
+/* Botones de visibilidad y borrado en playlists */
+.rep-pl-lock {
+  border: none;
+  background: transparent;
+  color: #bbb;
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.rep-pl-lock[data-private="0"] {
+  color: var(--accent, #f472b6);
+}
+
+.rep-pl-lock:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+.rep-pl-lock,
+.rep-pl-delete {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 14px;
+}
+
+.rep-pl-delete {
+  opacity: 0.85;
+}
+
+.rep-pl-delete:hover {
+  opacity: 1;
+}
+
+/* Cabecera izquierda con botón de retorno */
+.rep-left-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rep-mini-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line, #333);
+  background: transparent;
+  color: #ccc;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+  opacity: 0.9;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.12s ease;
+}
+
+.rep-mini-back-icon {
+  font-size: 11px;
+}
+
+.rep-mini-back-label {
+  white-space: nowrap;
+}
+
+.rep-mini-back:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--accent, #9ad);
+  box-shadow: 0 0 0 1px rgba(154, 173, 221, 0.3);
+  transform: translateY(-1px);
+}
+
+.rep-mini-back:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.rep-left-empty-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}

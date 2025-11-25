@@ -1,33 +1,41 @@
 import json
 import logging
 
-
 from django.contrib import messages
 from django.contrib.auth import logout as django_logout
-from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Q
 from django.db import IntegrityError
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
-from django.views.decorators.http import require_http_methods, require_POST
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
-
-from .models import ArtistProfile, LikeMedia, PlayList, PlayListSong, Song, Users, Followers
+from .models import (
+    ArtistProfile,
+    FollowArtist,
+    LikeMedia,
+    PlayList,
+    PlayListSong,
+    PlaylistCollaborator,
+    Song,
+    Users,
+)
 
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
+# ======================================================================
 # Helpers genéricos
-# ============================================================================
+# ======================================================================
 
 
 def _safe_file_url(f):
     """
-    Devuelve una URL segura para un FileField/ImageField o cadena vacía si no es usable.
+    Devuelve una URL segura para un FileField/ImageField o cadena vacía.
+
+    - Si no hay archivo → "".
+    - Si hay error al acceder a .url → str(f) o "".
     """
     if not f:
         return ""
@@ -41,23 +49,20 @@ def _safe_file_url(f):
 
 
 def _song_audio_url(song):
-    """
-    Devuelve la URL de audio de una Song o cadena vacía.
-    """
+    """Devuelve la URL de audio de una Song o cadena vacía."""
     return _safe_file_url(getattr(song, "audio_file", None)) or ""
 
 
 def _song_cover_url(song):
-    """
-    Devuelve la URL de portada de una Song o None.
-    """
+    """Devuelve la URL de portada de una Song o None."""
     cover = _safe_file_url(getattr(song, "cover_image", None))
     return cover or None
 
 
 def _get_session_user_obj(request):
     """
-    Devuelve la instancia Users asociada a request.session['user'], o None.
+    Devuelve la instancia Users asociada a request.session['user'],
+    o None si no existe o no es válida.
     """
     username = request.session.get("user")
     if not username:
@@ -67,13 +72,53 @@ def _get_session_user_obj(request):
     except Users.DoesNotExist:
         return None
 
-# ============================================================================
+
+def _is_admin(user):
+    """True si el usuario tiene rol de administrador o está marcado como superadmin."""
+    if not user:
+        return False
+    if getattr(user, "is_superadmin", False):
+        return True
+    return (user.type or "").lower() == "administrador"
+
+
+def _user_can_edit_playlist(user, playlist):
+    """
+    True si el usuario puede editar el contenido de una playlist:
+
+    - Owner de la playlist (idUser).
+    - Administrador / superadmin.
+    - Colaborador registrado en PlaylistCollaborator.
+    """
+    if not user or not playlist:
+        return False
+
+    # Dueño
+    if getattr(playlist, "idUser", None) == getattr(user, "id", None):
+        return True
+
+    # Admin
+    if _is_admin(user):
+        return True
+
+    # Colaborador (semántica de editor)
+    try:
+        return PlaylistCollaborator.objects.filter(
+            playlist_id=playlist.id,
+            user=user,
+        ).exists()
+    except Exception:
+        logger.exception("_user_can_edit_playlist: error consultando colaboradores")
+        return False
+
+
+# ======================================================================
 # Pantallas básicas (pública / autenticación / home)
-# ============================================================================
+# ======================================================================
 
 
 def pantallaPrincipal(request):
-    """Pantalla pública principal."""
+    """Pantalla pública principal (landing)."""
     return render(request, "inicio_sesion/principal.html")
 
 
@@ -81,9 +126,10 @@ def pantallaHome(request):
     """
     Pantalla principal autenticada (Home SPA).
 
-    Contexto:
-    - Datos de sesión (usuario, rol, avatar, fecha de creación, descripción).
-    - Para artistas, playlist virtual “Mi música” con sus canciones públicas (playlists_json).
+    Requiere usuario en sesión (modelo Users guardado en request.session).
+    Incluye:
+    - Datos básicos del usuario.
+    - Playlist virtual “Mi música” si es artista.
     """
     if "user" not in request.session:
         messages.error(request, "Debes iniciar sesión para acceder a esta página.")
@@ -97,7 +143,7 @@ def pantallaHome(request):
     artist_description = ""
     created_at_str = ""
 
-    # Datos del usuario en sesión (avatar, fecha, descripción de artista)
+    # Datos básicos del usuario en sesión
     try:
         u = Users.objects.get(user=session_user)
 
@@ -113,22 +159,21 @@ def pantallaHome(request):
             except ArtistProfile.DoesNotExist:
                 artist_description = ""
     except Users.DoesNotExist:
-        # Usuario en sesión inconsistente: se dejan campos vacíos
         pass
 
-    # Playlist virtual “Mi música” (solo para rol artista)
+    # Playlist virtual “Mi música” (rol artista)
     playlists = []
     if role_lower == "artista":
-        qs = (
-            Song.objects.filter(owner_user=session_user, visibility="public")
-            .only(
-                "id",
-                "title",
-                "artist_display_name",
-                "audio_file",
-                "cover_image",
-                "genre",
-            )
+        qs = Song.objects.filter(
+            owner_user=session_user,
+            visibility="public",
+        ).only(
+            "id",
+            "title",
+            "artist_display_name",
+            "audio_file",
+            "cover_image",
+            "genre",
         )
 
         songs = [
@@ -165,10 +210,10 @@ def pantallaHome(request):
 
 def pantallaRegistro(request):
     """
-    Pantalla de registro de usuarios (modelo Users).
+    Pantalla de registro basada en el modelo Users (contraseña en texto plano).
 
-    Actualmente almacena la contraseña en texto plano
-    (no se usa el sistema de autenticación de Django).
+    NOTA: esta lógica no usa el sistema de auth de Django; se mantiene
+    por compatibilidad con el resto de la app.
     """
     if request.method == "POST":
         username = request.POST.get("username", "")
@@ -199,9 +244,9 @@ def pantallaRegistro(request):
                     request, "¡Registro exitoso! Ahora puedes iniciar sesión."
                 )
                 return redirect("login")
-            except Exception as e:
+            except Exception:
                 logger.exception("Error al crear usuario en pantallaRegistro")
-                errors.append(f"Error al crear el usuario: {str(e)}")
+                errors.append("Error al crear el usuario. Intenta de nuevo más tarde.")
 
         for error in errors:
             messages.error(request, error)
@@ -214,6 +259,8 @@ def pantallaRegistro(request):
 def pantallaLogout(request):
     """
     Cierra sesión, limpia la sesión y deshabilita caché de la página anterior.
+
+    Se usa tanto en peticiones GET como POST por compatibilidad con formularios/botones.
     """
     request.session.flush()
     django_logout(request)
@@ -229,12 +276,10 @@ def pantallaLogout(request):
 
 def pantallaLogin(request):
     """
-    Inicio de sesión utilizando el modelo Users.
+    Inicio de sesión utilizando el modelo Users almacenado en sesión.
 
-    Al autenticar correctamente:
-    - Regenera la clave de sesión.
-    - Limpia claves de estado temporal (undo).
-    - Almacena usuario y rol en la sesión.
+    Se mantiene la autenticación manual (sin auth.User) por compatibilidad
+    con el resto del proyecto.
     """
     if request.method == "POST":
         user = request.POST.get("user")
@@ -243,6 +288,7 @@ def pantallaLogin(request):
         try:
             usuario_db = Users.objects.get(user=user, password=password)
 
+            # Evitar fijación de sesión + limpiar posibles datos de undo viejos
             request.session.cycle_key()
             for k in [
                 "gestion_undo",
@@ -271,112 +317,282 @@ def pantallaLogin(request):
     return render(request, "inicio_sesion/login.html")
 
 
-# ============================================================================
+# ======================================================================
 # Playlists (API JSON usada por la SPA y buscador)
-# ============================================================================
+# ======================================================================
 
 
 @require_GET
 def get_user_id(request):
-    """
-    Devuelve el ID del usuario si existe, dado el parámetro 'user'.
-    Ejemplo: /api/get-user-id/?user=jua
-    """
-    username = request.GET.get('user')
+    """Devuelve el ID de usuario activo dado el parámetro ?user=."""
+    username = request.GET.get("user")
     if not username:
-        return JsonResponse({'error': 'Parámetro "user" es requerido'}, status=400)
+        return JsonResponse({"error": 'Parámetro "user" es requerido'}, status=400)
 
     try:
         user_obj = Users.objects.get(user=username, is_active=True)
-        return JsonResponse({'id': user_obj.id})
+        return JsonResponse({"id": user_obj.id})
     except Users.DoesNotExist:
-        return JsonResponse({'error': 'Usuario no encontrado o inactivo'}, status=404)
-
-
-def playlist_getAll(request):
-    """
-    Devuelve las playlists del usuario en sesión con información de likes.
-
-    Forma de cada elemento:
-    {
-        "id": ...,
-        "idUser": ...,
-        "name": "...",
-        "portada": "...",
-        "isprivate": bool,
-        "created_at": "...",
-        "likes_count": int,
-        "liked": bool
-    }
-    """
-    user = _get_session_user_obj(request)
-    if not user:
-        return JsonResponse([], safe=False)
-
-    try:
-        base = list(
-            PlayList.objects.values(
-                "id", "idUser", "name", "portada", "isprivate", "created_at"
-            )
+        return JsonResponse(
+            {"error": "Usuario no encontrado o inactivo"},
+            status=404,
         )
 
-        if not base:
-            return JsonResponse([], safe=False)
 
-        playlist_ids = [p["id"] for p in base]
+@require_GET
+def playlist_getAll(request):
+    """
+    Devuelve playlists visibles y marca metadatos por usuario:
 
+    - isMine: playlists donde el usuario de referencia es dueño.
+    - isCollaborator: playlists donde el usuario de referencia es colaborador.
+    - canEdit: dueño, admin o colaborador (para el usuario en sesión).
+    """
+    session_user = _get_session_user_obj(request)
+
+    # Usuario de referencia para isMine / isCollaborator (por ?u= o sesión)
+    username_param = (request.GET.get("u") or "").strip()
+
+    target_user = None
+    if username_param:
+        try:
+            target_user = Users.objects.get(user=username_param, is_active=True)
+        except Users.DoesNotExist:
+            target_user = None
+        except Exception:
+            # Si el modelo Users está raro, mejor no tronar
+            logger.exception("playlist_getAll: error obteniendo target_user")
+            target_user = None
+
+    if target_user is None:
+        target_user = session_user
+
+    target_id = target_user.id if target_user else None
+
+    # ------------------------------------------------------------------
+    # Colaboraciones del usuario de referencia (incluyen playlists privadas)
+    # ------------------------------------------------------------------
+    collab_playlist_ids = set()
+    if target_user:
+        try:
+            collab_playlist_ids = set(
+                PlaylistCollaborator.objects.filter(
+                    user=target_user
+                ).values_list("playlist_id", flat=True)
+            )
+        except Exception:
+            logger.exception(
+                "playlist_getAll: error leyendo colaboraciones para target_user=%s",
+                target_user.user,
+            )
+            collab_playlist_ids = set()
+
+    # Colaboraciones del usuario de sesión (para canEdit)
+    session_collab_ids = set()
+    if session_user:
+        try:
+            session_collab_ids = set(
+                PlaylistCollaborator.objects.filter(
+                    user=session_user
+                ).values_list("playlist_id", flat=True)
+            )
+        except Exception:
+            logger.exception(
+                "playlist_getAll: error leyendo colaboraciones para session_user=%s",
+                session_user.user,
+            )
+            session_collab_ids = set()
+
+    # Playlists visibles:
+    #   - públicas para todos
+    #   - del propio usuario (aunque sean privadas)
+    #   - donde el usuario es colaborador (aunque sean privadas)
+    try:
+        if target_user:
+            qs = PlayList.objects.filter(
+                Q(isprivate=False)
+                | Q(idUser=target_user.id)
+                | Q(id__in=collab_playlist_ids)
+            )
+        else:
+            qs = PlayList.objects.filter(isprivate=False)
+    except Exception:
+        logger.exception("playlist_getAll: error consultando PlayList")
+        return JsonResponse([], safe=False)
+
+    base = list(
+        qs.values(
+            "id",
+            "idUser",
+            "name",
+            "portada",
+            "isprivate",
+            "created_at",
+        )
+    )
+    if not base:
+        return JsonResponse([], safe=False)
+
+    playlist_ids = [p["id"] for p in base]
+
+    # Likes por playlist
+    try:
         ct = ContentType.objects.get_for_model(PlayList)
         likes_qs = LikeMedia.objects.filter(
             content_type=ct,
             object_id__in=playlist_ids,
         )
+    except Exception:
+        logger.exception("playlist_getAll: error consultando LikeMedia")
+        likes_qs = LikeMedia.objects.none()
 
-        counts = {}
-        for l in likes_qs:
-            counts[l.object_id] = counts.get(l.object_id, 0) + 1
+    counts = {}
+    for l in likes_qs:
+        counts[l.object_id] = counts.get(l.object_id, 0) + 1
 
-        user_liked_ids = set(
-            likes_qs.filter(user=user).values_list("object_id", flat=True)
-        )
+    liked_ids = set()
+    if session_user:
+        try:
+            liked_ids = set(
+                likes_qs.filter(user=session_user).values_list(
+                    "object_id",
+                    flat=True,
+                )
+            )
+        except Exception:
+            logger.exception("playlist_getAll: error filtrando likes por session_user")
+            liked_ids = set()
+
+    # Mapa de dueños (idUser -> username)
+    user_ids = {p["idUser"] for p in base if p.get("idUser")}
+    try:
+        owners = {
+            u.id: u.user
+            for u in Users.objects.filter(id__in=user_ids).only("id", "user")
+        }
+    except Exception:
+        logger.exception("playlist_getAll: error obteniendo owners de playlists")
+        owners = {}
+
+    # Artistas seguidos por el usuario en sesión (para isfollow)
+    followed_artist_ids = set()
+    if session_user and user_ids:
+        try:
+            followed_artist_ids = set(
+                FollowArtist.objects.filter(
+                    follower=session_user,
+                    artist_id__in=user_ids,
+                ).values_list("artist_id", flat=True)
+            )
+        except Exception:
+            logger.exception("playlist_getAll: error obteniendo FollowArtist")
+            followed_artist_ids = set()
+
+    for p in base:
+        pid = p["id"]
+        owner_id = p.get("idUser")
+
+        p["likes_count"] = counts.get(pid, 0)
+        p["liked"] = pid in liked_ids
+
+        owner_username = owners.get(owner_id, "")
+        p["owner_username"] = owner_username
+        p["userCreated"] = owner_username  # usado por el frontend
+
+        is_mine = bool(target_id is not None and owner_id == target_id)
+        p["isMine"] = is_mine
+        p["isPublic"] = not p["isprivate"]
+
+        # ¿el usuario de referencia es colaborador de esta playlist?
+        p["isCollaborator"] = pid in collab_playlist_ids
+
+        # canEdit = dueño, admin o colaborador (para el session_user real)
+        can_edit = False
+        if session_user:
+            if owner_id == session_user.id or _is_admin(session_user):
+                can_edit = True
+            elif pid in session_collab_ids:
+                can_edit = True
+        p["canEdit"] = can_edit
+
+        # ¿el usuario en sesión sigue al creador de esta playlist?
+        p["isfollow"] = bool(session_user and owner_id in followed_artist_ids)
+
+    return JsonResponse(base, safe=False)
 
 
-
-        for p in base:
-            pid = p["id"]
-            p["likes_count"] = counts.get(pid, 0)
-            p["liked"] = pid in user_liked_ids
-            # Añadimos los datos del usuario
-            userCreated = Users.objects.values('user', 'avatar', 'type').get(pk=p["idUser"])
-            userLogueado = Users.objects.values('id','user', 'avatar', 'type').get(user=user)
-            p["userCreated"] = userCreated["user"]
-            p["isfollow"] = sigue(userLogueado["id"],p["idUser"])
-
-        return JsonResponse(base, safe=False)
-
-    except Exception as e:
-        logger.exception("Error en playlist_getAll")
-        return JsonResponse({"error": str(e)}, status=500)
-
-
+@require_GET
+def playlist_getAllList(request):
+    """
+    Alias simple para mantener compatibilidad con el frontend
+    (/playlist/getAllList/). Reutiliza playlist_getAll.
+    """
+    return playlist_getAll(request)
 
 
 def sigue(seguidor_id: int, seguido_id: int) -> bool:
-    return Followers.objects.filter(
-        seguidor_id=seguidor_id,
-        seguido_id=seguido_id
-    ).exists()
+    """Helper genérico de seguimiento basado en FollowArtist."""
+    try:
+        return FollowArtist.objects.filter(
+            follower_id=seguidor_id,
+            artist_id=seguido_id,
+        ).exists()
+    except Exception:
+        logger.exception("Error en sigue()")
+        return False
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def setFollows(request):
+    """
+    Endpoint usado por el frontend para seguir/dejar de seguir
+    al creador de una playlist.
+    """
+    seguidor_id = request.POST.get("seguidor_id")
+    seguido_id = request.POST.get("seguido_id")
+    action = (request.POST.get("action") or "").strip()  # 'follow' o 'unfollow'
+
+    if not seguidor_id or not seguido_id:
+        return JsonResponse({"error": "Faltan IDs"}, status=400)
+
+    try:
+        seguidor_id_int = int(seguidor_id)
+        seguido_id_int = int(seguido_id)
+    except ValueError:
+        return JsonResponse({"error": "IDs inválidos"}, status=400)
+
+    try:
+        follower = Users.objects.get(id=seguidor_id_int)
+        artist = Users.objects.get(id=seguido_id_int)
+    except Users.DoesNotExist:
+        return JsonResponse({"error": "Usuario no encontrado"}, status=404)
+
+    if action == "unfollow":
+        FollowArtist.objects.filter(
+            follower=follower,
+            artist=artist,
+        ).delete()
+        return JsonResponse({"followed": False})
+
+    FollowArtist.objects.get_or_create(
+        follower=follower,
+        artist=artist,
+    )
+    return JsonResponse({"followed": True})
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def create_playlist(request):
     """
-    Crea una playlist asociada a un usuario a partir de un cuerpo JSON.
+    Crea una playlist asociada a un usuario a partir de JSON.
 
-    Espera JSON:
-    { "user": "<username>", "name": "<nombre de la playlist>" }
+    JSON esperado:
+    {
+      "user": "<username>",
+      "name": "<nombre de la playlist>"
+    }
     """
     try:
         data = json.loads(request.body)
@@ -409,15 +625,19 @@ def create_playlist(request):
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "JSON inválido"}, status=400)
-    except Exception as e:
+    except Exception:
         logger.exception("Error en create_playlist")
-        return JsonResponse({"error": str(e)}, status=500)
+        return JsonResponse({"error": "Error interno del servidor"}, status=500)
 
 
 @require_http_methods(["GET"])
 def get_songs_by_playlist(request, playlist_id):
     """
     Devuelve las canciones de una playlist en el orden definido en PlayListSong.
+
+    Respuesta:
+      { "songs": [ { id, title, artist_display_name, genre, audioUrl, coverUrl,
+                     likes_count, liked } ] }
     """
     try:
         logger.info("Buscando canciones para playlist_id=%s", playlist_id)
@@ -427,7 +647,10 @@ def get_songs_by_playlist(request, playlist_id):
         ).order_by("position")
 
         if not playlist_songs.exists():
-            logger.warning("No se encontraron canciones para playlist_id=%s", playlist_id)
+            logger.warning(
+                "No se encontraron canciones para playlist_id=%s",
+                playlist_id,
+            )
             return JsonResponse({"songs": []})
 
         song_ids = [ps.song_id for ps in playlist_songs]
@@ -456,7 +679,10 @@ def get_songs_by_playlist(request, playlist_id):
         user_liked_set = set()
         if user:
             user_liked_set = set(
-                likes_qs.filter(user=user).values_list("object_id", flat=True)
+                likes_qs.filter(user=user).values_list(
+                    "object_id",
+                    flat=True,
+                )
             )
 
         songs_map = {}
@@ -466,7 +692,12 @@ def get_songs_by_playlist(request, playlist_id):
             songs_map[s.id] = {
                 "id": s.id,
                 "title": s.title,
-                "artist_display_name": getattr(s, "artist_display_name", "") or "",
+                "artist_display_name": getattr(
+                    s,
+                    "artist_display_name",
+                    "",
+                )
+                or "",
                 "genre": getattr(s, "genre", "") or "",
                 "audioUrl": au,
                 "coverUrl": cu,
@@ -482,7 +713,8 @@ def get_songs_by_playlist(request, playlist_id):
                 continue
             if not data["audioUrl"]:
                 logger.warning(
-                    "Canción id %s sin audioUrl; no será reproducible", sid
+                    "Canción id %s sin audioUrl; no será reproducible",
+                    sid,
                 )
                 continue
             ordered.append(data)
@@ -497,12 +729,19 @@ def get_songs_by_playlist(request, playlist_id):
 @csrf_exempt
 @require_http_methods(["DELETE"])
 def delete_playlist(request, playlist_id):
-    """
-    Elimina una playlist por identificador.
-    """
+    """Elimina una playlist por identificador (owner o admin)."""
     try:
-        playlist = PlayList.objects.get(id=playlist_id)
-        playlist.delete()
+        session_user = _get_session_user_obj(request)
+        if not session_user:
+            return JsonResponse({"error": "login_required"}, status=401)
+
+        pl = get_object_or_404(PlayList, id=playlist_id)
+
+        is_owner = getattr(pl, "idUser", None) == getattr(session_user, "id", None)
+        if not (is_owner or _is_admin(session_user)):
+            return JsonResponse({"error": "forbidden"}, status=403)
+
+        pl.delete()
         return JsonResponse(
             {"message": "Playlist eliminada correctamente"},
             status=200,
@@ -510,26 +749,39 @@ def delete_playlist(request, playlist_id):
 
     except PlayList.DoesNotExist:
         return JsonResponse({"error": "Playlist no encontrada"}, status=404)
-    except Exception as e:
+    except Exception:
         logger.exception("Error en delete_playlist")
-        return JsonResponse({"error": str(e)}, status=500)
+        return JsonResponse({"error": "Error interno del servidor"}, status=500)
 
 
 @csrf_exempt
 @require_http_methods(["PUT"])
 def update_playlist(request, playlist_id):
     """
-    Actualiza nombre y/o privacidad de una playlist.
+    Actualiza nombre y/o privacidad de una playlist desde JSON.
 
-    JSON esperado:
-    { "name": "<nuevo nombre>", "isprivate": true|false }
+    Permisos:
+    - Nombre: owner, admin o colaborador.
+    - isprivate: sólo owner o admin (los colaboradores no cambian visibilidad).
     """
     try:
-        pl = PlayList.objects.get(id=playlist_id)
-        data = json.loads(request.body or "{}")
+        session_user = _get_session_user_obj(request)
+        if not session_user:
+            return JsonResponse({"error": "login_required"}, status=401)
 
+        pl = PlayList.objects.get(id=playlist_id)
+
+        try:
+            data = json.loads(request.body or "{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "JSON inválido"}, status=400)
+
+        # --- Nombre ---
         new_name = data.get("name", None)
         if new_name is not None:
+            if not _user_can_edit_playlist(session_user, pl):
+                return JsonResponse({"error": "forbidden"}, status=403)
+
             new_name = (new_name or "").strip()
             if not new_name:
                 return JsonResponse(
@@ -538,7 +790,12 @@ def update_playlist(request, playlist_id):
                 )
             pl.name = new_name
 
+        # --- Privacidad ---
         if "isprivate" in data:
+            is_owner = getattr(pl, "idUser", None) == getattr(session_user, "id", None)
+            if not (is_owner or _is_admin(session_user)):
+                return JsonResponse({"error": "forbidden"}, status=403)
+
             ispriv = bool(data.get("isprivate"))
             pl.isprivate = ispriv
 
@@ -554,17 +811,18 @@ def update_playlist(request, playlist_id):
 
     except PlayList.DoesNotExist:
         return JsonResponse({"error": "Playlist no encontrada"}, status=404)
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "JSON inválido"}, status=400)
-    except Exception as e:
+    except Exception:
         logger.exception("Error en update_playlist")
-        return JsonResponse({"error": str(e)}, status=500)
+        return JsonResponse({"error": "Error interno del servidor"}, status=500)
 
 
 @require_http_methods(["GET"])
 def get_all_songs(request):
     """
-    Devuelve canciones públicas para Home / reproductor.
+    Devuelve canciones públicas para Home / reproductor en orden reciente.
+
+    Forma de cada elemento:
+      { id, title, artist_display_name, genre, audioUrl, coverUrl }
     """
     try:
         qs = (
@@ -592,7 +850,9 @@ def get_all_songs(request):
                     "id": s.id,
                     "title": s.title,
                     "artist_display_name": getattr(
-                        s, "artist_display_name", ""
+                        s,
+                        "artist_display_name",
+                        "",
                     )
                     or "",
                     "genre": getattr(s, "genre", "") or "",
@@ -603,22 +863,18 @@ def get_all_songs(request):
 
         return JsonResponse(songs, safe=False)
 
-    except Exception as e:
+    except Exception:
         logger.exception("Error en get_all_songs")
-        return JsonResponse({"error": str(e)}, status=500)
+        return JsonResponse({"error": "Error interno del servidor"}, status=500)
 
 
 @require_http_methods(["GET"])
 def mis_likes_json(request):
     """
-    Devuelve las canciones marcadas con "like" por el usuario autenticado.
+    Devuelve las canciones marcadas con like por el usuario autenticado.
 
-    Formato:
-    {
-        "id": "pl:likes",
-        "name": "Mis likes",
-        "songs": [...]
-    }
+    Respuesta:
+      { id: "pl:likes", name: "Mis likes", songs: [...] }
     """
     user = _get_session_user_obj(request)
     if not user:
@@ -626,12 +882,20 @@ def mis_likes_json(request):
 
     ct_song = ContentType.objects.get_for_model(Song)
     like_qs = LikeMedia.objects.filter(
-        user=user, content_type=ct_song
+        user=user,
+        content_type=ct_song,
     ).values_list("object_id", flat=True)
 
     songs_qs = (
         Song.objects.filter(id__in=list(like_qs), visibility="public")
-        .only("id", "title", "artist_display_name", "genre", "audio_file", "cover_image")
+        .only(
+            "id",
+            "title",
+            "artist_display_name",
+            "genre",
+            "audio_file",
+            "cover_image",
+        )
         .order_by("-created_at")
     )
 
@@ -645,7 +909,9 @@ def mis_likes_json(request):
                 "id": s.id,
                 "title": s.title,
                 "artist_display_name": getattr(
-                    s, "artist_display_name", ""
+                    s,
+                    "artist_display_name",
+                    "",
                 )
                 or "",
                 "genre": getattr(s, "genre", "") or "",
@@ -657,20 +923,106 @@ def mis_likes_json(request):
     return JsonResponse({"id": "pl:likes", "name": "Mis likes", "songs": songs})
 
 
+@require_http_methods(["GET"])
+def followed_artists_playlists_json(request):
+    """
+    Devuelve playlists virtuales por cada artista que el usuario sigue.
+
+    Cada playlist es: canciones públicas (visibility='public') de ese artista.
+    """
+    user = _get_session_user_obj(request)
+    if not user:
+        return JsonResponse({"error": "login_required"}, status=401)
+
+    # Artistas que sigue el usuario actual
+    followed = FollowArtist.objects.filter(follower=user).select_related("artist")
+    artist_users = [fa.artist for fa in followed]
+
+    if not artist_users:
+        return JsonResponse({"playlists": []})
+
+    # Usuarios-artista -> username (cadena) para filtrar Song.owner_user
+    artist_usernames = [a.user for a in artist_users]
+
+    qs = (
+        Song.objects.filter(
+            owner_user__in=artist_usernames,
+            visibility="public",
+        )
+        .only(
+            "id",
+            "title",
+            "artist_display_name",
+            "genre",
+            "audio_file",
+            "cover_image",
+        )
+        .order_by("id")
+    )
+
+    # Agrupar canciones por owner_user (username del artista)
+    songs_by_artist = {}
+    for s in qs:
+        au = _song_audio_url(s)
+        if not au:
+            continue
+
+        key = getattr(s, "owner_user", "")
+        if not key:
+            continue
+
+        songs_by_artist.setdefault(key, []).append(
+            {
+                "id": s.id,
+                "title": s.title,
+                "artist_display_name": getattr(
+                    s,
+                    "artist_display_name",
+                    "",
+                )
+                or "",
+                "genre": getattr(s, "genre", "") or "",
+                "audioUrl": au,
+                "coverUrl": _song_cover_url(s),
+            }
+        )
+
+    playlists = []
+    for artist_user in artist_users:
+        uname = artist_user.user
+        songs = songs_by_artist.get(uname, [])
+        if not songs:
+            continue
+
+        playlists.append(
+            {
+                "id": f"artist:{uname}",
+                "artist_username": uname,
+                "artist_display_name": uname,
+                "name": uname,
+                "songs": songs,
+            }
+        )
+
+    return JsonResponse({"playlists": playlists})
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def add_song_to_playlist(request):
     """
-    Agrega una canción a una playlist a partir de un cuerpo JSON.
+    Agrega una canción a una playlist a partir de JSON.
+
+    Permisos: owner, admin o colaborador.
 
     JSON esperado:
-    {
-        "song_id": <id canción>,
-        "playlist_id": <id playlist>,
-        "position": <posición entera>
-    }
+      { "song_id": <int>, "playlist_id": <int>, "position": <int> }
     """
     try:
+        session_user = _get_session_user_obj(request)
+        if not session_user:
+            return JsonResponse({"error": "login_required"}, status=401)
+
         data = json.loads(request.body)
         song_id = data.get("song_id")
         playlist_id = data.get("playlist_id")
@@ -681,6 +1033,14 @@ def add_song_to_playlist(request):
                 {"error": "Faltan parámetros: song_id, playlist_id, position"},
                 status=400,
             )
+
+        try:
+            pl = PlayList.objects.get(id=playlist_id)
+        except PlayList.DoesNotExist:
+            return JsonResponse({"error": "Playlist no encontrada"}, status=404)
+
+        if not _user_can_edit_playlist(session_user, pl):
+            return JsonResponse({"error": "forbidden"}, status=403)
 
         PlayListSong.objects.create(
             playlist_id=playlist_id,
@@ -695,35 +1055,48 @@ def add_song_to_playlist(request):
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "JSON inválido"}, status=400)
-    except Exception as e:
+    except Exception:
         logger.exception("Error en add_song_to_playlist")
-        return JsonResponse({"error": str(e)}, status=500)
+        return JsonResponse({"error": "Error interno del servidor"}, status=500)
 
 
 @csrf_exempt
 @require_http_methods(["DELETE"])
 def remove_song_from_playlist(request):
     """
-    Elimina una canción de una playlist a partir de un cuerpo JSON.
+    Elimina una canción de una playlist a partir de JSON.
+
+    Permisos: owner, admin o colaborador.
 
     JSON esperado:
-    {
-        "playlist_id": <id playlist>,
-        "song_id": <id canción>
-    }
+      { "playlist_id": <int>, "song_id": <int> }
     """
     try:
+        session_user = _get_session_user_obj(request)
+        if not session_user:
+            return JsonResponse({"error": "login_required"}, status=401)
+
         data = json.loads(request.body)
         playlist_id = data.get("playlist_id")
         song_id = data.get("song_id")
 
         if playlist_id is None or song_id is None:
             return JsonResponse(
-                {"error": "Se requieren playlist_id y song_id"}, status=400
+                {"error": "Se requieren playlist_id y song_id"},
+                status=400,
             )
 
+        try:
+            pl = PlayList.objects.get(id=playlist_id)
+        except PlayList.DoesNotExist:
+            return JsonResponse({"error": "Playlist no encontrada"}, status=404)
+
+        if not _user_can_edit_playlist(session_user, pl):
+            return JsonResponse({"error": "forbidden"}, status=403)
+
         deleted_count, _ = PlayListSong.objects.filter(
-            playlist_id=playlist_id, song_id=song_id
+            playlist_id=playlist_id,
+            song_id=song_id,
         ).delete()
 
         if deleted_count == 0:
@@ -736,22 +1109,21 @@ def remove_song_from_playlist(request):
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "JSON inválido"}, status=400)
-    except Exception as e:
+    except Exception:
         logger.exception("Error en remove_song_from_playlist")
-        return JsonResponse({"error": str(e)}, status=500)
+        return JsonResponse({"error": "Error interno del servidor"}, status=500)
 
 
-# ============================================================================
+# ======================================================================
 # Búsqueda (HTML + API JSON)
-# ============================================================================
+# ======================================================================
 
 
 def buscar(request):
     """
-    Vista HTML de búsqueda (/buscar/).
+    Vista HTML de búsqueda (canciones públicas, artistas y playlists públicas).
 
-    Busca en canciones públicas, artistas (Users type='artista') y playlists públicas.
-    Requiere que el usuario haya iniciado sesión.
+    Requiere sesión activa.
     """
     if "user" not in request.session:
         messages.error(request, "Debes iniciar sesión para acceder a esta página.")
@@ -763,7 +1135,8 @@ def buscar(request):
     if query:
         resultados["canciones"] = (
             Song.objects.filter(
-                Q(title__icontains=query) | Q(artist_display_name__icontains=query),
+                Q(title__icontains=query)
+                | Q(artist_display_name__icontains=query),
                 visibility="public",
             )
             .only(
@@ -784,7 +1157,9 @@ def buscar(request):
         )
 
         resultados["playlists"] = (
-            PlayList.objects.filter(Q(name__icontains=query) & Q(isprivate=False))
+            PlayList.objects.filter(
+                Q(name__icontains=query) & Q(isprivate=False)
+            )
             .only("id", "idUser", "name", "portada", "isprivate", "created_at")[:20]
         )
 
@@ -812,9 +1187,9 @@ def buscar(request):
 
 def api_buscar(request):
     """
-    API JSON para autosuggest de búsqueda.
+    API JSON para autosuggest de búsqueda (canciones, artistas, playlists).
 
-    Devuelve hasta 5 coincidencias por tipo: canciones, artistas y playlists públicas.
+    Devuelve hasta 5 resultados por tipo si la query tiene al menos 2 caracteres.
     """
     query = request.GET.get("q", "").strip()
 
@@ -869,18 +1244,18 @@ def api_buscar(request):
     return JsonResponse(results)
 
 
-# ============================================================================
+# ======================================================================
 # Likes (canciones / playlists)
-# ============================================================================
+# ======================================================================
 
 
 @require_POST
 def like_song(request, song_id):
     """
-    Alterna el estado de like para una canción.
+    Alterna el estado de like para una canción y devuelve conteo total.
 
-    Respuesta JSON:
-    { "liked": bool, "total": int }
+    Respuesta:
+      { liked: bool, total: int }
     """
     user = _get_session_user_obj(request)
     if not user:
@@ -889,12 +1264,20 @@ def like_song(request, song_id):
     song = get_object_or_404(Song, id=song_id)
     ct = ContentType.objects.get_for_model(Song)
 
-    qs = LikeMedia.objects.filter(user=user, content_type=ct, object_id=song.id)
+    qs = LikeMedia.objects.filter(
+        user=user,
+        content_type=ct,
+        object_id=song.id,
+    )
     if qs.exists():
         qs.delete()
         liked = False
     else:
-        LikeMedia.objects.create(user=user, content_type=ct, object_id=song.id)
+        LikeMedia.objects.create(
+            user=user,
+            content_type=ct,
+            object_id=song.id,
+        )
         liked = True
 
     total = LikeMedia.objects.filter(content_type=ct, object_id=song.id).count()
@@ -904,10 +1287,10 @@ def like_song(request, song_id):
 @require_POST
 def like_playlist(request, playlist_id):
     """
-    Alterna el estado de like para una playlist.
+    Alterna el estado de like para una playlist y devuelve conteo total.
 
-    Respuesta JSON:
-    { "liked": bool, "total": int }
+    Respuesta:
+      { liked: bool, total: int }
     """
     user = _get_session_user_obj(request)
     if not user:
@@ -916,69 +1299,90 @@ def like_playlist(request, playlist_id):
     playlist = get_object_or_404(PlayList, id=playlist_id)
     ct = ContentType.objects.get_for_model(PlayList)
 
-    qs = LikeMedia.objects.filter(user=user, content_type=ct, object_id=playlist.id)
+    qs = LikeMedia.objects.filter(
+        user=user,
+        content_type=ct,
+        object_id=playlist.id,
+    )
     if qs.exists():
         qs.delete()
         liked = False
     else:
-        LikeMedia.objects.create(user=user, content_type=ct, object_id=playlist.id)
+        LikeMedia.objects.create(
+            user=user,
+            content_type=ct,
+            object_id=playlist.id,
+        )
         liked = True
 
     total = LikeMedia.objects.filter(content_type=ct, object_id=playlist.id).count()
     return JsonResponse({"liked": liked, "total": total})
 
-# ============================================================================
+
+# ======================================================================
 # Colaboradores (playlists)
-# ============================================================================
+# ======================================================================
 
 
 @require_http_methods(["GET"])
 def playlist_collaborators_list(request, playlist_id):
     """
-    GET -> devuelve lista de colaboradores: [{user_id, username, role, created_at}]
-    Si el request.user no es el owner u admin, devuelve solo list si se permite (o 403).
+    Devuelve la lista de colaboradores de una playlist (solo owner o admin).
+
+    Usa PlaylistCollaborator (playlist_id + user FK).
     """
     session_user = _get_session_user_obj(request)
-    # Obtener playlist y verificar permisos de lectura: generalmente público, pero listar colaboradores
     pl = get_object_or_404(PlayList, id=playlist_id)
-    # Solo el propietario (idUser) o admins deberían listar colaboradores
+
     if not session_user:
         return JsonResponse({"error": "login_required"}, status=401)
 
-    # comprobar si es owner o admin
-    is_owner = (pl.idUser == session_user.id) if getattr(session_user, "id", None) is not None else False
-    is_admin = (getattr(session_user, "is_superadmin", False) or (session_user.type or "").lower() == "administrador")
+    is_owner = (
+        pl.idUser == session_user.id
+        if getattr(session_user, "id", None) is not None
+        else False
+    )
+    is_admin = _is_admin(session_user)
     if not (is_owner or is_admin):
         return JsonResponse({"error": "forbidden"}, status=403)
 
-    cols = PlayListCollaborator.objects.filter(playlist_id=playlist_id).select_related("user")
-    result = [
-        {
-            "user_id": c.user.id,
-            "username": c.user.user,
-            "role": c.role,
-            "created_at": c.created_at.isoformat(),
-        }
-        for c in cols
-    ]
+    cols = PlaylistCollaborator.objects.filter(
+        playlist_id=playlist_id
+    ).select_related("user")
+
+    result = []
+    for c in cols:
+        u = c.user
+        result.append(
+            {
+                "user_id": u.id if u else None,
+                "username": u.user if u else "",
+                "role": c.role,
+                "added_at": c.created_at.isoformat(),
+            }
+        )
+
     return JsonResponse({"collaborators": result})
 
 
 @require_POST
 def playlist_collaborator_add(request, playlist_id):
     """
-    POST JSON { username: "other_user", role: "editor" }
-    Solo propietario (idUser) o admin puede añadir.
-    Responde {added: true, user_id, username, role}
+    Añade un colaborador (username) a una playlist (solo owner o admin).
+
+    Guarda playlist_id + user (FK) + role.
     """
     session_user = _get_session_user_obj(request)
     if not session_user:
         return JsonResponse({"error": "login_required"}, status=401)
 
     pl = get_object_or_404(PlayList, id=playlist_id)
-    # sólo owner o admin
-    is_owner = (pl.idUser == session_user.id) if getattr(session_user, "id", None) is not None else False
-    is_admin = (getattr(session_user, "is_superadmin", False) or (session_user.type or "").lower() == "administrador")
+    is_owner = (
+        pl.idUser == session_user.id
+        if getattr(session_user, "id", None) is not None
+        else False
+    )
+    is_admin = _is_admin(session_user)
     if not (is_owner or is_admin):
         return JsonResponse({"error": "forbidden"}, status=403)
 
@@ -988,33 +1392,37 @@ def playlist_collaborator_add(request, playlist_id):
         data = {}
 
     username = (data.get("username") or "").strip()
-    role = (data.get("role") or "viewer").strip()
     if not username:
         return JsonResponse({"error": "username_required"}, status=400)
-    if role not in ("editor", "viewer"):
-        return JsonResponse({"error": "invalid_role"}, status=400)
+
+    role = (data.get("role") or "").strip() or "viewer"
+    if role not in ("viewer", "editor"):
+        role = "viewer"
 
     try:
         target = Users.objects.get(user=username)
     except Users.DoesNotExist:
         return JsonResponse({"error": "user_not_found"}, status=404)
 
-    # Añadir colaborador (evitar duplicado)
     try:
-        col, created = PlayListCollaborator.objects.get_or_create(
-            playlist_id=playlist_id, user=target, defaults={"role": role}
+        col, created = PlaylistCollaborator.objects.get_or_create(
+            playlist_id=playlist_id,
+            user=target,
+            defaults={"role": role},
         )
-        if not created:
-            # si ya existe, actualizar role si distinto
-            if col.role != role:
-                col.role = role
-                col.save(update_fields=["role"])
-        return JsonResponse({
-            "added": True,
-            "user_id": target.id,
-            "username": target.user,
-            "role": col.role,
-        })
+        if not created and col.role != role:
+            col.role = role
+            col.save(update_fields=["role"])
+
+        return JsonResponse(
+            {
+                "added": True,
+                "user_id": target.id,
+                "username": target.user,
+                "role": col.role,
+                "created": created,
+            }
+        )
     except IntegrityError:
         return JsonResponse({"error": "db_error"}, status=500)
 
@@ -1022,16 +1430,21 @@ def playlist_collaborator_add(request, playlist_id):
 @require_http_methods(["DELETE"])
 def playlist_collaborator_remove(request, playlist_id, user_id):
     """
-    DELETE -> elimina la colaboración del user_id en playlist_id.
-    Solo owner o admin pueden eliminar colaboradores.
+    Elimina la colaboración de un usuario en una playlist (solo owner o admin).
+
+    user_id es el ID en Users.
     """
     session_user = _get_session_user_obj(request)
     if not session_user:
         return JsonResponse({"error": "login_required"}, status=401)
 
     pl = get_object_or_404(PlayList, id=playlist_id)
-    is_owner = (pl.idUser == session_user.id) if getattr(session_user, "id", None) is not None else False
-    is_admin = (getattr(session_user, "is_superadmin", False) or (session_user.type or "").lower() == "administrador")
+    is_owner = (
+        pl.idUser == session_user.id
+        if getattr(session_user, "id", None) is not None
+        else False
+    )
+    is_admin = _is_admin(session_user)
     if not (is_owner or is_admin):
         return JsonResponse({"error": "forbidden"}, status=403)
 
@@ -1040,29 +1453,11 @@ def playlist_collaborator_remove(request, playlist_id, user_id):
     except Users.DoesNotExist:
         return JsonResponse({"error": "user_not_found"}, status=404)
 
-    deleted, _ = PlayListCollaborator.objects.filter(playlist_id=playlist_id, user=target).delete()
+    deleted, _ = PlaylistCollaborator.objects.filter(
+        playlist_id=playlist_id,
+        user=target,
+    ).delete()
+
     if deleted:
         return JsonResponse({"removed": True})
-    else:
-        return JsonResponse({"removed": False, "error": "not_found"}, status=404)
-
-
-
-@csrf_exempt
-def setFollows(request):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST only'}, status=405)
-
-    seguidor_id = request.POST.get('seguidor_id')
-    seguido_id  = request.POST.get('seguido_id')
-    action      = request.POST.get('action')  # 'follow' o 'unfollow'
-
-    if not all([seguidor_id, seguido_id]):
-        return JsonResponse({'error': 'Faltan IDs'}, status=400)
-
-    if action == 'unfollow':
-        Followers.objects.filter(seguidor_id=seguidor_id, seguido_id=seguido_id).delete()
-        return JsonResponse({'followed': False})
-
-    Followers.objects.get_or_create(seguidor_id=seguidor_id, seguido_id=seguido_id)
-    return JsonResponse({'followed': True})
+    return JsonResponse({"removed": False, "error": "not_found"}, status=404)
