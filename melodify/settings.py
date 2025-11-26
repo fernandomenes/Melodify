@@ -48,7 +48,6 @@ INSTALLED_APPS = [
     "reproductor",
     "muro",
     "gestion",
-    "feed",
 ]
 
 # ------------------------------ Middleware -------------------------------

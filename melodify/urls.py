@@ -36,7 +36,6 @@ urlpatterns = [
     path("gestion/", include("gestion.urls")),
     path("", include("reproductor.urls")),
     path("", include("muro.urls")),
-    path("feed/", include("feed.urls")),
 
     # Favicon
     path("favicon.ico", favicon_root, name="favicon"),

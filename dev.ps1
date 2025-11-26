@@ -152,7 +152,6 @@ function Coverage {
 $TaskMap = @{
   'help'             = { Write-Host "Tareas: dev, setup, init-dirs, makemigrations, migrate-safe, ensure-users, seed-demo, seed, run, runnet, clean, clean-media, clean-db, reset-db, superclean, test, coverage, showmigrations" }
 
-  # dev YA NO ejecuta Seed (contenido demo). Solo usuarios base si hace falta.
   'dev'              = { Setup; Ensure-Dirs; MakeMigrations; Migrate-Safe; Ensure-Users; Run }
 
   'setup'            = { Setup }
