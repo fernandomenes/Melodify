@@ -78,7 +78,7 @@
       ds.urlAllSongsJson ||
       ds.urlAllsongsJson ||
       ds.urlAllSongs ||
-      "/get_all_songs/"
+      "/api/all-songs/"
     );
   }
 
@@ -587,9 +587,22 @@
           pl.playlist_id ??
           null;
         if (pid == null) continue;
+
+        const backendId = String(pid);
+        const fullId = `pl:${backendId}`;
+
         out.push({
-          id: `pl:${pid}`,
+          id: fullId,
+          backendId,
           name: pl.name || pl.nombre || `Playlist ${pid}`,
+          canEdit:
+            typeof pl.canEdit === "boolean" ? pl.canEdit : true,
+          isMine: !!pl.isMine,
+          isCollaborator: !!pl.isCollaborator,
+          isPublic:
+            typeof pl.isPublic === "boolean"
+              ? pl.isPublic
+              : !pl.isprivate,
         });
       }
       return out;
@@ -679,7 +692,7 @@
     if (!pid || !sid) throw new Error("Playlist o canción inválida.");
 
     const csrftoken = getCookie("csrftoken") || "";
-    const res = await fetch("/playlist/removesong/", {
+    const res = await fetch("/playlist/removeSong/", {
       method: "DELETE",
       credentials: "same-origin",
       headers: {
@@ -737,7 +750,14 @@
       _refreshActivePlaylistInReproductor(backendId);
     } catch (err) {
       console.error("Fallback agregar canción falló:", err);
-      _toast("No se pudo agregar la canción.");
+      const msg = (err && err.message) || "";
+      if (msg === "login_required" || /login_required/i.test(msg)) {
+        _toast("Debes iniciar sesión para editar playlists.");
+      } else if (msg === "forbidden" || /forbidden/i.test(msg)) {
+        _toast("No puedes editar esta playlist.");
+      } else {
+        _toast("No se pudo agregar la canción.");
+      }
     }
   }
 
@@ -759,7 +779,14 @@
       _refreshActivePlaylistInReproductor(backendId);
     } catch (err) {
       console.error("Fallback quitar canción falló:", err);
-      _toast("No se pudo quitar la canción de la playlist.");
+      const msg = (err && err.message) || "";
+      if (msg === "login_required" || /login_required/i.test(msg)) {
+        _toast("Debes iniciar sesión para editar playlists.");
+      } else if (msg === "forbidden" || /forbidden/i.test(msg)) {
+        _toast("No puedes editar esta playlist.");
+      } else {
+        _toast("No se pudo quitar la canción de la playlist.");
+      }
     }
   }
 
@@ -800,6 +827,9 @@
           return arr.filter((p) => {
             const pid = String((p && p.id) || "").trim();
             if (!pid || _ADD_TO_PLAYLIST_FORBIDDEN.has(pid)) return false;
+            const canEdit =
+              p && typeof p.canEdit !== "undefined" ? !!p.canEdit : true;
+            if (!canEdit) return false;
             return true;
           });
         };

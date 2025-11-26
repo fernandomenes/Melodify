@@ -18,12 +18,28 @@ urlpatterns = [
     # Playlists
     path("playlist/getAllList/", v.playlist_getAll, name="getAllList"),
     path("playlist/create/", v.create_playlist, name="create-playlist"),
-    path("playlist/<int:playlist_id>/songs/", v.get_songs_by_playlist, name="getSongsByPl"),
-    path("playlist/<int:playlist_id>/delete/", v.delete_playlist, name="delete-playlist"),
-    path("playlist/<int:playlist_id>/update/", v.update_playlist, name="update-playlist"),
+    path(
+        "playlist/<int:playlist_id>/songs/",
+        v.get_songs_by_playlist,
+        name="getSongsByPl",
+    ),
+    path(
+        "playlist/<int:playlist_id>/delete/",
+        v.delete_playlist,
+        name="delete-playlist",
+    ),
+    path(
+        "playlist/<int:playlist_id>/update/",
+        v.update_playlist,
+        name="update-playlist",
+    ),
     path("playlist/allsongs/", v.get_all_songs, name="get-all-songs"),
     path("playlist/addsong/", v.add_song_to_playlist, name="add-song-to-playlist"),
-    path("playlist/removeSong/", v.remove_song_from_playlist, name="remove-song-from-playlist"),
+    path(
+        "playlist/removeSong/",
+        v.remove_song_from_playlist,
+        name="remove-song-from-playlist",
+    ),
     path("playlist/getuserid/", v.get_user_id, name="get_user_id"),
     path("playlist/setFollows/", v.setFollows, name="setFollows"),
 
@@ -57,6 +73,11 @@ urlpatterns = [
         "playlist/<int:playlist_id>/collaborators/add/",
         v.playlist_collaborator_add,
         name="playlist_collaborator_add",
+    ),
+    path(
+        "playlist/collaborators/add/",
+        v.playlist_collaborator_add,
+        name="playlist_collaborator_add_global",
     ),
     path(
         "playlist/<int:playlist_id>/collaborators/remove/<int:user_id>/",

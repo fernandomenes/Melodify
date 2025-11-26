@@ -18,7 +18,6 @@
   <script defer src="{% static 'inicio_sesion/playListScript.js' %}"></script>
 
   <link rel="stylesheet" href="{% static 'muro/muro.css' %}?v={% now 'U' %}">
-
   <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
 
@@ -117,7 +116,7 @@
       grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
       gap:10px;
     }
-      .page-muro .artist-pl-card{
+    .page-muro .artist-pl-card{
       background:#1b1b1b;
       border:1px solid #2b2b2b;
       border-radius:10px;
@@ -138,9 +137,9 @@
     }
 
     .page-muro .artist-pl-card--likes{
-  border-color:#f5c542;             
-  box-shadow:0 0 0 1px rgba(245,197,66,0.45);
-}
+      border-color:#f5c542;
+      box-shadow:0 0 0 1px rgba(245,197,66,0.45);
+    }
 
     .page-muro .artist-pl-name{
       font-weight:600;
@@ -160,6 +159,28 @@
         min-width:110px;
       }
     }
+
+    /* Fila compacta seguidores + botón */
+    .page-muro .muro-stat-row {
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+
+    /* Botón "Ver lista" más sutil y elegante */
+    .page-muro .muro-followers-btn {
+      padding:2px 10px;
+      font-size:11px;
+      border-radius:999px;
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.18);
+      color:#f5f5f5;
+      line-height:1.2;
+    }
+    .page-muro .muro-followers-btn:hover {
+      background:rgba(255,255,255,0.14);
+      border-color:rgba(255,255,255,0.28);
+    }
   </style>
 </head>
 <body class="page-muro">
@@ -174,11 +195,6 @@
     </nav>
   </div>
 </header>
-<section id="muro-followers-list"
-         class="card"
-         style="display:none; margin:0 0 12px;"
-         aria-label="Lista de seguidores">
-</section>
 
 <aside id="menuLateral">
   <div class="logo" id="toggle-menu">
@@ -200,6 +216,7 @@
 <main id="main-content"
       data-url-home="{% url 'home' %}"
       data-url-mi-musica-json="{% url 'mi_musica_json' %}"
+      data-url-all-songs-json="{% url 'all_songs_json' %}"
       data-url-mi-muro="{% url 'mi_muro' %}"
       data-url-gestion="{% url 'gestion' %}"
       data-url-revertir-muro="{% url 'revertir_mi_cancion' %}"
@@ -326,41 +343,40 @@
       </div>
     {% endif %}
 
-{# ======================= Playlists del artista ======================== #}
-{% if artist_likes_playlist or artist_public_playlists %}
-  <section id="artist-playlists-section" aria-label="Playlists del artista">
-    <h3 style="margin:0 0 10px">Playlists del artista</h3>
-    <div class="artist-playlists-grid">
-      {% if artist_likes_playlist %}
-        <article class="artist-pl-card artist-pl-card--likes"
-                 data-pl-id="{{ artist_likes_playlist.id }}">
-          <div class="artist-pl-name">Music that i love</div>
-          <div class="artist-pl-meta">
-            {{ artist_likes_playlist.songs_count|default:0 }}
-            canción{{ artist_likes_playlist.songs_count|default:0|pluralize:"es" }}
-          </div>
-        </article>
-      {% endif %}
+    {# ======================= Playlists del artista ======================== #}
+    {% if artist_likes_playlist or artist_public_playlists %}
+      <section id="artist-playlists-section" aria-label="Playlists del artista">
+        <h3 style="margin:0 0 10px">Playlists del artista</h3>
+        <div class="artist-playlists-grid">
+          {% if artist_likes_playlist %}
+            <article class="artist-pl-card artist-pl-card--likes"
+                     data-pl-id="{{ artist_likes_playlist.id }}">
+              <div class="artist-pl-name">Music that i love</div>
+              <div class="artist-pl-meta">
+                {{ artist_likes_playlist.songs_count|default:0 }}
+                canción{{ artist_likes_playlist.songs_count|default:0|pluralize:"es" }}
+              </div>
+            </article>
+          {% endif %}
 
-      {% for pl in artist_public_playlists %}
-        <article class="artist-pl-card"
-                 data-pl-id="{{ pl.id }}">
-          <div class="artist-pl-name">{{ pl.name }}</div>
-          <div class="artist-pl-meta">
-            {{ pl.songs_count|default:0 }} canción{{ pl.songs_count|default:0|pluralize:"es" }}
-            &middot;
-            {{ pl.likes_count|default:0 }} like{{ pl.likes_count|default:0|pluralize:"s" }}
-          </div>
-        </article>
-      {% endfor %}
-    </div>
-  </section>
-{% endif %}
+          {% for pl in artist_public_playlists %}
+            <article class="artist-pl-card"
+                     data-pl-id="{{ pl.id }}">
+              <div class="artist-pl-name">{{ pl.name }}</div>
+              <div class="artist-pl-meta">
+                {{ pl.songs_count|default:0 }} canción{{ pl.songs_count|default:0|pluralize:"es" }}
+                &middot;
+                {{ pl.likes_count|default:0 }} like{{ pl.likes_count|default:0|pluralize:"s" }}
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
 
-<section id="artist-playlist-songs-wrapper"
-         aria-label="Playlist seleccionada"
-         style="display:none"></section>
-
+    <section id="artist-playlist-songs-wrapper"
+             aria-label="Playlist seleccionada"
+             style="display:none"></section>
 
     <section aria-label="Canciones">
       <h3 style="margin:0 0 12px">Canciones</h3>
@@ -368,37 +384,26 @@
       {% if songs %}
         <div class="muro-stats-panel" aria-label="Estadísticas del muro del artista">
           <div class="muro-stat">
-            <div class="muro-stat-label">Me gusta totales</div>
-            <div class="muro-stat-value">
-              {{ muro_total_likes|default:0 }}
-              <span>en este muro</span>
+            <div class="muro-stat-label">Seguidores</div>
+            <div class="muro-stat-row">
+              <div class="muro-stat-value" id="muro-followers-count">
+                {{ muro_followers_count|default:0 }}
+              </div>
+              <button type="button"
+                      id="btn-show-followers"
+                      class="btn btn-small muro-followers-btn">
+                Ver lista
+              </button>
             </div>
           </div>
-
-          {% if session_user %}
-            <div class="muro-stat">
-              <div class="muro-stat-label">Tus Me gusta aquí</div>
-              <div class="muro-stat-value">
-                {{ muro_user_liked_songs|default:0 }}
-                <span>canciones</span>
-              </div>
-            </div>
-          {% endif %}
-
-       <div class="muro-stat">
-  <div class="muro-stat-label">Seguidores</div>
-  <div class="muro-stat-value" id="muro-followers-count">
-    {{ muro_followers_count|default:0 }}
-  </div>
-  <button type="button"
-          id="btn-show-followers"
-          class="btn btn-small"
-          style="margin-top:4px;">
-    Ver lista
-  </button>
-</div>
-
         </div>
+
+        {# Lista de seguidores, debajo del panel de stats #}
+        <section id="muro-followers-list"
+                 class="card"
+                 style="display:none; margin:10px 0 12px;"
+                 aria-label="Lista de seguidores">
+        </section>
       {% endif %}
 
       {% if is_owner %}
@@ -531,18 +536,13 @@
 <div id="like-toast" aria-live="polite"></div>
 
 <script>
-  window.__ARTIST_PUBLIC_PLAYLISTS__ = {{ artist_public_playlists_json|default:"[]"|safe }};
-  window.__ARTIST_LIKES_PLAYLIST__ = {{ artist_likes_playlist_json|default:"{}"|safe }};
+  window.__ARTIST_PUBLIC_PLAYLISTS__ = JSON.parse(
+    '{{ artist_public_playlists_json|escapejs }}'
+  );
+  window.__ARTIST_LIKES_PLAYLIST__ = JSON.parse(
+    '{{ artist_likes_playlist_json|escapejs }}'
+  );
 </script>
-
-  <script>
-    window.__ARTIST_PUBLIC_PLAYLISTS__ = JSON.parse(
-      '{{ artist_public_playlists_json|escapejs }}'
-    );
-    window.__ARTIST_LIKES_PLAYLIST__ = JSON.parse(
-      '{{ artist_likes_playlist_json|escapejs }}'
-    );
-  </script>
 
 <script defer src="{% static 'muro/muro.js' %}?v={% now 'U' %}"></script>
 <script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>

@@ -36,28 +36,10 @@ if [ "${COLLECTSTATIC_ON_STARTUP:-0}" = "1" ]; then
   python manage.py collectstatic --noinput || true
 fi
 
-# ---------- Seeds (controlables por env) ----------
+# ---------- Usuarios iniciales (sin contenido demo) ----------
 if [ "${SEED_ON_DEPLOY:-1}" = "1" ]; then
   echo "→ ensure_initial_users…"
   python manage.py ensure_initial_users || true
-
-  echo "→ seed_demo…"
-  python manage.py seed_demo \
-    --root "${SEED_ROOT:-seeds/artists}" \
-    --default-pass "${SEED_DEFAULT_PASS:-demo123}" \
-    ${SEED_REPLACE_AVATARS:+--replace-avatars} \
-    ${SEED_REPLACE_COVERS:+--replace-covers} \
-    ${SEED_REPLACE_AUDIO:+--replace-audio} \
-    || true
-
-  if [ "${SEED_PLAYLISTS:-0}" = "1" ]; then
-    echo "→ seed_playlists…"
-    python manage.py seed_playlists \
-      ${SEED_PLAYLISTS_WIPE:+--wipe} \
-      --prefix "${SEED_PLAYLISTS_PREFIX:-Favoritos — }" \
-      --max "${SEED_PLAYLISTS_MAX:-20}" \
-      || true
-  fi
 fi
 
 # ---------- Gunicorn ----------

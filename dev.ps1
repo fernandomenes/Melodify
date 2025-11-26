@@ -34,10 +34,18 @@ function Ensure-Dirs {
     "uploaded_media\uploaded_avatars",
     "static"
   )
-  foreach ($d in $dirs) { $full = Join-Path $PSScriptRoot $d; if (-not (Test-Path $full)) { New-Item -ItemType Directory -Force -Path $full | Out-Null } }
+  foreach ($d in $dirs) {
+    $full = Join-Path $PSScriptRoot $d
+    if (-not (Test-Path $full)) {
+      New-Item -ItemType Directory -Force -Path $full | Out-Null
+    }
+  }
 }
 
-function Invoke-Py { param([Parameter(Mandatory)][string[]]$Args) & $VenvPython @Args }
+function Invoke-Py {
+  param([Parameter(Mandatory)][string[]]$Args)
+  & $VenvPython @Args
+}
 
 function Setup          { Ensure-Venv; Write-Host "Instalando dependencias..."; & $VenvPip install -r (Join-Path $PSScriptRoot "requirements.txt") }
 function MakeMigrations { Ensure-Venv; Invoke-Py @("manage.py","makemigrations") }
@@ -52,36 +60,101 @@ function Migrate-Safe {
   }
 }
 
-
 function ShowMigrations { Ensure-Venv; Invoke-Py @("manage.py","showmigrations") }
 
 # ===== seed =====
-function Ensure-Users { Ensure-Venv; Invoke-Py @("manage.py","ensure_initial_users") }
+function Ensure-Users {
+  Ensure-Venv
+  Invoke-Py @("manage.py","ensure_initial_users")
+}
+
 function Seed-Demo {
   Ensure-Venv
   $root = "seeds\artists"
   $pass = "demo123"
   Invoke-Py @("manage.py","seed_demo","--root",$root,"--default-pass",$pass,"--replace-avatars","--replace-covers","--replace-audio")
 }
-function Seed { Ensure-Users; Seed-Demo }
 
-function Run   { Ensure-Venv; $port = if ($env:PORT) { $env:PORT } else { 8000 }; Write-Host "Iniciando http://127.0.0.1:$port"; Invoke-Py @("manage.py","runserver","127.0.0.1:$port") }
-function RunNet{ Ensure-Venv; $port = if ($env:PORT) { $env:PORT } else { 8000 }; Write-Host "Iniciando 0.0.0.0:$port"; Invoke-Py @("manage.py","runserver","0.0.0.0:$port") }
+function Seed {
+  Ensure-Users
+  Seed-Demo
+}
 
-function Clean-Pyc   { Write-Host "Borrando caches…"; Get-ChildItem -Path $PSScriptRoot -Recurse -Include *.pyc,*.pyo -File -EA SilentlyContinue | Remove-Item -Force; Get-ChildItem -Path $PSScriptRoot -Recurse -Directory -Filter "__pycache__" -EA SilentlyContinue | Remove-Item -Recurse -Force; Remove-Item -Force -Recurse "$PSScriptRoot\.pytest_cache","$PSScriptRoot\.ruff_cache" -EA SilentlyContinue }
-function Clean-Build { Write-Host "Borrando build…"; Remove-Item -Force -Recurse "$PSScriptRoot\build","$PSScriptRoot\dist" -EA SilentlyContinue; Get-ChildItem $PSScriptRoot -Filter *.egg-info -Recurse -Directory -EA SilentlyContinue | Remove-Item -Recurse -Force }
-function Clean-Media { Write-Host "Limpiando uploaded_media…"; Ensure-Dirs; Get-ChildItem "$PSScriptRoot\uploaded_media\uploaded_songs" -Force -EA SilentlyContinue | Remove-Item -Recurse -Force -EA SilentlyContinue; Get-ChildItem "$PSScriptRoot\uploaded_media\uploaded_covers" -Force -EA SilentlyContinue | Remove-Item -Recurse -Force -EA SilentlyContinue; Get-ChildItem "$PSScriptRoot\uploaded_media\uploaded_avatars" -Force -EA SilentlyContinue | Remove-Item -Recurse -Force -EA SilentlyContinue; Get-ChildItem "$PSScriptRoot\uploaded_media" -File -Force -EA SilentlyContinue | Remove-Item -Force; Write-Host "Media limpia." }
-function Clean-Db    { Write-Host "Eliminando SQLite…"; Remove-Item -Force "$PSScriptRoot\melodifyDB.sqlite3" -EA SilentlyContinue; Write-Host "DB eliminada." }
-function Reset-Db    { Clean-Db; Migrate-Safe; Write-Host "DB reseteada." }
-function Clean       { Clean-Pyc; Clean-Build; Write-Host "Limpieza básica OK." }
-function SuperClean  { Clean; Clean-Media; Clean-Db; Write-Host "Superclean OK." }
+function Run {
+  Ensure-Venv
+  $port = if ($env:PORT) { $env:PORT } else { 8000 }
+  Write-Host "Iniciando http://127.0.0.1:$port"
+  Invoke-Py @("manage.py","runserver","127.0.0.1:$port")
+}
 
-function Test-Unit   { Ensure-Venv; Invoke-Py @("manage.py","test","-v","2") }
-function Coverage    { Ensure-Venv; & $VenvPip install -U coverage; Push-Location $PSScriptRoot; try { & $VenvPython -m coverage run manage.py test -v 2; & $VenvPython -m coverage report -m } finally { Pop-Location } }
+function RunNet {
+  Ensure-Venv
+  $port = if ($env:PORT) { $env:PORT } else { 8000 }
+  Write-Host "Iniciando 0.0.0.0:$port"
+  Invoke-Py @("manage.py","runserver","0.0.0.0:$port")
+}
+
+function Clean-Pyc {
+  Write-Host "Borrando caches…"
+  Get-ChildItem -Path $PSScriptRoot -Recurse -Include *.pyc,*.pyo -File -EA SilentlyContinue | Remove-Item -Force
+  Get-ChildItem -Path $PSScriptRoot -Recurse -Directory -Filter "__pycache__" -EA SilentlyContinue | Remove-Item -Recurse -Force
+  Remove-Item -Force -Recurse "$PSScriptRoot\.pytest_cache","$PSScriptRoot\.ruff_cache" -EA SilentlyContinue
+}
+
+function Clean-Build {
+  Write-Host "Borrando build…"
+  Remove-Item -Force -Recurse "$PSScriptRoot\build","$PSScriptRoot\dist" -EA SilentlyContinue
+  Get-ChildItem $PSScriptRoot -Filter *.egg-info -Recurse -Directory -EA SilentlyContinue | Remove-Item -Recurse -Force
+}
+
+function Clean-Media {
+  Write-Host "Limpiando uploaded_media…"
+  Ensure-Dirs
+  Get-ChildItem "$PSScriptRoot\uploaded_media\uploaded_songs" -Force -EA SilentlyContinue | Remove-Item -Recurse -Force -EA SilentlyContinue
+  Get-ChildItem "$PSScriptRoot\uploaded_media\uploaded_covers" -Force -EA SilentlyContinue | Remove-Item -Recurse -Force -EA SilentlyContinue
+  Get-ChildItem "$PSScriptRoot\uploaded_media\uploaded_avatars" -Force -EA SilentlyContinue | Remove-Item -Recurse -Force -EA SilentlyContinue
+  Get-ChildItem "$PSScriptRoot\uploaded_media" -File -Force -EA SilentlyContinue | Remove-Item -Force
+  Write-Host "Media limpia."
+}
+
+function Clean-Db {
+  Write-Host "Eliminando SQLite…"
+  Remove-Item -Force "$PSScriptRoot\melodifyDB.sqlite3" -EA SilentlyContinue
+  Write-Host "DB eliminada."
+}
+
+function Reset-Db {
+  Clean-Db
+  Migrate-Safe
+  Write-Host "DB reseteada."
+}
+
+function Clean      { Clean-Pyc; Clean-Build; Write-Host "Limpieza básica OK." }
+function SuperClean { Clean; Clean-Media; Clean-Db; Write-Host "Superclean OK." }
+
+function Test-Unit {
+  Ensure-Venv
+  Invoke-Py @("manage.py","test","-v","2")
+}
+
+function Coverage {
+  Ensure-Venv
+  & $VenvPip install -U coverage
+  Push-Location $PSScriptRoot
+  try {
+    & $VenvPython -m coverage run manage.py test -v 2
+    & $VenvPython -m coverage report -m
+  } finally {
+    Pop-Location
+  }
+}
 
 $TaskMap = @{
   'help'             = { Write-Host "Tareas: dev, setup, init-dirs, makemigrations, migrate-safe, ensure-users, seed-demo, seed, run, runnet, clean, clean-media, clean-db, reset-db, superclean, test, coverage, showmigrations" }
-  'dev'              = { Setup; Ensure-Dirs; MakeMigrations; Migrate-Safe; Seed; Run }
+
+  # dev YA NO ejecuta Seed (contenido demo). Solo usuarios base si hace falta.
+  'dev'              = { Setup; Ensure-Dirs; MakeMigrations; Migrate-Safe; Ensure-Users; Run }
+
   'setup'            = { Setup }
   'init-dirs'        = { Ensure-Dirs }
   'makemigrations'   = { MakeMigrations }
@@ -102,5 +175,9 @@ $TaskMap = @{
 }
 
 foreach ($t in $Tasks) {
-  if ($TaskMap.ContainsKey($t)) { & $TaskMap[$t] } else { throw "Tarea desconocida: $t`nUsa: ./dev.ps1 help" }
+  if ($TaskMap.ContainsKey($t)) {
+    & $TaskMap[$t]
+  } else {
+    throw "Tarea desconocida: $t`nUsa: ./dev.ps1 help"
+  }
 }

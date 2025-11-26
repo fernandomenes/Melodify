@@ -1,0 +1,170 @@
+{# templates/inicio_sesion/playlist_collaborators.html #}
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Colaboradores — {{ playlist.name }} | Melodify</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}">
+  <link rel="stylesheet" href="{% static 'inicio_sesion/ComponentStyles.css' %}">
+
+  <style>
+    body {
+      background:#050505;
+      color:#f5f5f5;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      padding:16px;
+    }
+    .page-wrap {
+      max-width:640px;
+      margin:0 auto;
+    }
+    .card {
+      background:#121212;
+      border-radius:12px;
+      border:1px solid #262626;
+      padding:16px 18px;
+      box-shadow:0 18px 35px rgba(0,0,0,.6);
+    }
+    h1,h2,h3 {
+      margin:0 0 10px;
+    }
+    .muted {
+      font-size:13px;
+      opacity:.8;
+      margin:0 0 8px;
+    }
+    .collab-list {
+      list-style:none;
+      margin:8px 0 0;
+      padding:0;
+    }
+    .collab-item {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:6px 0;
+      border-bottom:1px solid rgba(255,255,255,0.05);
+    }
+    .collab-user {
+      font-weight:500;
+    }
+    .collab-meta {
+      font-size:12px;
+      opacity:.8;
+    }
+    .btn {
+      cursor:pointer;
+    }
+    .btnDanger {
+      background:#c62828;
+      border-color:#c62828;
+    }
+    .btnDanger:hover {
+      background:#e53935;
+    }
+    .top-actions {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      margin-bottom:10px;
+    }
+    .back-link {
+      font-size:13px;
+      opacity:.85;
+    }
+    form.inline {
+      display:inline;
+      margin:0;
+    }
+    .field-row {
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+      margin:8px 0 0;
+    }
+    .field-row input[type="text"]{
+      flex:1 1 auto;
+      min-width:140px;
+    }
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+  <div class="card">
+    <div class="top-actions">
+      <h1 style="font-size:18px;">Colaboradores de “{{ playlist.name }}”</h1>
+      <a href="{% url 'home' %}?view=playlist" class="back-link">← Volver a mis playlists</a>
+    </div>
+
+    <p class="muted">
+      Aquí puedes ver y gestionar quién puede editar la playlist.
+      Solo el creador de la playlist puede agregar o quitar colaboradores.
+    </p>
+
+    {# Formulario para agregar colaborador por username #}
+    <section style="margin-top:10px;">
+      <h2 style="font-size:15px;">Agregar colaborador</h2>
+      <p class="muted">Escribe el nombre de usuario de la persona a la que quieres dar acceso.</p>
+
+      <form method="post"
+            action="{% url 'playlist_collaborator_add' playlist.id %}">
+        {% csrf_token %}
+        <div class="field-row">
+          <input type="text"
+                 name="username"
+                 placeholder="usuario"
+                 required>
+          <button class="btn" type="submit">Agregar</button>
+        </div>
+      </form>
+    </section>
+
+    {# Lista de colaboradores actuales #}
+    <section style="margin-top:16px;">
+      <h2 style="font-size:15px;">Colaboradores actuales</h2>
+
+      {% if collaborators %}
+        <ul class="collab-list">
+          {% for c in collaborators %}
+            <li class="collab-item">
+              <div>
+                <div class="collab-user">
+                  {{ c.user.username }}
+                  {% if c.user == playlist.user %}
+                    <span class="collab-meta">(propietario)</span>
+                  {% endif %}
+                </div>
+                {% if c.user != playlist.user %}
+                  <div class="collab-meta">
+                    Puede agregar/quitar canciones y editar la playlist.
+                  </div>
+                {% endif %}
+              </div>
+
+              {# Botón para quitar colaborador (no se muestra sobre el dueño) #}
+              {% if c.user != playlist.user %}
+                <form class="inline"
+                      method="post"
+                      action="{% url 'playlist_collaborator_remove' playlist.id c.user.id %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btnDanger">Quitar</button>
+                </form>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted" style="margin-top:6px;">
+          Esta playlist todavía no tiene colaboradores.
+        </p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+</body>
+</html>

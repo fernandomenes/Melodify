@@ -1,1 +1,0 @@
-//clase para el feed en próxima actualización

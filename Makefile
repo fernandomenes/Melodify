@@ -50,8 +50,8 @@ run:
 runnet:
 	$(PY) manage.py runserver 0.0.0.0:8000
 
-# dev: venv → deps → dirs → makemigrations → migrate → seed → run
-dev: setup init-dirs makemigrations migrate seed run
+# dev: venv → deps → dirs → makemigrations → migrate → seed-users → run
+dev: setup init-dirs makemigrations migrate seed-users run
 
 # ================== LIMPIEZA ==================
 clean: clean-pyc clean-build
