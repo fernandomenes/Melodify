@@ -1438,6 +1438,7 @@ def playlist_collaborator_add(request, playlist_id=None):
 
     pl = get_object_or_404(PlayList, id=playlist_id)
 
+    # Permisos: dueño o admin
     is_owner = (
         pl.idUser == session_user.id
         if getattr(session_user, "id", None) is not None
@@ -1470,32 +1471,6 @@ def playlist_collaborator_add(request, playlist_id=None):
             status=400,
         )
 
-    owner_user = None
-    if getattr(pl, "idUser", None) is not None:
-        try:
-            owner_user = Users.objects.get(id=pl.idUser)
-        except Users.DoesNotExist:
-            owner_user = None
-
-    if owner_user and (owner_user.type or "").lower() == "artista":
-        try:
-            is_follower = FollowArtist.objects.filter(
-                follower=target,
-                artist=owner_user,
-            ).exists()
-        except Exception:
-            logger.exception("playlist_collaborator_add: error verificando FollowArtist")
-            is_follower = False
-
-        if not is_follower:
-            return JsonResponse(
-                {
-                    "ok": False,
-                    "error": "not_follower",
-                    "message": "Solo puedes agregar como colaborador a usuarios que ya te siguen.",
-                },
-                status=400,
-            )
 
     try:
         col, created = PlaylistCollaborator.objects.get_or_create(
@@ -1565,3 +1540,38 @@ def playlist_collaborator_remove(request, playlist_id, user_id):
     if deleted:
         return JsonResponse({"removed": True})
     return JsonResponse({"removed": False, "error": "not_found"}, status=404)
+
+@require_http_methods(["GET"])
+def playlist_collaborators_candidates(request):
+    """
+    Devuelve una lista de usuarios activos que se pueden usar como
+    candidatos a colaborador de una playlist.
+
+    Opcionalmente se puede filtrar con ?q=...
+    """
+    session_user = _get_session_user_obj(request)
+    if not session_user:
+        return JsonResponse({"error": "login_required"}, status=401)
+
+    q = (request.GET.get("q") or "").strip()
+
+    qs = Users.objects.filter(is_active=True)
+
+    if q:
+        qs = qs.filter(user__icontains=q)
+
+    # opcional: no incluirse a sí mismo en la lista
+    qs = qs.exclude(id=session_user.id).order_by("user")[:50]
+
+    users = []
+    for u in qs:
+        users.append(
+            {
+                "id": u.id,
+                "username": u.user,
+                "type": (u.type or "").lower(),
+                "avatarUrl": _safe_file_url(getattr(u, "avatar", None)),
+            }
+        )
+
+    return JsonResponse({"users": users})

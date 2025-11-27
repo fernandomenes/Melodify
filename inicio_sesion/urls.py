@@ -84,6 +84,11 @@ urlpatterns = [
         v.playlist_collaborator_remove,
         name="playlist_collaborator_remove",
     ),
+    path(
+        "playlist/collaborators/candidates/",
+        v.playlist_collaborators_candidates,
+        name="playlist_collaborators_candidates",
+    ),
         path("playlist/<int:playlist_id>/cover/", v.playlist_upload_cover, name="playlist_upload_cover"),
 
 ]

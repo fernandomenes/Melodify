@@ -364,9 +364,12 @@ async function getUSerIdLogin(username) {
  * Crea una playlist para el usuario actual.
  * extra: { description?: string, coverFile?: File }
  */
+/**
+ * Crea una playlist para el usuario actual.
+ * extra: { coverFile?: File }
+ */
 function crearPlaylist(namePlaylist, extra = {}) {
   const csrf = getCookie("csrftoken");
-  const description = (extra.description || "").trim();
   const coverFile = extra.coverFile || null;
 
   fetch("/playlist/create/", {
@@ -380,7 +383,6 @@ function crearPlaylist(namePlaylist, extra = {}) {
     body: JSON.stringify({
       user: USERNAME,
       name: namePlaylist,
-      description: description,
     }),
   })
     .then((r) =>
@@ -413,6 +415,7 @@ function crearPlaylist(namePlaylist, extra = {}) {
       showMdfAlert(msg, { title: "Error al crear playlist" });
     });
 }
+
 
 /**
  * Cambia el like de una playlist y actualiza el contador.
@@ -945,6 +948,32 @@ function showPlaylists() {
       actionsRow.style.marginTop = "8px";
 
       if (USERID && USERID.toString() === uid.toString()) {
+        // Botón colaboradores 👤+
+        const collabBtn = document.createElement("button");
+        collabBtn.type = "button";
+        collabBtn.className = "btnRoundPlaylist btnRoundPlaylist--collabs";
+        collabBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i>';
+        collabBtn.title = "Gestionar colaboradores";
+
+        Object.assign(collabBtn.style, {
+          width: "30px",
+          height: "30px",
+          borderRadius: "999px",
+          border: "none",
+          background: "#2d3748",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          color: "#f9fafb",
+          fontSize: "14px",
+        });
+
+        collabBtn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          openPlaylistCollaboratorsDialog(pid, pname);
+        });
+
         const editBtn = document.createElement("button");
         editBtn.type = "button";
         editBtn.className = "btnRoundPlaylist btnRoundPlaylist--edit";
@@ -968,11 +997,14 @@ function showPlaylists() {
           eliminarPlaylist(pid, uid);
         });
 
+        // Orden: colaboradores – editar – eliminar
+        actionsRow.appendChild(collabBtn);
         actionsRow.appendChild(editBtn);
         actionsRow.appendChild(deleteBtn);
       }
 
       card.appendChild(actionsRow);
+
 
       grid.appendChild(card);
     });
@@ -1225,12 +1257,10 @@ function showAlertNewPlaylist(btn, rectPosition, option, idPlaylist, idUser) {
 
   document.body.appendChild(formContainer);
 
-  const nameInput = formContainer.querySelector(".playlist-form__input");
-  const descInput = formContainer.querySelector(".playlist-form__textarea");
-  const fileInput = formContainer.querySelector(".playlist-form__file");
-  const crearBtn = formContainer.querySelector(".btn-create");
-  const cancelarBtn = formContainer.querySelector(".btn-cancel");
-
+const nameInput = formContainer.querySelector(".playlist-form__input");
+const fileInput = formContainer.querySelector(".playlist-form__file");
+const crearBtn = formContainer.querySelector(".btn-create");
+const cancelarBtn = formContainer.querySelector(".btn-cancel");
   // Prellenar en modo edición
   if (isUpdate) {
     const currentName = PL_NAME.get(String(idPlaylist)) || "";
@@ -1263,22 +1293,22 @@ function showAlertNewPlaylist(btn, rectPosition, option, idPlaylist, idUser) {
     }
 
     if (isUpdate) {
-      editarPlaylist(idPlaylist, name, idUser);
-      if (formContainer.parentNode) {
-        formContainer.parentNode.removeChild(formContainer);
-      }
-      return;
-    }
+  editarPlaylist(idPlaylist, name, idUser);
+  if (formContainer.parentNode) {
+    formContainer.parentNode.removeChild(formContainer);
+  }
+  return;
+}
 
-    const description = (descInput?.value || "").trim();
-    const coverFile =
-      fileInput?.files && fileInput.files[0] ? fileInput.files[0] : null;
+const coverFile =
+  fileInput?.files && fileInput.files[0] ? fileInput.files[0] : null;
 
-    crearPlaylist(name, { description, coverFile });
+crearPlaylist(name, { coverFile });
 
-    if (formContainer.parentNode) {
-      formContainer.parentNode.removeChild(formContainer);
-    }
+if (formContainer.parentNode) {
+  formContainer.parentNode.removeChild(formContainer);
+}
+
   });
 
   cancelarBtn.addEventListener("click", () => {
@@ -2274,6 +2304,359 @@ async function removeCollaborator(playlistId, userId) {
     console.error("removeCollaborator error", e);
     return { error: "network" };
   }
+}
+/**
+ * Devuelve la lista de usuarios que se pueden usar como colaboradores.
+ * El backend debe responder con:
+ *   { users: [{id, username, display_name?, avatar_url?}, ...] }
+ */
+async function fetchAllUsersForCollabs(query = "") {
+  try {
+    const params = query ? `?q=${encodeURIComponent(query)}` : "";
+    const url = `/playlist/collaborators/candidates/${params}`;
+
+    const resp = await fetch(url, {
+      credentials: "same-origin",
+      headers: H_FETCH,
+    });
+
+    if (!resp.ok) {
+      console.warn("fetchAllUsersForCollabs: HTTP", resp.status);
+      return [];
+    }
+
+    const data = await resp.json();
+    return Array.isArray(data.users) ? data.users : [];
+  } catch (e) {
+    console.error("fetchAllUsersForCollabs error", e);
+    return [];
+  }
+}
+
+/**
+ * Popup para gestionar colaboradores de una playlist:
+ * - Muestra todos los usuarios con buscador.
+ * - Botón Agregar / Agregado (toggle).
+ */
+async function openPlaylistCollaboratorsDialog(playlistId, playlistName) {
+  if (document.getElementById("pl-collab-popup")) return;
+
+  const pid = String(playlistId);
+  const esc = (s) =>
+    String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  // Overlay
+  const overlay = document.createElement("div");
+  overlay.id = "pl-collab-overlay";
+  Object.assign(overlay.style, {
+    position: "fixed",
+    top: "0",
+    left: "0",
+    width: "100%",
+    height: "100%",
+    background: "rgba(0,0,0,0.45)",
+    zIndex: "998",
+  });
+
+  // Popup
+  const popup = document.createElement("div");
+  popup.id = "pl-collab-popup";
+  Object.assign(popup.style, {
+    position: "fixed",
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    backgroundColor: "#181818",
+    border: "1px solid #333",
+    borderRadius: "14px",
+    minWidth: "420px",
+    maxWidth: "720px",
+    maxHeight: "70vh",
+    overflow: "hidden",
+    boxShadow: "0 18px 40px rgba(0,0,0,0.65)",
+    zIndex: "999",
+    fontFamily:
+      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    color: "#f5f5f5",
+    display: "flex",
+    flexDirection: "column",
+  });
+
+  popup.innerHTML = `
+    <div style="
+      padding: 12px 16px;
+      border-bottom: 1px solid #2a2a2a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    ">
+      <div style="display:flex; flex-direction:column; gap:2px;">
+        <strong style="font-size:15px;">Colaboradores de la playlist</strong>
+        <span style="font-size:12px; color:#aaa;">
+          ${esc(playlistName || "")}
+        </span>
+      </div>
+      <button type="button"
+        class="pl-collab-close"
+        style="
+          border:none;
+          background:transparent;
+          color:#ccc;
+          font-size:18px;
+          cursor:pointer;
+        "
+        aria-label="Cerrar"
+      >✕</button>
+    </div>
+
+    <div style="
+      padding: 8px 16px 4px;
+      border-bottom: 1px solid #2a2a2a;
+    ">
+      <input
+        id="pl-collab-search"
+        type="text"
+        placeholder="Buscar por usuario o nombre..."
+        style="
+          width:100%;
+          padding:8px 10px;
+          border-radius:999px;
+          border:1px solid #444;
+          background:#111;
+          color:#f5f5f5;
+          font-size:13px;
+          outline:none;
+        "
+      />
+      <p id="pl-collab-info"
+         style="margin:4px 0 0;font-size:11px;color:#aaa;">
+         Cargando usuarios…
+      </p>
+    </div>
+
+    <div style="padding: 0 0 8px; flex:1; overflow-y:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead>
+          <tr style="background:#202020;">
+            <th style="text-align:left; padding:8px 16px; font-weight:500;">Usuario</th>
+            <th style="text-align:left; padding:8px 10px; font-weight:500;">Rol</th>
+            <th style="text-align:right; padding:8px 16px; width:90px;"></th>
+          </tr>
+        </thead>
+        <tbody id="pl-collab-tbody">
+          <tr>
+            <td colspan="3" style="padding:12px 16px; color:#888;">
+              Cargando usuarios…
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  document.body.appendChild(popup);
+
+  function closePopup() {
+    document.removeEventListener("keydown", keyHandler);
+    if (popup.parentNode) popup.parentNode.removeChild(popup);
+    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+  }
+
+  function keyHandler(e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closePopup();
+    }
+  }
+
+  document.addEventListener("keydown", keyHandler);
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closePopup();
+  });
+  popup.querySelector(".pl-collab-close")?.addEventListener("click", closePopup);
+
+  const tbody     = popup.querySelector("#pl-collab-tbody");
+  const searchInp = popup.querySelector("#pl-collab-search");
+  const infoLine  = popup.querySelector("#pl-collab-info");
+
+  let allUsers = [];
+  let collabSet = new Set(); // ids de colaboradores actuales (string)
+
+  function renderRows(list) {
+    tbody.innerHTML = "";
+    if (!list.length) {
+      tbody.innerHTML =
+        '<tr><td colspan="3" style="padding:12px 16px; color:#888;">No se encontraron usuarios.</td></tr>';
+      return;
+    }
+
+    list.forEach((u) => {
+      const uid         = String(u.id);
+      const username    = u.username || "";
+      const displayName = u.display_name || username;
+      const avatar      = u.avatar_url || u.avatar || "";
+
+      const isCollab = collabSet.has(uid);
+
+      const tr = document.createElement("tr");
+      tr.style.borderBottom = "1px solid #222";
+
+      const initials = (displayName || username || "?")
+        .trim()
+        .charAt(0)
+        .toUpperCase();
+
+      tr.innerHTML = `
+        <td style="padding:6px 16px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="
+              width:28px;height:28px;
+              border-radius:999px;
+              background:#333;
+              overflow:hidden;
+              display:flex;
+              align-items:center;
+              justify-content:center;
+              font-size:13px;
+            ">
+              ${
+                avatar
+                  ? `<img src="${esc(avatar)}" alt="${esc(displayName)}"
+                          style="width:100%;height:100%;object-fit:cover;">`
+                  : `<span>${esc(initials)}</span>`
+              }
+            </div>
+            <div>
+              <div style="font-weight:500;">${esc(displayName)}</div>
+              <div style="font-size:11px;color:#b3b3b3;">@${esc(username)}</div>
+            </div>
+          </div>
+        </td>
+        <td style="padding:6px 8px;font-size:12px;color:#b3b3b3;">
+          ${isCollab ? "Editor" : ""}
+        </td>
+        <td style="padding:6px 16px;text-align:right;">
+          <button type="button"
+            class="pl-collab-toggle-btn"
+            data-user-id="${uid}"
+            data-username="${esc(username)}"
+            style="
+              min-width:86px;
+              padding:5px 10px;
+              border-radius:999px;
+              border:none;
+              font-size:12px;
+              cursor:pointer;
+              background:${isCollab ? "#2e7d32" : "#3b82f6"};
+              color:#fff;
+            ">
+            ${isCollab ? "Agregado" : "Agregar"}
+          </button>
+        </td>
+      `;
+
+      const roleCell = tr.children[1];
+      const btn = tr.querySelector(".pl-collab-toggle-btn");
+
+      btn.addEventListener("click", async () => {
+        const currentlyCollab = collabSet.has(uid);
+        btn.disabled = true;
+
+        try {
+          if (!currentlyCollab) {
+            const res = await addCollaborator(pid, username, "editor");
+            if (!res || res.error) {
+              alert(
+                res && res.error
+                  ? res.error
+                  : "No se pudo añadir colaborador."
+              );
+              btn.disabled = false;
+              return;
+            }
+            collabSet.add(uid);
+          } else {
+            const res = await removeCollaborator(pid, uid);
+            if (!res || res.error) {
+              alert(
+                res && res.error
+                  ? res.error
+                  : "No se pudo quitar colaborador."
+              );
+              btn.disabled = false;
+              return;
+            }
+            collabSet.delete(uid);
+          }
+
+          const now = collabSet.has(uid);
+          btn.textContent      = now ? "Agregado" : "Agregar";
+          btn.style.background = now ? "#2e7d32" : "#3b82f6";
+          roleCell.textContent = now ? "Editor" : "";
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  function applyFilter() {
+    const q = (searchInp?.value || "").trim().toLowerCase();
+    const filtered = !q
+      ? allUsers
+      : allUsers.filter((u) => {
+          const u1 = (u.username || "").toLowerCase();
+          const d1 = (u.display_name || "").toLowerCase();
+          return u1.includes(q) || d1.includes(q);
+        });
+    renderRows(filtered);
+  }
+
+  if (searchInp) {
+    searchInp.addEventListener("input", () => {
+      applyFilter();
+    });
+  }
+
+  // Carga inicial: colaboradores actuales + listado de usuarios
+  (async () => {
+    try {
+      infoLine.textContent = "Cargando colaboradores y usuarios…";
+
+      const [collabs, users] = await Promise.all([
+        fetchCollaborators(pid),
+        fetchAllUsersForCollabs(""),
+      ]);
+
+      collabSet = new Set(
+        (collabs || []).map((c) =>
+          String(c.user_id || c.id || c.pk || "")
+        )
+      );
+
+      // Opcional: excluye al propio dueño si no quieres que salga
+      allUsers = (users || []).filter((u) => u.username !== USERNAME);
+
+      renderRows(allUsers);
+      infoLine.textContent =
+        "Haz clic en “Agregar” para dar permisos de edición a esa persona.";
+    } catch (e) {
+      console.error("pl-collab load error", e);
+      infoLine.textContent = "No se pudieron cargar los usuarios.";
+      tbody.innerHTML =
+        '<tr><td colspan="3" style="padding:12px 16px; color:red;">Error al cargar usuarios.</td></tr>';
+    }
+  })();
 }
 
 // ---------------------------------------------------------------------------
