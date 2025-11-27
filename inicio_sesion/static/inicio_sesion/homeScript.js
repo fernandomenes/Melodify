@@ -6,7 +6,7 @@
 const __SPA_DISABLED__ = !!window.__DISABLE_HOME_SCRIPT__;
 
 // ---------------------------------------------------------------------------
-// Modo sin SPA: sólo quitar la clase de colapso de menú
+// Modo sin SPA: elimina la clase de colapso de menú
 // ---------------------------------------------------------------------------
 if (__SPA_DISABLED__) {
   document.addEventListener("DOMContentLoaded", () => {
@@ -27,7 +27,7 @@ if (__SPA_DISABLED__) {
         window.REPRODUCTOR_SRC || "/static/reproductor/reproductor.js?v=1";
       RP = await import(src);
     } catch {
-      // Fallback mínimo si el módulo falla o no carga
+      // Fallback mínimo si el módulo no carga
       RP = {
         stopReproductorIfLoaded: async () => {},
         renderMenuReproductor: async () => {},
@@ -35,7 +35,7 @@ if (__SPA_DISABLED__) {
       };
     }
 
-    // Mini helper de querySelector
+    // Helper de querySelector
     const $ = (s, r = document) => r.querySelector(s);
 
     // -----------------------------------------------------------------------
@@ -57,6 +57,234 @@ if (__SPA_DISABLED__) {
     }
 
     // -----------------------------------------------------------------------
+    // Diálogo de confirmación Melodify (mdfConfirm)
+    // -----------------------------------------------------------------------
+    if (typeof window.mdfConfirm !== "function") {
+      window.mdfConfirm = function (message, opts = {}) {
+        return new Promise((resolve) => {
+          const prev = document.querySelector(".mdf-dialog-backdrop");
+          if (prev) prev.remove();
+
+          const backdrop = document.createElement("div");
+          backdrop.className = "mdf-dialog-backdrop";
+          Object.assign(backdrop.style, {
+            position: "fixed",
+            inset: "0",
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: "9999",
+          });
+
+          const dialog = document.createElement("div");
+          dialog.className = "mdf-dialog";
+          if (opts.className) dialog.classList.add(opts.className);
+          Object.assign(dialog.style, {
+            minWidth: "260px",
+            maxWidth: "360px",
+            background: "#181818",
+            borderRadius: "14px",
+            padding: "18px 20px",
+            border: "1px solid rgba(255,255,255,0.12)",
+            boxShadow: "0 18px 40px rgba(0,0,0,0.7)",
+            color: "#f5f5f5",
+            fontFamily:
+              "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          });
+
+          if (opts.danger) {
+            dialog.style.border = "1px solid #ff4fa3";
+            dialog.style.boxShadow =
+              "0 0 0 1px rgba(255,79,163,0.7),0 18px 40px rgba(0,0,0,0.7)";
+          }
+
+          const title = document.createElement("h3");
+          title.className = "mdf-dialog-title";
+          title.textContent = opts.title || "Confirmar acción";
+          Object.assign(title.style, {
+            margin: "0 0 6px",
+            fontSize: "15px",
+            fontWeight: "600",
+          });
+
+          const text = document.createElement("p");
+          text.className = "mdf-dialog-message";
+          text.textContent = message || "";
+          Object.assign(text.style, {
+            margin: "0 0 14px",
+            fontSize: "13px",
+            color: "#dddddd",
+          });
+
+          const actions = document.createElement("div");
+          actions.className = "mdf-dialog-actions";
+          Object.assign(actions.style, {
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "8px",
+          });
+
+          const cancelBtn = document.createElement("button");
+          cancelBtn.type = "button";
+          cancelBtn.textContent = opts.cancelText || "Cancelar";
+          cancelBtn.className = "btn btnSecondary";
+          Object.assign(cancelBtn.style, {
+            fontSize: "13px",
+            padding: "6px 12px",
+          });
+
+          const okBtn = document.createElement("button");
+          okBtn.type = "button";
+          okBtn.textContent = opts.confirmText || "Aceptar";
+          okBtn.className = "btn" + (opts.danger ? " btnDanger" : "");
+          Object.assign(okBtn.style, {
+            fontSize: "13px",
+            padding: "6px 12px",
+          });
+
+          actions.appendChild(cancelBtn);
+          actions.appendChild(okBtn);
+
+          dialog.appendChild(title);
+          dialog.appendChild(text);
+          dialog.appendChild(actions);
+          backdrop.appendChild(dialog);
+          document.body.appendChild(backdrop);
+
+          const cleanup = (value) => {
+            resolve(value);
+            backdrop.remove();
+            document.removeEventListener("keydown", onKey);
+          };
+
+          const onKey = (ev) => {
+            if (ev.key === "Escape") {
+              ev.preventDefault();
+              cleanup(false);
+            } else if (ev.key === "Enter") {
+              ev.preventDefault();
+              cleanup(true);
+            }
+          };
+
+          document.addEventListener("keydown", onKey);
+
+          cancelBtn.addEventListener("click", () => cleanup(false));
+          okBtn.addEventListener("click", () => cleanup(true));
+          backdrop.addEventListener("click", (ev) => {
+            if (ev.target === backdrop) cleanup(false);
+          });
+
+          setTimeout(() => okBtn.focus(), 10);
+        });
+      };
+    }
+
+    // -----------------------------------------------------------------------
+    // Diálogo de aviso Melodify (mdfAlert)
+    // -----------------------------------------------------------------------
+    if (typeof window.mdfAlert !== "function") {
+      window.mdfAlert = function (message, opts = {}) {
+        return new Promise((resolve) => {
+          const prev = document.querySelector(".mdf-dialog-backdrop");
+          if (prev) prev.remove();
+
+          const backdrop = document.createElement("div");
+          backdrop.className = "mdf-dialog-backdrop";
+          Object.assign(backdrop.style, {
+            position: "fixed",
+            inset: "0",
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: "9999",
+          });
+
+          const dialog = document.createElement("div");
+          dialog.className = "mdf-dialog";
+          if (opts.className) dialog.classList.add(opts.className);
+          Object.assign(dialog.style, {
+            minWidth: "260px",
+            maxWidth: "360px",
+            background: "#181818",
+            borderRadius: "14px",
+            padding: "18px 20px",
+            border: "1px solid rgba(255,255,255,0.12)",
+            boxShadow: "0 18px 40px rgba(0,0,0,0.7)",
+            color: "#f5f5f5",
+            fontFamily:
+              "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          });
+
+          const title = document.createElement("h3");
+          title.className = "mdf-dialog-title";
+          title.textContent = opts.title || "Aviso";
+          Object.assign(title.style, {
+            margin: "0 0 6px",
+            fontSize: "15px",
+            fontWeight: "600",
+          });
+
+          const text = document.createElement("p");
+          text.className = "mdf-dialog-message";
+          text.textContent = message || "";
+          Object.assign(text.style, {
+            margin: "0 0 14px",
+            fontSize: "13px",
+            color: "#dddddd",
+          });
+
+          const actions = document.createElement("div");
+          actions.className = "mdf-dialog-actions";
+          Object.assign(actions.style, {
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "8px",
+          });
+
+          const okBtn = document.createElement("button");
+          okBtn.type = "button";
+          okBtn.textContent = opts.okText || "Aceptar";
+          okBtn.className = "btn";
+          Object.assign(okBtn.style, {
+            fontSize: "13px",
+            padding: "6px 12px",
+          });
+
+          actions.appendChild(okBtn);
+          dialog.appendChild(title);
+          dialog.appendChild(text);
+          dialog.appendChild(actions);
+          backdrop.appendChild(dialog);
+          document.body.appendChild(backdrop);
+
+          const cleanup = () => {
+            resolve(true);
+            backdrop.remove();
+            document.removeEventListener("keydown", onKey);
+          };
+
+          const onKey = (ev) => {
+            if (ev.key === "Escape" || ev.key === "Enter") {
+              ev.preventDefault();
+              cleanup();
+            }
+          };
+
+          document.addEventListener("keydown", onKey);
+          okBtn.addEventListener("click", cleanup);
+          backdrop.addEventListener("click", (ev) => {
+            if (ev.target === backdrop) cleanup();
+          });
+
+          setTimeout(() => okBtn.focus(), 10);
+        });
+      };
+    }
+
+    // -----------------------------------------------------------------------
     // Utilidades de normalización (mayúsculas, acentos, etc.)
     // -----------------------------------------------------------------------
     const nfdLower = (s) =>
@@ -69,25 +297,22 @@ if (__SPA_DISABLED__) {
     window.nfdLower = nfdLower;
 
     // -----------------------------------------------------------------------
-    // Refresco de playlists personales para el Home
+    // Refresco de playlists personales en Home
     // -----------------------------------------------------------------------
     /**
-     * Vuelve a pedir las playlists personales del usuario para:
-     *  - tener window._playlists actualizado
-     *  - marcar si el usuario tiene playlists personales (para hints del Home)
+     * Actualiza window._playlists y el indicador de playlists personales.
      */
     async function refreshHomePlaylists() {
       try {
-        // Usuario en sesión
         const main = document.getElementById("main-content");
         const uname =
           (main && main.dataset && main.dataset.username) ||
           (document.querySelector('meta[name="username"]') || {}).content ||
           "";
 
-        // URL filtrada por usuario, con cache-buster
         const url = uname
           ? `/playlist/getAllList/?u=${encodeURIComponent(uname)}&t=${Date.now()}`
+
           : `/playlist/getAllList/?t=${Date.now()}`;
 
         const r = await fetch(url, {
@@ -101,7 +326,6 @@ if (__SPA_DISABLED__) {
           ? arr.filter((pl) => nfdLower(pl?.name) !== "mi musica")
           : [];
 
-        // Playlists personales detectadas
         window._playlists = arr;
         window.__HOME_HAS_PERSONAL_PLAYLISTS__ = real.length > 0;
 
@@ -125,11 +349,10 @@ if (__SPA_DISABLED__) {
     const botonBack = $("#back-btn");
 
     // -----------------------------------------------------------------------
-    // Toast global de Home (like / acciones varias)
+    // Toast global de Home
     // -----------------------------------------------------------------------
     /**
      * Toast global asociado a #like-toast.
-     * Se usa para mensajes cortos en Home, likes, playlists, etc.
      */
     window.__melodifyShowLikeToast = function (message) {
       let toast = document.getElementById("like-toast");
@@ -149,7 +372,7 @@ if (__SPA_DISABLED__) {
     };
 
     // -----------------------------------------------------------------------
-    // Helpers de likes en Home (capa visual + caché)
+    // Helpers de likes en Home
     // -----------------------------------------------------------------------
 
     /**
@@ -176,8 +399,7 @@ if (__SPA_DISABLED__) {
     }
 
     /**
-     * Actualiza el modelo global window._likes desde Home cuando cambia un like.
-     * Sólo almacena el id de la canción para mantenerlo sencillo.
+     * Actualiza window._likes cuando cambia un like.
      */
     function updateLikesCacheFromHome(songId, liked) {
       const idNum = Number(songId);
@@ -193,7 +415,6 @@ if (__SPA_DISABLED__) {
 
       if (liked) {
         if (idx === -1) {
-          // Se guarda solo el id
           window._likes.push({ id: idNum });
         }
       } else {
@@ -206,8 +427,6 @@ if (__SPA_DISABLED__) {
     // -----------------------------------------------------------------------
     // Sincronización global de likes (evento melodify:likes:changed)
     // -----------------------------------------------------------------------
-
-    // Primer listener: sólo sincroniza la caché global de likes
     document.addEventListener("melodify:likes:changed", (ev) => {
       try {
         const detail = ev?.detail || {};
@@ -218,7 +437,6 @@ if (__SPA_DISABLED__) {
       }
     });
 
-    // Sincronizar likes globales -> caché + botones en Home
     document.addEventListener("melodify:likes:changed", (ev) => {
       try {
         const detail = ev?.detail || {};
@@ -227,10 +445,8 @@ if (__SPA_DISABLED__) {
         const songId = String(detail.songId);
         const liked = !!detail.liked;
 
-        // Actualizar caché global de likes
         updateLikesCacheFromHome(songId, liked);
 
-        // Actualizar cualquier botón de Home que corresponda a esa canción
         const btns = document.querySelectorAll(
           `.song-like-btn[data-song-id="${CSS.escape(songId)}"]`
         );
@@ -243,11 +459,11 @@ if (__SPA_DISABLED__) {
     });
 
     // -----------------------------------------------------------------------
-    // Toggle de likes en Home (actualmente deshabilitado)
+    // Toggle de likes en Home (stub deshabilitado)
     // -----------------------------------------------------------------------
     /**
-     * Stub: si algo intenta hacer toggle de likes directamente en Home,
-     * se ignora y se muestra un mensaje. Se deja la firma para evitar errores.
+     * Mantiene la firma pública para togglear likes desde Home.
+     * Muestra un mensaje indicando que la acción está deshabilitada.
      */
     window.__melodifyToggleLikeFromHome = async function (ev, _songId) {
       try {
@@ -260,7 +476,7 @@ if (__SPA_DISABLED__) {
       );
     };
 
-    // Si no hay contenedores principales, no tiene sentido continuar
+    // Si no hay contenedores principales, no continúa la inicialización
     if (!mainContent || !contentDiv) return;
 
     // -----------------------------------------------------------------------
@@ -297,21 +513,15 @@ if (__SPA_DISABLED__) {
     let HOME_LIKED_AUDIO = new Set();
 
     /**
-     * VERSIÓN 1 de ensureInitialLikesForHome:
-     * Intenta rellenar HOME_LIKED_IDS / HOME_LIKED_AUDIO desde:
+     * Carga inicial de likes en Home usando:
      *  - window._likes
-     *  - endpoint "Mi música"
-     *
-     * NOTA: Más abajo hay otra definición de ensureInitialLikesForHome
-     * (mantengo ambas para no cambiar el comportamiento actual).
+     *  - endpoint "Mi música".
      */
     async function ensureInitialLikesForHome() {
-      // Si ya tenemos datos, no hacemos nada
       if (HOME_LIKED_IDS.size || HOME_LIKED_AUDIO.size) {
         return;
       }
 
-      // Si algún otro módulo ya llenó window._likes, aprovéchalo
       const likesGlobal = Array.isArray(window._likes) ? window._likes : [];
       if (likesGlobal.length) {
         likesGlobal.forEach((s) => {
@@ -321,10 +531,7 @@ if (__SPA_DISABLED__) {
             return;
           }
           const cand =
-            s.id ??
-            s.song_id ??
-            s.songId ??
-            s.cancion_id ??
+            s.id ?? s.song_id ?? s.songId ?? s.cancion_id ??
             (s.song && (s.song.id ?? s.song.pk)) ??
             (s.cancion && (s.cancion.id ?? s.cancion.pk));
           if (cand != null) HOME_LIKED_IDS.add(String(cand));
@@ -332,7 +539,6 @@ if (__SPA_DISABLED__) {
         return;
       }
 
-      // Fallback: pedir al backend "Mi música"
       if (!URL_MI_MUSICA_JSON) return;
 
       try {
@@ -355,7 +561,6 @@ if (__SPA_DISABLED__) {
           if (norm.audioUrl) HOME_LIKED_AUDIO.add(norm.audioUrl);
         });
 
-        // También rellenamos window._likes para otros módulos
         if (!Array.isArray(window._likes) || !window._likes.length) {
           window._likes = Array.from(HOME_LIKED_IDS).map((id) => ({
             id: Number(id),
@@ -390,8 +595,12 @@ if (__SPA_DISABLED__) {
       mainContent.dataset.initialView ||
       "home"
     ).trim();
+    const INITIAL_SONG   = urlParams.get("song")   || "";
+    const INITIAL_TITLE  = urlParams.get("title")  || "";
+    const INITIAL_ARTIST = urlParams.get("artist") || "";
+    const INITIAL_COVER  = urlParams.get("cover")  || "";
 
-    // Deducir rol de administrador si no viene explícito
+    // Deducción de rol administrador si no viene definido
     if (!ROLE) {
       const h1 =
         document.querySelector(".page h1")?.textContent?.toLowerCase() || "";
@@ -419,22 +628,14 @@ if (__SPA_DISABLED__) {
     window.__HOME_HAS_PERSONAL_PLAYLISTS__ = HOME_HAS_PERSONAL_PLAYLISTS;
 
     // -----------------------------------------------------------------------
-    // Likes iniciales (VERSIÓN 2 de ensureInitialLikesForHome)
+    // Likes iniciales (reescritura de ensureInitialLikesForHome)
     // -----------------------------------------------------------------------
     /**
-     * VERSIÓN 2 de ensureInitialLikesForHome:
-     * Esta redefinición es más simple: rellena window._likes directamente.
-     *
-     * IMPORTANTE:
-     *   - Sobrescribe la versión anterior por ser otra function con el mismo
-     *     nombre en el mismo ámbito.
-     *   - Se deja tal cual para no cambiar la semántica actual del archivo.
+     * Carga inicial de likes para Home en window._likes.
      */
     async function ensureInitialLikesForHome() {
-      // Si ya hay likes en memoria, no hacemos nada
       if (Array.isArray(window._likes) && window._likes.length > 0) return;
 
-      // 1) Intentar leer de un JSON embebido (si lo llegas a tener)
       try {
         const el = document.getElementById("likes-data-json");
         if (el && el.textContent.trim()) {
@@ -454,7 +655,6 @@ if (__SPA_DISABLED__) {
         console.warn("HOME: error leyendo likes-data-json", e);
       }
 
-      // 2) Fallback: pedir al backend la "Mi música" del usuario
       if (!URL_MI_MUSICA_JSON) return;
 
       try {
@@ -576,7 +776,6 @@ if (__SPA_DISABLED__) {
         song.links && song.links.like
       );
 
-      // Detectar si el backend ya manda un flag de "liked"
       let liked;
       try {
         const likeFields = [
@@ -588,7 +787,7 @@ if (__SPA_DISABLED__) {
         ];
         for (const field of likeFields) {
           if (Object.prototype.hasOwnProperty.call(song, field)) {
-            liked = !!song[field]; // true / false
+            liked = !!song[field];
             break;
           }
         }
@@ -604,7 +803,7 @@ if (__SPA_DISABLED__) {
         audioUrl: audio,
         genre,
         likeUrl: likeUrl || "",
-        liked, // puede ser true, false o undefined
+        liked,
       };
     }
 
@@ -651,10 +850,8 @@ if (__SPA_DISABLED__) {
       const idStr = String(id ?? "");
       if (!idStr) return false;
 
-      // 1) Primero, por id en los sets de Home
       if (HOME_LIKED_IDS.has(idStr)) return true;
 
-      // 2) Intentar por audioUrl (por si los IDs no coinciden)
       try {
         const song =
           Array.isArray(HOME_SONGS_CACHE) &&
@@ -664,7 +861,6 @@ if (__SPA_DISABLED__) {
         }
       } catch {}
 
-      // 3) Fallback: modelo global window._likes, en varios formatos
       const likes = Array.isArray(window._likes) ? window._likes : [];
       return likes.some((s) => {
         if (!s) return false;
@@ -674,10 +870,7 @@ if (__SPA_DISABLED__) {
         }
 
         const cand =
-          s.id ??
-          s.song_id ??
-          s.songId ??
-          s.cancion_id ??
+          s.id ?? s.song_id ?? s.songId ?? s.cancion_id ??
           (s.song && (s.song.id ?? s.song.pk)) ??
           (s.cancion && (s.cancion.id ?? s.cancion.pk));
 
@@ -859,6 +1052,7 @@ if (__SPA_DISABLED__) {
 
         const url = uname
           ? `/playlist/getAllList/?u=${encodeURIComponent(uname)}&t=${Date.now()}`
+
           : `/playlist/getAllList/?t=${Date.now()}`;
 
         const res = await fetch(url, {
@@ -1065,7 +1259,6 @@ if (__SPA_DISABLED__) {
       showContent(html);
 
       try {
-        // Aseguramos tener la caché de likes lista ANTES de pintar
         await ensureInitialLikesForHome();
 
         const allSongs = await fetchAllSongsForHome();
@@ -1103,7 +1296,7 @@ if (__SPA_DISABLED__) {
 
     // -----------------------------------------------------------------------
     // Vista Playlists “simple” (fallback si no existe módulo avanzado)
-// -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     function renderMenuPlaylists() {
       mainContent.dataset.view = "playlist";
       const P = Array.isArray(window._playlists) ? window._playlists : [];
@@ -1202,7 +1395,7 @@ if (__SPA_DISABLED__) {
 
     // -----------------------------------------------------------------------
     // Permisos de menú según rol (ocultar/mostrar items)
-// -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     function aplicarPermisosMenu() {
       const hideAll = (view) => {
         document
@@ -1266,38 +1459,87 @@ if (__SPA_DISABLED__) {
       "click",
       (e) => {
         const a = e.target.closest?.('a[data-external="true"]');
-        if (a) return; // Se deja seguir al navegador
+        if (a) return;
       },
       true
     );
 
     // -----------------------------------------------------------------------
     // Menú de usuario (avatar arriba a la derecha)
-// -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     const userTrigger = $("#user-trigger");
-    const userMenu = $("#user-menu");
+    const userMenu   = $("#user-menu");
+    const perfilLink = $("#menu-perfil");
+    const logoutLink = $("#menu-logout");
 
     if (userTrigger && userMenu) {
       userTrigger.addEventListener("click", (e) => {
         e.stopPropagation();
         userMenu.classList.toggle("show");
       });
-      document.addEventListener("click", () =>
-        userMenu.classList.remove("show")
-      );
+
+      document.addEventListener("click", () => userMenu.classList.remove("show"));
       userMenu.addEventListener("click", (e) => e.stopPropagation());
 
-      $("#menu-perfil")?.addEventListener("click", (e) => {
-        e.preventDefault();
-        userMenu.classList.remove("show");
-        activarItemMenu("perfil");
-        navegarSPA("perfil");
-      });
+      // Ir a Perfil dentro de la SPA
+      if (perfilLink) {
+        perfilLink.addEventListener("click", (e) => {
+          e.preventDefault();
+          userMenu.classList.remove("show");
+          activarItemMenu("perfil");
+          navegarSPA("perfil");
+        });
+      }
+
+      // Cerrar sesión con diálogo Melodify
+      if (logoutLink) {
+        logoutLink.addEventListener("click", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          const logoutUrl =
+            logoutLink.dataset.logoutUrl ||
+            logoutLink.getAttribute("href") ||
+            window.MELODIFY_LOGOUT_URL ||
+            "/logout/";
+
+          const doLogout = await (window.mdfConfirm
+            ? window.mdfConfirm("¿Seguro que deseas cerrar sesión?", {
+                title: "Cerrar sesión",
+                danger: true,
+                confirmText: "Cerrar sesión",
+                cancelText: "Cancelar",
+              })
+            : Promise.resolve(window.confirm("¿Seguro que deseas cerrar sesión?")));
+
+          if (!doLogout) {
+            userMenu.classList.remove("show");
+            return;
+          }
+
+          const csrfToken = getCSRF();
+
+          const form = document.createElement("form");
+          form.method = "POST";
+          form.action = logoutUrl;
+
+          if (csrfToken) {
+            const csrfInput = document.createElement("input");
+            csrfInput.type = "hidden";
+            csrfInput.name = "csrfmiddlewaretoken";
+            csrfInput.value = csrfToken;
+            form.appendChild(csrfInput);
+          }
+
+          document.body.appendChild(form);
+          form.submit();
+        });
+      }
     }
 
     // -----------------------------------------------------------------------
-    // Clicks en los ítems del menú lateral (Home/Playlist/Reproductor/Perfil)
-// -----------------------------------------------------------------------
+    // Clicks en los ítems del menú lateral
+    // -----------------------------------------------------------------------
     document
       .querySelectorAll("#menuLateral .menu-item[data-view]")
       .forEach((item) => {
@@ -1430,7 +1672,7 @@ if (__SPA_DISABLED__) {
 
     // -----------------------------------------------------------------------
     // Decorador de botones "peligrosos" (eliminar, borrar, etc.)
-// -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     function decorateDangerButtons(root = document) {
       const attrMatches = root.querySelectorAll(
         'button[name*="delete" i], button[id*="delete" i], button[data-action="delete"], button[data-danger],' +
@@ -1496,9 +1738,7 @@ if (__SPA_DISABLED__) {
       try {
         if (window.MDFCore?.getAudio?.()?.src) {
           window.__MDF_FORMS_HIDE_BAR__ = false;
-          document.dispatchEvent(
-            new CustomEvent("melodify:bar:shouldShow")
-          );
+          document.dispatchEvent(new CustomEvent("melodify:bar:shouldShow"));
         }
       } catch {}
 
@@ -1509,7 +1749,12 @@ if (__SPA_DISABLED__) {
       });
 
       const first = INITIAL_VIEW || "home";
-      activarItemMenu(first);
+      const SPA_INITIAL_VIEWS = new Set(["home", "playlist", "reproductor", "perfil"]);
+
+      if (SPA_INITIAL_VIEWS.has(first)) {
+        activarItemMenu(first);
+      }
+
       mainContent.dataset.view = first;
 
       if (first === "home") {
@@ -1531,7 +1776,7 @@ if (__SPA_DISABLED__) {
           URL_MI_MUSICA_JSON,
         });
       } else {
-        await renderMenuHome();
+        // Otras vistas renderizadas por Django
       }
 
       const main = $("#main-content");
@@ -1551,6 +1796,35 @@ if (__SPA_DISABLED__) {
     }
 
     // -----------------------------------------------------------------------
+    // Autoplay desde parámetros de la URL (?view=reproductor&song=...)
+    // -----------------------------------------------------------------------
+    function autoPlayFromQueryIfNeeded() {
+      if (!INITIAL_SONG) return;
+
+      let attempts = 0;
+      const maxAttempts = 20;
+
+      function tryPlay() {
+        const core = window.MDFCore;
+        if (core && typeof core.playExternalSong === "function") {
+          core.playExternalSong(
+            INITIAL_SONG,
+            INITIAL_TITLE  || "",
+            INITIAL_ARTIST || "",
+            INITIAL_COVER  || ""
+          );
+          return;
+        }
+
+        if (attempts++ < maxAttempts) {
+          setTimeout(tryPlay, 200);
+        }
+      }
+
+      tryPlay();
+    }
+
+    // -----------------------------------------------------------------------
     // Observador para aplicar permisos de menú al cambiar items
     // -----------------------------------------------------------------------
     if (menuLateral) {
@@ -1567,14 +1841,15 @@ if (__SPA_DISABLED__) {
       refreshHomePlaylists
     );
 
-    // Lanzar inicialización principal
+    // Inicialización
     await inicializarApp();
+    autoPlayFromQueryIfNeeded();
   });
 }
 
 // ============================================================================
 // Fallback global para añadir a playlist desde Home/Buscador
-// Sólo si no existe ya openAddToPlaylistForSong en otra parte.
+// Solo si no existe ya openAddToPlaylistForSong en otra parte.
 // ============================================================================
 
 if (!window.openAddToPlaylistForSong) {
@@ -1604,7 +1879,6 @@ if (!window.openAddToPlaylistForSong) {
       return;
     }
 
-    // Fallback sin MDFCore (llama directo al backend)
     const P = Array.isArray(window._playlists) ? window._playlists : [];
     const reales = P.filter((pl) => nLower(pl?.name) !== "mi musica");
 

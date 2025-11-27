@@ -1,19 +1,14 @@
 /* ==========================================================================
    Melodify — Barra de reproducción global (UI “beat-meter”)
    --------------------------------------------------------------------------
-   Responsabilidades principales:
-   - Renderizar una barra fija de reproducción controlada por MDFCore
-     (prev / play / next / seek / volumen / velocidad).
-   - Sincronizar título, artista, portada y tiempos con el <audio> central.
-   - Aplicar visualización reactiva al audio (“beat-meter”) usando WebAudio
-     y una EMA asimétrica para evitar ruido visual.
-   - Persistir velocidad de reproducción y estado mostrar/ocultar en
-     localStorage.
-   - Exponer una pequeña API de consola: window.MDFBarUI / window.MDFBar.
+   - Barra fija de reproducción controlada por MDFCore.
+   - Sincroniza título, artista, portada y tiempos con el <audio> central.
+   - Visualización reactiva al audio mediante WebAudio.
+   - Velocidad y estado mostrar/ocultar persistidos en localStorage.
    ========================================================================== */
 (function () {
 
-  // Tabla de velocidades permitidas (se guarda en localStorage)
+  // Tabla de velocidades permitidas (persistidas en localStorage)
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
   // Hue por género (clave normalizada sin acentos ni espacios)
@@ -33,7 +28,7 @@
   // ---------------------------------------------------------------------------
   // Estado global de la barra
   // ---------------------------------------------------------------------------
-  let els = {};          // Referencias a elementos del DOM
+  let els = {};          // Referencias al DOM
   let audio = null;      // <audio> controlado por MDFCore
   let hue = 270;         // Tinte actual del glow
   let intensity = 0.22;  // Intensidad visual actual
@@ -42,7 +37,7 @@
   // WebAudio / beat-meter
   let ac = null, analyser = null, buf = null, raf = 0;
 
-  // Último <audio> al que se enganchó el listener de velocidad
+  // Último <audio> asociado al listener de velocidad
   let lastAudioForSpeedListener = null;
   const _mdfSyncSpeed = () => applySpeed(getSavedSpeed());
 
@@ -68,13 +63,12 @@
   // ---------------------------------------------------------------------------
   // Parámetros del medidor de ritmo (beat-meter)
   // ---------------------------------------------------------------------------
-  // Preset agresivo pero controlado (sin ruido visual)
   const METER = {
     bands: { low: [50, 180], mid: [180, 1800] },
 
     // Respuesta temporal (EMA)
-    emaRise: 0.60,   // Ataque rápido
-    emaFall: 0.12,   // Caída moderada
+    emaRise: 0.60,
+    emaFall: 0.12,
 
     // Bases (idle vs reproducción)
     baseIdle: 0.08,
@@ -91,15 +85,15 @@
     clampMax: 0.98
   };
 
-  // Pulso adicional por transitorios en graves (punch)
+  // Pulso adicional por transitorios en graves
   let prevLow = 0, pulseEnv = 0;
   const PULSE = {
-    threshold: 0.040, // Sensibilidad a subidas súbitas en graves
-    strength:  0.26,  // Cuánto suma al brillo final
-    decay:     0.88   // Release corto
+    threshold: 0.040,
+    strength:  0.26,
+    decay:     0.88
   };
 
-  // Curva para enfatizar picos sin ruido
+  // Curva para enfatizar picos
   const shape = v => Math.pow(v, 1.45);
 
   // ---------------------------------------------------------------------------
@@ -138,7 +132,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Toggle mostrar/ocultar barra (estado guardado en localStorage)
+  // Toggle mostrar/ocultar barra (estado persistente)
   // ---------------------------------------------------------------------------
   const BAR_HIDDEN_KEY = "mdf.bar.hidden";
 
@@ -152,24 +146,46 @@
     catch {}
   }
 
+  function _renderEyeState(btn, hidden){
+    if (!btn) return;
+    btn.setAttribute("aria-pressed", hidden ? "true" : "false");
+    btn.classList.toggle("is-closed", hidden);
+  }
+
+  function _setToggleVisible(visible){
+    const btn = document.getElementById("mdf-bar-toggle");
+    if (!btn) return;
+    btn.classList.toggle("mdf-toggle-hidden", !visible);
+  }
+
   // Crea el botón flotante de mostrar/ocultar si no existe
   function ensureBarToggle(){
     if (document.getElementById("mdf-bar-toggle")) return;
+
     const btn = document.createElement("button");
     btn.id = "mdf-bar-toggle";
     btn.type = "button";
+    btn.className = "mdf-bar-toggle mdf-toggle-hidden";
     btn.title = "Mostrar/Ocultar reproductor";
+    btn.setAttribute("aria-label", "Mostrar u ocultar la barra de reproducción");
     btn.setAttribute("aria-pressed", "false");
-    btn.innerHTML = "▾";
+
+    btn.innerHTML = `
+      <span class="mdf-eye-icon" aria-hidden="true">
+        <span class="mdf-eye-ball"></span>
+      </span>
+    `;
+
     btn.addEventListener("click", () => {
       const bar = els.bar || document.querySelector("._mdf-player-bar");
       if (!bar) return;
+
       const hide = !bar.classList.contains("mdf-bar--hidden");
       bar.classList.toggle("mdf-bar--hidden", hide);
-      btn.setAttribute("aria-pressed", hide ? "true" : "false");
-      btn.innerHTML = hide ? "▴" : "▾";
+      _renderEyeState(btn, hide);
       _saveHidden(hide);
     });
+
     document.body.appendChild(btn);
   }
 
@@ -177,12 +193,13 @@
   function applySavedHidden(){
     const bar = els.bar || document.querySelector("._mdf-player-bar");
     if (!bar) return;
+
     const hide = _loadHidden();
     bar.classList.toggle("mdf-bar--hidden", hide);
+
     const btn = document.getElementById("mdf-bar-toggle");
     if (btn){
-      btn.setAttribute("aria-pressed", hide ? "true" : "false");
-      btn.innerHTML = hide ? "▴" : "▾";
+      _renderEyeState(btn, hide);
     }
   }
 
@@ -240,8 +257,7 @@
     ensureBarToggle();
     applySavedHidden();
 
-    // Controles principales → delegan en MDFCore o, en el caso de play/pausa,
-    // controlan directamente el <audio> conocido.
+    // Controles principales → delegan en MDFCore o <audio> actual
     els.prev.onclick = () => {
       if (window.MDFCore && typeof window.MDFCore.prev === "function") {
         window.MDFCore.prev();
@@ -257,14 +273,12 @@
     els.play.onclick = () => {
       try {
         if (audio) {
-          // Control directo del <audio> que está sonando
           if (audio.paused) {
             audio.play().catch(() => {});
           } else {
             audio.pause();
           }
         } else if (window.MDFCore && typeof window.MDFCore.toggle === "function") {
-          // Fallback por si aún no se ha resuelto audio
           window.MDFCore.toggle();
         }
       } catch (e) {
@@ -302,7 +316,7 @@
       applySpeed(next);
     });
 
-    // Rellenos iniciales + intensidad inicial
+    // Estado inicial de sliders y glow
     setRangeFill(els.seek, Number(els.seek.value));
     setRangeFill(els.vol, 100*Number(els.vol.value));
     setVars(intensity, hue);
@@ -320,10 +334,17 @@
   }
 
   function enforceVisibility(){
-    const hasAudio = !!(audio && audio.src);
+    const hasAudio  = !!(audio && audio.src);
     const forceHide = !!window.__MDF_FORMS_HIDE_BAR__;
-    if (!forceHide && hasAudio) { show(); }
-    else { hide(); }
+    const shouldShow = !forceHide && hasAudio;
+
+    if (shouldShow) {
+      show();
+    } else {
+      hide();
+    }
+
+    _setToggleVisible(shouldShow);
   }
 
   // Observa cambios de data-view para refrescar visibilidad
@@ -349,15 +370,15 @@
       if(!analyser){
         const src = ac.createMediaElementSource(audio);
         analyser = ac.createAnalyser();
-        analyser.fftSize = 512;               // Resolución temporal alta
-        analyser.smoothingTimeConstant = 0.0; // Sin smoothing interno (se hace a mano)
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.0;
         src.connect(analyser);
         analyser.connect(ac.destination);
         buf = new Uint8Array(analyser.frequencyBinCount);
       }
       if(raf) cancelAnimationFrame(raf);
 
-      let smoothed = intensity; // Arranca desde el valor actual
+      let smoothed = intensity;
       const sr = ac.sampleRate || 44100;
       const N  = analyser.fftSize;
       const lowA = hzToIndex(METER.bands.low[0], sr, N);
@@ -378,12 +399,12 @@
         // Pulso por subida súbita en graves
         const deltaLow = eLow - prevLow; prevLow = eLow;
         if(deltaLow > PULSE.threshold){
-          pulseEnv = Math.min(1, pulseEnv + deltaLow * 2.6); // Ataque rápido
+          pulseEnv = Math.min(1, pulseEnv + deltaLow * 2.6);
         } else {
-          pulseEnv *= PULSE.decay; // Release corto
+          pulseEnv *= PULSE.decay;
         }
 
-        // Mezcla lineal con base según estado (idle vs play)
+        // Mezcla con base según estado (idle vs play)
         const playing = !!(audio && !audio.paused);
         const base = playing ? METER.basePlay : METER.baseIdle;
 
@@ -396,7 +417,7 @@
         const alpha = (lin > smoothed) ? METER.emaRise : METER.emaFall;
         smoothed = (1 - alpha) * smoothed + alpha * lin;
 
-        // Salida final: suavizado + pulso, con curva de énfasis
+        // Salida final: suavizado + pulso
         let out = smoothed + pulseEnv * PULSE.strength;
         out = shape(clamp(out, METER.clampMin, METER.clampMax));
 
@@ -437,58 +458,57 @@
     enforceVisibility();
   }
 
-function onTrackMeta(ev){
-  const d = ev?.detail || {};
-  const isMobile = window.matchMedia("(max-width: 640px)").matches;
+  function onTrackMeta(ev){
+    const d = ev?.detail || {};
+    const isMobile = window.matchMedia("(max-width: 640px)").matches;
 
-  const fullTitle  = d.title  || "—";
-  const fullArtist = d.artist || "—";
+    const fullTitle  = d.title  || "—";
+    const fullArtist = d.artist || "—";
 
-  // Límites de caracteres en móvil
-  const TITLE_LIMIT  = 8;   // por si luego quieres subir/bajar
-  const ARTIST_LIMIT = 10;
+    // Límites de caracteres en móvil
+    const TITLE_LIMIT  = 8;
+    const ARTIST_LIMIT = 10;
 
-  const clampText = (text, limit) => {
-    text = String(text || "—");
-    if (!isMobile || !limit || text.length <= limit) return text;
-    return text.slice(0, limit) + "…";
-  };
+    const clampText = (text, limit) => {
+      text = String(text || "—");
+      if (!isMobile || !limit || text.length <= limit) return text;
+      return text.slice(0, limit) + "…";
+    };
 
-  const displayTitle  = clampText(fullTitle, TITLE_LIMIT);
-  const displayArtist = clampText(fullArtist, ARTIST_LIMIT);
+    const displayTitle  = clampText(fullTitle, TITLE_LIMIT);
+    const displayArtist = clampText(fullArtist, ARTIST_LIMIT);
 
-  // Texto que se ve en la barra
-  els.title.textContent  = displayTitle;
-  els.artist.textContent = displayArtist;
+    // Texto visible en la barra
+    els.title.textContent  = displayTitle;
+    els.artist.textContent = displayArtist;
 
-  // Tooltip con el texto completo (útil en desktop)
-  els.title.title  = fullTitle;
-  els.artist.title = fullArtist;
+    // Tooltip con el texto completo
+    els.title.title  = fullTitle;
+    els.artist.title = fullArtist;
 
-  // --------- lo demás igual que ya lo tenías ---------
-  if (d.cover){
-    els.cover.style.visibility = "visible";
-    els.cover.src = d.cover;
-    els.cover.onerror = () => { els.cover.style.visibility = "hidden"; };
-  } else {
-    els.cover.removeAttribute("src");
-    els.cover.style.visibility = "hidden";
+    if (d.cover){
+      els.cover.style.visibility = "visible";
+      els.cover.src = d.cover;
+      els.cover.onerror = () => { els.cover.style.visibility = "hidden"; };
+    } else {
+      els.cover.removeAttribute("src");
+      els.cover.style.visibility = "hidden";
+    }
+
+    const k = normGenre(d.genre);
+    const h = k != null ? GENRE_HUES[k] : null;
+
+    // Tema blanco para género “otro”
+    els.bar?.classList.toggle("mdf-whiteglow", k === "otro");
+
+    if (h != null){
+      lockGenreHue = true;
+      hue = h;
+    } else {
+      lockGenreHue = false;
+    }
+    setVars(intensity, hue);
   }
-
-  const k = normGenre(d.genre);
-  const h = k != null ? GENRE_HUES[k] : null;
-
-  // Tema blanco para género “otro”
-  els.bar?.classList.toggle("mdf-whiteglow", k === "otro");
-
-  if (h != null){
-    lockGenreHue = true;
-    hue = h;
-  } else {
-    lockGenreHue = false;
-  }
-  setVars(intensity, hue);
-}
 
   function onTrackChange(){
     enforceVisibility();
@@ -516,6 +536,11 @@ function onTrackMeta(ev){
   function onState(ev){
     const playing = !!ev.detail?.playing;
     els.play.textContent = playing ? "⏸" : "▶";
+
+    const btn = document.getElementById("mdf-bar-toggle");
+    if (btn){
+      btn.classList.toggle("is-playing", playing);
+    }
   }
 
   function onShowBar(){
@@ -539,9 +564,8 @@ function onTrackMeta(ev){
     document.addEventListener("melodify:state",       onState);
     document.addEventListener("melodify:bar:shouldShow", onShowBar);
 
-    // Si MDFCore ya está listo cuando se carga esta UI
     if(window.MDFCore && typeof window.MDFCore.getAudio === "function"){
-      onAudioReady({detail:{audio:window.MDFCore.getAudio()}});
+      onAudioReady({detail:{audio:window.MDFCore.getAudio()}})
     }
   }
 

@@ -188,8 +188,8 @@ function _playlistSongRow(
   song,
   {
     countsMode = null,
-    countsStamp = null, // compat
-    weeklyAgg = null, // compat
+    countsStamp = null,
+    weeklyAgg = null,
     showLikeBtn = true,
     showHistoryTime = false,
     playlistId = null,
@@ -310,7 +310,7 @@ function _playlistSongRow(
       </button>`;
   }
 
-  // Historial: sólo marcamos data-history-ts y un span vacío
+  // Historial: solo marca data-history-ts y span vacío
   let historyHTML = "";
   let historyTsAttr = "";
   if (showHistoryTime && !isStr) {
@@ -375,6 +375,13 @@ export function renderLeftSongs(songs, titleForEmpty = "Playlist", opts = {}) {
     left.removeAttribute("data-remove-song-url-template");
   }
 
+  // En la vista "reproductor" no se muestra el botón "+ Agregar canciones"
+  const main = document.getElementById("main-content");
+  const currentView = (main?.dataset.view || main?.dataset.initialView || "").trim();
+  const allowAddFromPlayer = currentView !== "reproductor";
+
+  const effectiveAllowAddToPlaylist = allowAddFromPlayer && allowAddToPlaylist;
+
   const rootId =
     backRoot === "my"
       ? MY_ROOT_ID
@@ -421,16 +428,14 @@ export function renderLeftSongs(songs, titleForEmpty = "Playlist", opts = {}) {
     : "";
 
   const addBtnHTML =
-    allowAddToPlaylist && playlistId
+    effectiveAllowAddToPlaylist && playlistId
       ? `
       <div class="rep-addsongs-inline">
         <button type="button"
                 class="rep-addsongs-btn"
                 onclick="
                   if (window.MDFCore && typeof window.MDFCore.openAddSongsDialogForPlaylist === 'function') {
-                    window.MDFCore.openAddSongsDialogForPlaylist('${_esc(
-                      playlistId
-                    )}');
+                    window.MDFCore.openAddSongsDialogForPlaylist('${_esc(playlistId)}');
                   }
                 ">
           + Agregar canciones
@@ -466,16 +471,14 @@ export function renderLeftSongs(songs, titleForEmpty = "Playlist", opts = {}) {
           <h3 style="margin:0">${_esc(titleForEmpty)}</h3>
           <p>No hay canciones.</p>
           ${
-            !addBtnHTML && allowAddToPlaylist && playlistId
+            !addBtnHTML && effectiveAllowAddToPlaylist && playlistId
               ? `
           <div class="rep-addsongs-inline">
             <button type="button"
                     class="rep-addsongs-btn"
                     onclick="
                       if (window.MDFCore && typeof window.MDFCore.openAddSongsDialogForPlaylist === 'function') {
-                        window.MDFCore.openAddSongsDialogForPlaylist('${_esc(
-                          playlistId
-                        )}');
+                        window.MDFCore.openAddSongsDialogForPlaylist('${_esc(playlistId)}');
                       }
                     ">
               + Agregar canciones
@@ -513,6 +516,7 @@ export function renderLeftSongs(songs, titleForEmpty = "Playlist", opts = {}) {
     /* ignore */
   }
 }
+
 
 // ---------------------------- Audio core -----------------------------------
 function setMetaFor(song) {
@@ -947,7 +951,7 @@ const MDFCoreExports = {
   toggleLikeFromReproductor: (evt, idSongRaw) =>
     _toggleLikeFromReproductor(evt, idSongRaw),
 
-  // Likes: actualiza el modelo local; MDFActions puede engancharse si quiere
+  // Actualiza modelo local; otros módulos pueden engancharse
   syncLikeModelFromClient: (idSong, liked, meta) => {
     const result = _syncLikeModelFromClient(idSong, liked, meta);
 
@@ -1046,7 +1050,7 @@ const MDFCoreExports = {
       return;
     }
 
-    // UI moderna (reproductor-playlists.js)
+    // UI principal (reproductor-playlists.js)
     if (
       window.MDFPlaylists &&
       typeof window.MDFPlaylists.openAddToPlaylistDialog === "function"
@@ -1055,7 +1059,7 @@ const MDFCoreExports = {
       return;
     }
 
-    // Fallback histórico
+    // Fallback para versión anterior
     if (typeof window.openAddToPlaylistForSong === "function") {
       window.openAddToPlaylistForSong(sid);
       return;
@@ -1091,9 +1095,9 @@ export const DEFAULT_GENRES = [
 ];
 
 // Nodos raíz para agrupar playlists
-const PUBLIC_ROOT_ID = "pl:public-root"; // Playlists públicas
-const MY_ROOT_ID = "pl:my-root"; // Playlists propias
-const FOLLOWED_ROOT_ID = "pl:followed-root"; // "Artistas que sigues"
+const PUBLIC_ROOT_ID = "pl:public-root";
+const MY_ROOT_ID = "pl:my-root";
+const FOLLOWED_ROOT_ID = "pl:followed-root";
 
 // IDs reservados del sistema
 const SYSTEM_PLAYLIST_IDS = new Set([
@@ -1188,7 +1192,7 @@ function splitPlaylistsForSidebar(allPlaylists) {
   return { system, mine, publics };
 }
 
-// Sólo candado en playlists propias (no sistema / no públicas)
+// Reglas de visibilidad para candado de playlist
 function canToggleVisibility(pl) {
   if (!pl) return false;
 
@@ -1323,7 +1327,8 @@ export function buildRightSidebarHTML({
         </button>`
       : "";
 
-    liParts.push(`
+    liParts.push(``
+      + `
       <li data-pl="${_esc(pl.id)}"
           style="display:flex;align-items:center;gap:10px;background:#181818;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;cursor:pointer">
         <span style="flex:1">${_esc(label)}</span>
@@ -1336,8 +1341,7 @@ export function buildRightSidebarHTML({
   // Nodo "Tus playlists"
   if (mine.length > 0) {
     const totalSongs = mine.reduce(
-      (acc, pl) =>
-        acc + (Array.isArray(pl.songs) ? pl.songs.length : 0),
+      (acc, pl) => acc + (Array.isArray(pl.songs) ? pl.songs.length : 0),
       0
     );
 
@@ -1377,15 +1381,11 @@ export function buildRightSidebarHTML({
 
   const liHTML = liParts.join("");
 
+  // Panel de playlists sin botón de creación
   const playlistsHTML = `
     <div class="rep-panel">
-      <div class="rep-head" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <div class="rep-head">
         <h3 style="margin:0">Playlists</h3>
-        <button id="rep-add-playlist-btn"
-                type="button"
-                class="rep-add-playlist-btn">
-          + Nueva
-        </button>
       </div>
       <ul id="rep-playlists" class="rep-list" style="list-style:none;margin:0;padding:0">
         ${
@@ -2098,7 +2098,7 @@ export async function renderMenuReproductor({
     ? followedArtists
     : [];
 
-  // Fallback "Mi música" si no vino nada desde el endpoint JSON
+  // Fallback "Mi música" si no llega nada desde el endpoint JSON
   if (!mySongs || mySongs.length === 0) {
     try {
       const el = document.getElementById("playlists-data-json");
@@ -2271,7 +2271,7 @@ export function wireReproductorPlaylistEvents({ mainContent }) {
       return;
     }
 
-    // Para crear/eliminar playlists o cambiar visibilidad recargamos todo
+    // Para crear/eliminar playlists o cambiar visibilidad recarga todo
     try {
       await renderMenuReproductor({
         mainContent,
@@ -2875,7 +2875,6 @@ async function _deletePlaylist(playlistIdRaw) {
     return;
   }
 
-  // Confirmación antes de eliminar
   const ok = await window.mdfConfirm(
     "¿Eliminar esta playlist? Esta acción no se puede deshacer.",
     {
@@ -2912,7 +2911,6 @@ async function _deletePlaylist(playlistIdRaw) {
       throw new Error(msg);
     }
 
-    // Actualizar modelo local en memoria
     if (Array.isArray(window._playlists)) {
       window._playlists = window._playlists.filter(
         (p) => p && String(p.id) !== playlistId
@@ -2932,7 +2930,6 @@ async function _deletePlaylist(playlistIdRaw) {
         );
     }
 
-    // Panel derecho: quitar el item de #rep-playlists
     const li = document.querySelector(
       `#rep-playlists li[data-pl="${CSS.escape(playlistId)}"]`
     );
@@ -2940,7 +2937,6 @@ async function _deletePlaylist(playlistIdRaw) {
       li.parentElement.removeChild(li);
     }
 
-    // Columna izquierda: quitar de "Tus playlists" / "Playlists públicas"
     document
       .querySelectorAll(
         `.rep-my-item[data-pl-id="${CSS.escape(
@@ -2951,7 +2947,6 @@ async function _deletePlaylist(playlistIdRaw) {
         if (node.parentElement) node.parentElement.removeChild(node);
       });
 
-    // Si la playlist abierta es ésta, mostrar estado vacío
     const left = document.querySelector(".rep-left");
     if (left && left.dataset.currentPlaylist === playlistId) {
       left.innerHTML = `
@@ -2966,7 +2961,6 @@ async function _deletePlaylist(playlistIdRaw) {
 
     _toast("Playlist eliminada.");
 
-    // Avisar al resto de módulos
     _dispatchPlaylistsChanged({
       type: "delete",
       playlistId,
@@ -2999,7 +2993,7 @@ function _openAddSongsDialogForPlaylist(playlistIdRaw) {
   _toast("No se encontró la UI para agregar canciones a la playlist.");
 }
 
-// ---------------------------- SPA playlists (ganchos vacíos) --------------
+// ---------------------------- SPA playlists (hooks vacíos) -----------------
 let currentViewPlaylist = "allPlayList";
 export function crearPlaylist() {
   console.log("crearPlaylist no implementado");
@@ -3020,7 +3014,7 @@ export function playSong(id) {
 }
 export function likeSong() {}
 
-// ==== Helpers de debug (solo consola) =====================================
+// ==== Helpers de depuración (consola) =====================================
 window.__MDF_DEBUG = {
   getCurrentUserInfo: _getCurrentUserInfo,
   extractPlaylistOwner: _extractPlaylistOwner,

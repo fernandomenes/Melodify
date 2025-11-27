@@ -1,7 +1,6 @@
 {% load static %}
 <!doctype html>
 <html lang="es">
-
 <head>
   <meta charset="utf-8">
   <meta name="csrf-token" content="{{ csrf_token }}">
@@ -59,7 +58,8 @@
       --muted:#9aa0a6;
       --btn:#2a2a2a;
       --btnb:#3a3a3a;
-      --accent:#9ad;
+      --accent:#ff4fa3;
+      --accent-soft:rgba(255,79,163,0.7);
     }
 
     *{ box-sizing:border-box; }
@@ -103,32 +103,61 @@
     .card{
       background:var(--card);
       border:1px solid var(--line);
-      border-radius:12px;
-      padding:16px;
+      border-radius:16px;
+      padding:18px 18px 16px;
       margin:16px 0;
+      box-shadow:0 18px 35px rgba(0,0,0,0.55);
+    }
+
+    .card h3{
+      font-size:18px;
+      letter-spacing:.02em;
     }
 
     label{
       display:block;
       margin:10px 0 6px;
-      font-size:14px;
-      color:#bbb;
+      font-size:13px;
+      color:#c9c9c9;
     }
 
+    /* Campos de texto, password, selects, textarea */
     input[type="text"],
     input[type="password"],
-    input[type="file"],
     textarea,
     select{
       width:100%;
       max-width:520px;
-      padding:10px;
-      border-radius:8px;
+      padding:10px 12px;
+      border-radius:10px;
       border:1px solid #333;
-      background:#191919;
+      background:#171717;
       color:#eee;
-      appearance:none;
       outline:none;
+      font-size:14px;
+      transition:
+        border-color .16s ease,
+        box-shadow .16s ease,
+        background-color .16s ease,
+        transform .10s ease;
+    }
+
+    input[type="text"]::placeholder,
+    input[type="password"]::placeholder,
+    textarea::placeholder{
+      color:#5f6368;
+    }
+
+    input[type="text"]:focus,
+    input[type="password"]:focus,
+    textarea:focus,
+    select:focus{
+      border-color:var(--accent);
+      box-shadow:
+        0 0 0 1px var(--accent-soft),
+        0 0 0 4px rgba(255,79,163,0.13);
+      background:#151515;
+      transform:translateY(-1px);
     }
 
     textarea{
@@ -136,17 +165,117 @@
       min-height:72px;
     }
 
+    /* Input file estilo Melodify */
+    input[type="file"]{
+      width:100%;
+      max-width:520px;
+      padding:8px 10px;
+      border-radius:10px;
+      border:1px dashed rgba(255,255,255,0.18);
+      background:#151515;
+      color:#ddd;
+      font-size:13px;
+      cursor:pointer;
+    }
+
+    input[type="file"]::-webkit-file-upload-button,
+    input[type="file"]::file-selector-button{
+      padding:8px 14px;
+      margin-right:10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,0.3);
+      background:linear-gradient(135deg,#ff4fa3,#9c6bff);
+      color:#050505;
+      font-size:13px;
+      font-weight:600;
+      letter-spacing:.02em;
+      cursor:pointer;
+      transition:
+        background .16s ease,
+        box-shadow .16s ease,
+        transform .12s ease,
+        border-color .16s ease;
+    }
+
+    input[type="file"]:hover::file-selector-button,
+    input[type="file"]:hover::-webkit-file-upload-button{
+      border-color:rgba(255,255,255,0.6);
+      box-shadow:
+        0 0 0 1px rgba(255,79,163,0.7),
+        0 8px 24px rgba(0,0,0,0.7);
+      transform:translateY(-1px);
+    }
+
+    input[type="file"]:focus{
+      border-color:var(--accent);
+      box-shadow:
+        0 0 0 1px var(--accent-soft),
+        0 0 0 4px rgba(255,79,163,0.13);
+    }
+
     .btn{
-      padding:10px 14px;
-      border-radius:8px;
+      padding:9px 14px;
+      border-radius:999px;
       border:1px solid var(--btnb);
       background:var(--btn);
       color:#eee;
       cursor:pointer;
       text-decoration:none;
-      display:inline-block;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:6px;
+      font-size:13px;
+      line-height:1.2;
+      transition:
+        background-color .16s ease,
+        border-color .16s ease,
+        box-shadow .16s ease,
+        transform .12s ease,
+        color .12s ease;
     }
-    .btn:hover{ background:#333; }
+    .btn:hover{
+      background:#333;
+      border-color:#4a4a4a;
+      transform:translateY(-1px);
+      box-shadow:0 6px 20px rgba(0,0,0,0.6);
+    }
+    .btn:disabled{
+      opacity:.55;
+      cursor:default;
+      box-shadow:none;
+      transform:none;
+    }
+
+    .btnPrimary{
+      background:linear-gradient(135deg,#ff4fa3,#9c6bff);
+      border-color:transparent;
+      color:#050505;
+      font-weight:600;
+      letter-spacing:.02em;
+      box-shadow:
+        0 0 0 1px rgba(255,79,163,0.8),
+        0 14px 38px rgba(0,0,0,0.75);
+    }
+    .btnPrimary:hover{
+      background:linear-gradient(135deg,#ff66b3,#b28cff);
+      box-shadow:
+        0 0 0 1px rgba(255,79,163,0.9),
+        0 18px 46px rgba(0,0,0,0.9);
+    }
+
+    .btnDanger{
+      background:#3a141c;
+      border-color:#7a2639;
+      color:#ffd7e3;
+    }
+    .btnDanger:hover{
+      background:#551725;
+      border-color:#ff4f7c;
+      box-shadow:
+        0 0 0 1px rgba(255,79,140,0.7),
+        0 10px 28px rgba(0,0,0,0.8);
+    }
 
     .grid2{
       display:grid;
@@ -161,7 +290,9 @@
       display:flex;
       gap:8px;
       border-bottom:1px solid var(--line);
-      margin:8px 0 0;
+      margin:18px 0 0;
+      overflow-x:auto;
+      padding-bottom:2px;
     }
 
     .tab-btn{
@@ -170,23 +301,27 @@
       border-bottom:none;
       background:#181818;
       color:#ddd;
-      padding:10px 14px;
-      border-top-left-radius:10px;
-      border-top-right-radius:10px;
+      padding:8px 14px;
+      border-top-left-radius:11px;
+      border-top-right-radius:11px;
       cursor:pointer;
+      font-size:13px;
+      white-space:nowrap;
     }
     .tab-btn[aria-selected="true"],
     .tab-btn.active{
       background:#232323;
       color:#fff;
+      border-color:rgba(255,255,255,0.28);
     }
 
     .tab{
       display:none;
       background:#232323;
       border:1px solid var(--line);
-      border-radius:0 12px 12px 12px;
+      border-radius:0 14px 14px 14px;
       padding:16px;
+      margin-bottom:16px;
     }
     .tab.active{ display:block; }
 
@@ -235,8 +370,8 @@
       gap:10px;
       background:#202020;
       border:1px solid #2c2c2c;
-      padding:10px;
-      border-radius:10px;
+      padding:10px 12px;
+      border-radius:11px;
       margin:12px 0;
     }
     .undo-bar .undo-label{
@@ -248,10 +383,11 @@
       background:#202020;
       border:1px solid #333;
       color:#eee;
-      border-radius:8px;
+      border-radius:10px;
       padding:8px 10px;
       margin:10px 0;
       display:none;
+      font-size:13px;
     }
     .msg.error{
       border-color:#743d3d;
@@ -288,6 +424,14 @@
       text-align:right;
       font-size:12px;
       color:#ccc;
+    }
+
+    .filters{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+      margin:14px 0;
     }
 
     .modal{
@@ -356,7 +500,9 @@
       <span id="username">{{ username|default:"Usuario" }}</span>
       <div id="user-menu">
         <a href="#" id="menu-perfil">Perfil</a>
-        <a href="{% url 'logout' %}" id="menu-logout">Cerrar sesión</a>
+        <a href="#"
+           id="menu-logout"
+           data-logout-url="{% url 'logout' %}">Cerrar sesión</a>
       </div>
     </div>
   </div>
@@ -471,7 +617,7 @@
               <input name="avatar" type="file" accept="image/*">
 
               <div style="margin-top:10px">
-                <button class="btn" type="submit">Agregar artista</button>
+                <button class="btn btnPrimary" type="submit">Agregar artista</button>
               </div>
             </form>
           </div>
@@ -492,7 +638,7 @@
               <input name="avatar" type="file" accept="image/*">
 
               <div style="margin-top:10px">
-                <button class="btn" type="submit">Agregar administrador</button>
+                <button class="btn btnPrimary" type="submit">Agregar administrador</button>
               </div>
             </form>
           </div>
@@ -541,7 +687,7 @@
             <label style="display:flex;align-items:center;gap:8px">
               <input type="checkbox" id="sel-all"> Seleccionar todo
             </label>
-            <button class="btn" id="bulk-delete" type="button" disabled>
+            <button class="btn btnDanger" id="bulk-delete" type="button" disabled>
               Eliminar seleccionadas
             </button>
             <span id="sel-count" class="muted"></span>
@@ -565,7 +711,7 @@
           </p>
           <div class="actions">
             <button class="btn" id="confirm-cancel" type="button">Cancelar</button>
-            <button class="btn" id="confirm-accept" type="button">Eliminar</button>
+            <button class="btn btnDanger" id="confirm-accept" type="button">Eliminar</button>
           </div>
         </div>
       </div>
@@ -619,5 +765,120 @@
       })();
     }
   </script>
+
+  <!-- Menú de usuario y cierre de sesión -->
+  <script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const userTrigger = document.getElementById("user-trigger");
+    const userMenu    = document.getElementById("user-menu");
+    const perfilLink  = document.getElementById("menu-perfil");
+    const logoutLink  = document.getElementById("menu-logout");
+
+    const perfilUrl = "/home/?view=perfil&no_spa=1";
+    const logoutUrl =
+      (logoutLink && (logoutLink.getAttribute("data-logout-url") || logoutLink.getAttribute("href"))) ||
+      "/logout/";
+
+    let menuOpen = false;
+
+    function setMenuOpen(open) {
+      menuOpen = open;
+      if (!userMenu) return;
+
+      if (menuOpen) {
+        userMenu.style.display       = "block";
+        userMenu.style.opacity       = "1";
+        userMenu.style.pointerEvents = "auto";
+      } else {
+        userMenu.style.opacity       = "0";
+        userMenu.style.pointerEvents = "none";
+        setTimeout(function () {
+          if (!menuOpen) {
+            userMenu.style.display = "none";
+          }
+        }, 120);
+      }
+    }
+
+    if (userMenu) {
+      setMenuOpen(false);
+    }
+
+    // Mostrar/ocultar menú de usuario
+    if (userTrigger && userMenu) {
+      userTrigger.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        setMenuOpen(!menuOpen);
+      });
+
+      document.addEventListener("click", function () {
+        if (menuOpen) setMenuOpen(false);
+      });
+
+      userMenu.addEventListener("click", function (e) {
+        e.stopPropagation();
+      });
+    }
+
+    // Navegar a perfil
+    if (perfilLink) {
+      perfilLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        setMenuOpen(false);
+        window.location.href = perfilUrl;
+      });
+    }
+
+    // Logout con confirmación (POST)
+    if (logoutLink) {
+      // Clonar enlace para eliminar listeners previos
+      var cleanLogout = logoutLink.cloneNode(true);
+      logoutLink.parentNode.replaceChild(cleanLogout, logoutLink);
+
+      cleanLogout.addEventListener("click", async function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const doLogout = await (
+          typeof window.mdfConfirm === "function"
+            ? window.mdfConfirm("¿Seguro que deseas cerrar sesión?", {
+                title: "Cerrar sesión",
+                danger: true,
+                confirmText: "Cerrar sesión",
+                cancelText: "Cancelar",
+              })
+            : Promise.resolve(window.confirm("¿Seguro que deseas cerrar sesión?"))
+        );
+
+        if (!doLogout) {
+          setMenuOpen(false);
+          return;
+        }
+
+        const csrfToken =
+          document
+            .querySelector('meta[name="csrf-token"]')
+            ?.getAttribute("content") || "";
+
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = logoutUrl;
+
+        if (csrfToken) {
+          const csrfInput = document.createElement("input");
+          csrfInput.type  = "hidden";
+          csrfInput.name  = "csrfmiddlewaretoken";
+          csrfInput.value = csrfToken;
+          form.appendChild(csrfInput);
+        }
+
+        document.body.appendChild(form);
+        form.submit();
+      });
+    }
+  });
+  </script>
+
 </body>
 </html>

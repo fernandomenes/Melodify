@@ -37,6 +37,7 @@ from django.http import (
 from django.core.exceptions import FieldDoesNotExist
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
+from django.utils.html import escape
 
 from inicio_sesion import base as base
 from inicio_sesion.auth_helpers import _get_user_role, _is_artist, _require_session_user
@@ -166,13 +167,10 @@ def _song_to_dict(song: Song) -> dict:
         "title": song.title,
         "artist_display_name": artist_name,
         "author": artist_name,  # alias usado en templates/JS
-
         "audioUrl": audio_url,
         "audio_url": audio_url,  # alias legacy
-
         "coverUrl": cover_url,
         "cover_url": cover_url,  # alias legacy
-
         "genre": getattr(song, "genre", "") or "",
     }
 
@@ -541,7 +539,7 @@ def muro_publico(request, username: str):
         except Users.DoesNotExist:
             pass
 
-    # Likes y seguidores
+    # Likes y seguidores (estadísticas)
     like_stats = _collect_song_likes_for_muro(songs, session_user or None)
     likes_for_js = [
         {"id": s.id}
@@ -552,6 +550,31 @@ def muro_publico(request, username: str):
     follow_stats = _collect_follow_stats_for_artist(
         artist_user, session_user or None
     )
+
+    # Lista de seguidores para uso en JS (muro_followers_json)
+    followers_list: list[dict] = []
+    if FollowArtist:
+        try:
+            followers_qs = (
+                FollowArtist.objects
+                .filter(artist=artist_user)
+                .select_related("follower")
+                .order_by("follower__user")
+            )
+            for rel in followers_qs:
+                u = rel.follower
+                if not u:
+                    continue
+                uname = getattr(u, "user", "") or ""
+                display = getattr(u, "name", "") or uname
+                followers_list.append(
+                    {
+                        "username": uname,
+                        "display_name": display,
+                    }
+                )
+        except Exception:
+            followers_list = []
 
     # Playlist "Mi música" (artista logueado)
     playlists = []
@@ -740,6 +763,8 @@ def muro_publico(request, username: str):
         "music_that_i_love_json": json.dumps(
             artist_likes_playlist or {}, ensure_ascii=False
         ),
+        # Lista de seguidores para JS
+        "muro_followers_json": json.dumps(followers_list, ensure_ascii=False),
     }
 
     return render(request, "muro/muro_artista.html", ctx)
@@ -747,6 +772,9 @@ def muro_publico(request, username: str):
 
 @require_http_methods(["GET"])
 def mi_muro(request):
+    """
+    Muro propio del artista autenticado.
+    """
     username = _require_session_user(request)
     if not username:
         return _redirect_login_clean(request)
@@ -1030,7 +1058,6 @@ def eliminar_cancion(request, song_id: int):
     if song.visibility == "public":
         song.visibility = "removed"
         song.save(update_fields=["visibility"])
-
 
     _put_undo_muro(
         request,
@@ -1607,6 +1634,8 @@ def toggle_follow_artist(request, username: str):
 def artist_followers_fragment(request, username: str):
     """
     Fragmento HTML con la lista de seguidores de un artista.
+    Devuelve solo el contenido interior que se inyecta en
+    #muro-followers-list (sin card externa).
     """
     if not FollowArtist:
         return HttpResponse(
@@ -1630,27 +1659,58 @@ def artist_followers_fragment(request, username: str):
         .order_by("follower__user")
     )
 
-    parts = [
-        '<div class="card" style="margin:8px 0 0;">',
-        '<h4 style="margin:0 0 8px;">Seguidores</h4>',
-    ]
+    parts: list[str] = []
 
     if not followers_qs.exists():
         parts.append(
-            '<p class="muted" style="margin:0;">Este artista aún no tiene seguidores.</p>'
+            '<p class="muted" style="margin:0;">'
+            "Este artista aún no tiene seguidores."
+            "</p>"
         )
     else:
-        parts.append('<ul class="simple-list" style="margin:0; padding-left:18px;">')
+        parts.append('<div class="muro-followers-list-inner">')
+
         for rel in followers_qs:
             u = rel.follower
+            if not u:
+                continue
+
             uname = getattr(u, "user", "") or ""
             display = getattr(u, "name", "") or uname
-            parts.append(
-                f"<li>{display} <span class='muted'>@{uname}</span></li>"
-            )
-        parts.append("</ul>")
+            avatar_field = getattr(u, "avatar", None)
+            avatar_url = _safe_file_url(avatar_field) if avatar_field else ""
 
-    parts.append("</div>")
+            initial = (display or uname or "?").strip()[:1].upper() or "?"
+
+            parts.append('<article class="muro-follow-item">')
+
+            # Avatar
+            if avatar_url:
+                parts.append(
+                    '<div class="muro-follow-avatar">'
+                    f'<img src="{escape(avatar_url)}" '
+                    f'alt="{escape(display)}">'
+                    "</div>"
+                )
+            else:
+                parts.append(
+                    '<div class="muro-follow-avatar">'
+                    f"<span>{escape(initial)}</span>"
+                    "</div>"
+                )
+
+            # Nombre + @usuario
+            parts.append(
+                '<div class="muro-follow-main">'
+                f'<div class="muro-follow-name">{escape(display)}</div>'
+                f'<div class="muro-follow-username">@{escape(uname)}</div>'
+                "</div>"
+            )
+
+            parts.append("</article>")
+
+        parts.append("</div>")
+
     return HttpResponse("".join(parts))
 
 

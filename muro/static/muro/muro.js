@@ -1,13 +1,13 @@
 // static/muro/muro.js
 // ============================================================================
 // Melodify – Muro del artista
-// Reproducción básica, selección, borrado, subida, likes y playlists.
+// Reproducción básica, selección, borrado, subida, likes, playlists y tabs.
 // ============================================================================
 
 (function () {
   "use strict";
 
-  // Helpers DOM y cabeceras comunes
+  // Utilidades de DOM y cabeceras comunes
   const $  = (sel, ctx = document) => ctx.querySelector(sel);
   const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
   const H  = { "X-Requested-With": "fetch" };
@@ -24,10 +24,10 @@
     );
   }
 
-  // Reproductor usado en el muro (stub local o MDFCore global)
+  // Reproductor usado en el muro (MDFCore global o stub local)
   let muroPlayer = null;
 
-  // Toast local para likes / playlists
+  // Toast local para acciones de likes / playlists
   let likeToastTimer = null;
 
   function showLikeToast(message) {
@@ -46,7 +46,7 @@
     }, 2000);
   }
 
-  // Stub de reproducción si no existe MDFCore global
+  // Stub de reproducción cuando no existe MDFCore global
   (function setupMuroCore() {
     if (window.MDFCore && typeof window.MDFCore.playFromDomItem === "function") {
       muroPlayer = window.MDFCore;
@@ -89,7 +89,9 @@
     }
 
     function buildQueueFromCard(card) {
-      const rootGrid = card.closest("#songs-grid") || document;
+      const rootGrid = card.closest("#songs-grid") ||
+                       card.closest("#artist-playlist-songs-wrapper") ||
+                       document;
       queueCards = Array.from(rootGrid.querySelectorAll(".js-song-card"));
       queue      = queueCards.map(datasetToTrack);
       index      = Math.max(0, queueCards.indexOf(card));
@@ -255,7 +257,10 @@
       main?.dataset?.artistFollowing === "true",
   };
 
-  // Barra de "Deshacer" (undo)
+  const IS_OWNER =
+    main?.dataset?.isOwner === "1" || main?.dataset?.isOwner === "true";
+
+  // Barra de deshacer
   function showUndo(label) {
     const bar = $("#undo-bar", root);
     const lbl = $("#undo-label", root);
@@ -270,7 +275,7 @@
     if (bar) bar.style.display = "none";
   }
 
-  // Click en tarjeta → reproducir (evitando controles internos)
+  // Click en tarjeta de canción → reproducir (evita controles internos)
   function bindSongCardsToGlobalPlayer(scopeRoot = document) {
     const cards = scopeRoot.querySelectorAll(".js-song-card");
     if (!cards.length) return;
@@ -330,36 +335,71 @@
     updateUI();
   }
 
-  // Confirm genérico (modal o window.confirm)
-  function confirmWithModal(texto = "¿Eliminar este elemento?") {
-    const modal     = $("#confirm-modal", document);
+  // Confirmación genérica; usa modal propio o window.confirm como reserva
+  function confirmWithModal(texto = "¿Eliminar este elemento?", opts = {}) {
+    const modal     = document.getElementById("confirm-modal");
     const dlg       = modal?.querySelector(".dialog");
-    const txt       = modal?.querySelector("#confirm-text");
+    const titleEl   = modal?.querySelector("#confirm-title");
+    const txtEl     = modal?.querySelector("#confirm-text");
     const btnOk     = modal?.querySelector("#confirm-accept");
     const btnCancel = modal?.querySelector("#confirm-cancel");
 
+    // Si no existe el modal, utiliza la confirmación nativa
     if (!modal || !btnOk || !btnCancel) {
       return Promise.resolve(window.confirm(texto));
     }
-    if (txt) txt.textContent = texto;
+
+    // Conserva los textos originales para restaurarlos después
+    const original = {
+      title:   titleEl?.textContent || "",
+      message: txtEl?.textContent || "",
+      ok:      btnOk.textContent,
+      cancel:  btnCancel.textContent,
+    };
+
+    // Opciones de personalización
+    if (titleEl && opts.title) {
+      titleEl.textContent = opts.title;
+    }
+    if (txtEl) {
+      txtEl.textContent = texto;
+    }
+    if (opts.confirmText) {
+      btnOk.textContent = opts.confirmText;
+    }
+    if (opts.cancelText) {
+      btnCancel.textContent = opts.cancelText;
+    }
 
     return new Promise((resolve) => {
       function cleanup() {
         modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
         btnOk.removeEventListener("click", onOk);
         btnCancel.removeEventListener("click", onCancel);
         document.removeEventListener("keydown", onKey);
+
+        // Restaura los textos originales
+        if (titleEl)  titleEl.textContent  = original.title;
+        if (txtEl)    txtEl.textContent    = original.message;
+        btnOk.textContent                  = original.ok;
+        btnCancel.textContent              = original.cancel;
       }
+
       function onOk() {
         cleanup();
         resolve(true);
       }
+
       function onCancel() {
         cleanup();
         resolve(false);
       }
+
       function onKey(e) {
-        if (e.key === "Escape") onCancel();
+        if (e.key === "Escape") {
+          onCancel();
+        }
       }
 
       btnOk.addEventListener("click", onOk);
@@ -367,8 +407,14 @@
       document.addEventListener("keydown", onKey);
 
       modal.classList.add("show");
+      modal.setAttribute("aria-hidden", "false");
       (dlg || modal).focus?.();
     });
+  }
+
+  // Expone confirmación con estilo Melodify a otros scripts
+  if (typeof window.mdfConfirm !== "function") {
+    window.mdfConfirm = (message, opts = {}) => confirmWithModal(message, opts);
   }
 
   // Checkboxes de selección múltiple
@@ -400,7 +446,7 @@
     }
   });
 
-  // Cache de tarjetas antes de delete individual
+  // Cache de tarjetas antes del borrado individual
   root.addEventListener(
     "submit",
     (e) => {
@@ -416,7 +462,7 @@
     true
   );
 
-  // Delete individual
+  // Borrado individual
   root.addEventListener(
     "submit",
     async (e) => {
@@ -465,7 +511,7 @@
     true
   );
 
-  // Delete múltiple
+  // Borrado múltiple
   btnBulk?.addEventListener("click", async (e) => {
     e.preventDefault();
     if (selected.size === 0) return;
@@ -516,7 +562,7 @@
     }
   });
 
-  // Undo de acciones en el muro
+  // Deshacer acciones en el muro
   undoForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
     try {
@@ -568,7 +614,7 @@
         ?.classList.toggle("menuLateral-collapsed", collapsed);
     }
 
-    // Estado inicial: barra lateral oculta
+    // Estado inicial: barra lateral colapsada
     applyCollapsed(true);
 
     function handleToggleClick() {
@@ -580,7 +626,7 @@
     logoToggle?.addEventListener("click", handleToggleClick);
   })();
 
-  // Menú de usuario y logout
+  // Menú de usuario y logout (usa mdfConfirm definido en plantilla)
   (function userMenu() {
     const trigger = document.getElementById("user-trigger");
     const menu    = document.getElementById("user-menu");
@@ -618,7 +664,7 @@
             return;
           }
         } catch {
-          // fallback a redirección directa
+          // En caso de error, redirige directamente
         }
         location.href = url;
       });
@@ -830,30 +876,67 @@
     alert("No se encontró la función para agregar a playlist.");
   };
 
-  // Botón de seguir / dejar de seguir artista
+  // Botón Seguir/Dejar de seguir artista
   function setupFollowButton() {
-    const btn = document.getElementById("btn-follow-artist");
+    // El propietario del muro no muestra botón de seguimiento
+    if (IS_OWNER) return;
+
+    const btn = document.getElementById("muro-follow-btn");
     if (!btn || !URLS.follow || !ARTIST.username) return;
 
-    const counter = document.getElementById("muro-followers-count");
+    const labelSpan = btn.querySelector(".follow-toggle-label");
+    const counter   = document.getElementById("muro-followers-count");
+
+    let currentFollowers = Number(counter?.textContent || 0);
 
     function applyState(following, followers) {
-      btn.dataset.following = following ? "1" : "0";
-      btn.textContent = following ? "Siguiendo" : "Seguir";
+      const flag = following ? "1" : "0";
+      btn.dataset.following = flag;
       btn.classList.toggle("is-following", following);
-      if (counter && typeof followers === "number") {
-        counter.textContent = String(followers);
+      btn.setAttribute("aria-pressed", following ? "true" : "false");
+      btn.setAttribute(
+        "aria-label",
+        following
+          ? "Dejar de seguir a este artista"
+          : "Seguir a este artista"
+      );
+
+      if (labelSpan) {
+        labelSpan.textContent = following ? "Siguiendo" : "Seguir";
+      }
+
+      if (typeof followers === "number") {
+        currentFollowers = followers;
+        if (counter) counter.textContent = String(followers);
       }
     }
 
-    const initialFollowers = Number(counter?.textContent || 0);
-    applyState(ARTIST.isFollowing, initialFollowers);
+    // Actualiza la pestaña Seguidores si está visible
+    function refreshFollowersListIfVisible() {
+      const panel = document.getElementById("tab-seguidores");
+      const box   = document.getElementById("muro-followers-list");
+      if (!panel || !box) return;
+
+      delete box.dataset.loaded;
+
+      const isActive =
+        !panel.hidden && panel.classList.contains("active");
+
+      if (isActive) {
+        setupFollowersList();
+      }
+    }
+
+    // Estado inicial del botón
+    applyState(ARTIST.isFollowing, currentFollowers);
 
     btn.addEventListener("click", async (e) => {
       e.preventDefault();
 
-      const prevFollowing = btn.dataset.following === "1";
+      const prevFollowing       = btn.dataset.following === "1";
       const optimisticFollowing = !prevFollowing;
+
+      // Actualización optimista de estado visual
       applyState(optimisticFollowing);
 
       try {
@@ -864,7 +947,7 @@
         });
 
         if (!res.ok) {
-          applyState(prevFollowing, initialFollowers);
+          applyState(prevFollowing, currentFollowers);
           showLikeToast("No se pudo actualizar el seguimiento.");
           return;
         }
@@ -872,61 +955,69 @@
         const data = await res.json().catch(() => null);
         if (data && typeof data.following !== "undefined") {
           ARTIST.isFollowing = !!data.following;
-          applyState(ARTIST.isFollowing, data.followers);
+          const followers =
+            typeof data.followers === "number"
+              ? data.followers
+              : currentFollowers;
+
+          applyState(ARTIST.isFollowing, followers);
+          refreshFollowersListIfVisible();
+
           showLikeToast(
             ARTIST.isFollowing
               ? "Ahora sigues a este artista"
               : "Dejaste de seguir al artista"
           );
         } else {
-          applyState(prevFollowing, initialFollowers);
+          applyState(prevFollowing, currentFollowers);
           showLikeToast("No se pudo actualizar el seguimiento.");
         }
       } catch (err) {
         console.error("MURO: error al seguir artista:", err);
-        applyState(prevFollowing, initialFollowers);
+        applyState(prevFollowing, currentFollowers);
         showLikeToast("No se pudo actualizar el seguimiento.");
       }
     });
   }
 
-  // Lista de seguidores (carga perezosa desde el backend)
+  // Lista de seguidores: carga el fragmento una vez por sesión
   function setupFollowersList() {
-    const btn = document.getElementById("btn-show-followers");
     const box = document.getElementById("muro-followers-list");
-    if (!btn || !box || !URLS.followersFragment) return;
+    if (!box || box.dataset.loaded === "1" || !URLS.followersFragment) return;
 
-    let visible = false;
+    const counterEl = document.getElementById("muro-followers-count");
+    const total = Number(counterEl?.textContent || 0);
 
-    async function loadAndToggle() {
-      if (!visible && !box.dataset.loaded) {
-        try {
-          box.innerHTML =
-            '<p class="muted" style="margin:0;">Cargando seguidores…</p>';
-
-          const res = await fetch(URLS.followersFragment, {
-            credentials: "same-origin",
-            headers: H,
-          });
-          const html = await res.text();
-          box.innerHTML = html;
-          box.dataset.loaded = "1";
-        } catch (e) {
-          console.error("MURO: error cargando seguidores:", e);
-          box.innerHTML =
-            '<p class="muted" style="margin:0;">No se pudo cargar la lista de seguidores.</p>';
-        }
-      }
-
-      visible = !visible;
-      box.style.display = visible ? "block" : "none";
-      btn.textContent = visible ? "Ocultar lista" : "Ver lista";
+    // Si no hay seguidores, muestra mensaje y no consulta al backend
+    if (!total) {
+      box.innerHTML =
+        '<p class="muted" style="margin:0;">Este artista aún no tiene seguidores.</p>';
+      box.dataset.loaded = "1";
+      return;
     }
 
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      loadAndToggle();
-    });
+    (async () => {
+      try {
+        box.innerHTML =
+          '<p class="muted" style="margin:0;">Cargando seguidores…</p>';
+
+        const res = await fetch(URLS.followersFragment, {
+          credentials: "same-origin",
+          headers: H,
+        });
+        const html = await res.text();
+
+        box.innerHTML =
+          html.trim() ||
+          '<p class="muted" style="margin:0;">Este artista aún no tiene seguidores.</p>';
+
+        box.dataset.loaded = "1";
+      } catch (e) {
+        console.error("MURO: error cargando seguidores:", e);
+        box.innerHTML =
+          '<p class="muted" style="margin:0;">No se pudo cargar la lista de seguidores.</p>';
+      }
+    })();
   }
 
   // Viewer de playlists del artista (likes + públicas)
@@ -1018,17 +1109,16 @@
         const card = document.createElement("article");
         card.className = "song js-song-card";
 
-        const title = song.title || "—";
-        const artist =
-          song.author || song.artist_display_name || "—";
-        const genre = song.genre || "";
+        const title    = song.title || "—";
+        const artist   = song.author || song.artist_display_name || "—";
+        const genre    = song.genre || "";
         const audioUrl = song.audioUrl || song.audio_url || "";
         const coverUrl = song.coverUrl || song.cover_url || "";
 
         if (song.id != null) card.dataset.songId = String(song.id);
-        card.dataset.title = title;
+        card.dataset.title  = title;
         card.dataset.artist = artist;
-        if (genre) card.dataset.genre = genre;
+        if (genre)    card.dataset.genre    = genre;
         if (audioUrl) card.dataset.audioUrl = audioUrl;
         if (coverUrl) card.dataset.coverUrl = coverUrl;
 
@@ -1084,7 +1174,7 @@
     });
 
     // Estado inicial del viewer:
-    // - Prioriza "Music that i love" si tiene canciones.
+    // - Prioriza la playlist de likes si tiene canciones.
     // - En su defecto, primera playlist pública con canciones.
     let initial = null;
     if (likesPL && Array.isArray(likesPL.songs) && likesPL.songs.length) {
@@ -1102,6 +1192,475 @@
     }
   }
 
+  // Pestaña de colaboradores del muro
+  function setupCollaboratorsTab() {
+    const panel = document.getElementById("tab-colaboradores");
+    if (!panel || panel.dataset.collabInit === "1") return;
+
+    const rootBox =
+      panel.querySelector("[data-collabs-root]") ||
+      document.getElementById("muro-collabs-root") ||
+      panel;
+
+    // Datos de seguidores del artista para el <select> de colaboradores
+    let followers = [];
+    const rawFollowers = rootBox.dataset.followers || "";
+    if (rawFollowers) {
+      try {
+        const parsed = JSON.parse(rawFollowers);
+        if (Array.isArray(parsed)) {
+          followers = parsed;
+        }
+      } catch {
+        // Si falla el parse, se mantiene la lista vacía
+      }
+    }
+
+    // Playlists públicas disponibles para colaboración
+    const publicPL = Array.isArray(window.__ARTIST_PUBLIC_PLAYLISTS__)
+      ? window.__ARTIST_PUBLIC_PLAYLISTS__
+      : [];
+
+    if (!publicPL.length) {
+      rootBox.innerHTML =
+        '<p class="muted" style="margin:0;">Este artista no tiene playlists disponibles para colaboración.</p>';
+      panel.dataset.collabInit = "1";
+      return;
+    }
+
+    function escapeHtml(str) {
+      return String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    // UI base
+    const wrapper = document.createElement("div");
+    wrapper.className = "muro-collabs";
+
+    const formRow = document.createElement("div");
+    formRow.style.display = "flex";
+    formRow.style.flexWrap = "wrap";
+    formRow.style.gap = "8px";
+    formRow.style.marginBottom = "12px";
+    formRow.style.alignItems = "flex-end";
+
+    // Select de playlist
+    const plBox = document.createElement("div");
+    plBox.style.flex = "1 1 180px";
+
+    const plLabel = document.createElement("label");
+    plLabel.textContent = "Playlist";
+    plLabel.className = "muted";
+    plLabel.style.display = "block";
+    plLabel.style.fontSize = "12px";
+    plLabel.style.marginBottom = "4px";
+
+    const plSelect = document.createElement("select");
+    plSelect.id = "muro-collabs-playlist-select";
+    plSelect.style.width = "100%";
+
+    publicPL.forEach((pl) => {
+      if (!pl || typeof pl.id === "undefined") return;
+      const opt = document.createElement("option");
+      opt.value = String(pl.id);
+      opt.textContent = pl.name || `Playlist ${pl.id}`;
+      plSelect.appendChild(opt);
+    });
+
+    plBox.appendChild(plLabel);
+    plBox.appendChild(plSelect);
+
+    // Select de seguidor colaborador
+    const userBox = document.createElement("div");
+    userBox.style.flex = "1 1 180px";
+
+    const userLabel = document.createElement("label");
+    userLabel.textContent = "Seguidor";
+    userLabel.className = "muted";
+    userLabel.style.display = "block";
+    userLabel.style.fontSize = "12px";
+    userLabel.style.marginBottom = "4px";
+
+    const userSelect = document.createElement("select");
+    userSelect.id = "muro-collabs-username";
+    userSelect.style.width = "100%";
+
+    const optEmpty = document.createElement("option");
+    optEmpty.value = "";
+    optEmpty.textContent = followers.length
+      ? "Selecciona un seguidor…"
+      : "No tienes seguidores disponibles";
+    userSelect.appendChild(optEmpty);
+
+    followers.forEach((f) => {
+      if (!f || !f.username) return;
+      const opt = document.createElement("option");
+      opt.value = f.username;
+      opt.textContent = f.username;
+      userSelect.appendChild(opt);
+    });
+
+    userBox.appendChild(userLabel);
+    userBox.appendChild(userSelect);
+
+    // Botón Añadir colaborador
+    const btnBox = document.createElement("div");
+    btnBox.style.flex = "0 0 auto";
+
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "btn btn-small";
+    addBtn.textContent = "Añadir colaborador";
+
+    btnBox.appendChild(addBtn);
+
+    // Playlist siempre visible; resto solo para el dueño
+    formRow.appendChild(plBox);
+
+    if (IS_OWNER) {
+      formRow.appendChild(userBox);
+      formRow.appendChild(btnBox);
+    }
+
+    // Mensaje de estado
+    const msg = document.createElement("p");
+    msg.id = "muro-collabs-msg";
+    msg.className = "muted";
+    msg.style.margin = "4px 0 10px 0";
+
+    // Tabla de colaboradores
+    const table = document.createElement("table");
+    table.className = "table collabs-table";
+    table.style.width = "100%";
+    table.style.borderCollapse = "collapse";
+    table.style.marginTop = "4px";
+
+    const thead = document.createElement("thead");
+    thead.innerHTML =
+      "<tr><th>Usuario</th><th>Rol</th><th style='text-align:right;'></th></tr>";
+
+    const tbody = document.createElement("tbody");
+    tbody.id = "muro-collabs-tbody";
+
+    table.appendChild(thead);
+    table.appendChild(tbody);
+
+    wrapper.appendChild(formRow);
+    wrapper.appendChild(msg);
+    wrapper.appendChild(table);
+
+    rootBox.innerHTML = "";
+    rootBox.appendChild(wrapper);
+
+    panel.dataset.collabInit = "1";
+
+    // Helpers de API de colaboradores
+    async function loadCollaboratorsFor(playlistId) {
+      if (!playlistId) return;
+      msg.textContent = "Cargando colaboradores…";
+      msg.classList.remove("error");
+      tbody.innerHTML = "";
+
+      try {
+        const res = await fetch(
+          `/playlist/${encodeURIComponent(playlistId)}/collaborators/`,
+          {
+            headers: H,
+            credentials: "same-origin",
+          }
+        );
+
+        if (!res.ok) {
+          if (res.status === 403) {
+            msg.textContent =
+              "No tienes permisos para ver los colaboradores de esta playlist.";
+          } else {
+            msg.textContent = "No se pudieron cargar los colaboradores.";
+          }
+          msg.classList.add("error");
+          return;
+        }
+
+        const data = await res.json().catch(() => null);
+        const list = data && Array.isArray(data.collaborators)
+          ? data.collaborators
+          : [];
+
+        if (!list.length) {
+          msg.textContent = "Esta playlist todavía no tiene colaboradores.";
+          msg.classList.remove("error");
+          tbody.innerHTML = "";
+          return;
+        }
+
+        msg.textContent = "";
+        msg.classList.remove("error");
+        tbody.innerHTML = "";
+
+        list.forEach((c) => {
+          const tr = document.createElement("tr");
+
+          const username    = c.username || c.user || "";
+          const role        = c.role || "editor";
+          const userId      = c.user_id || c.id;
+          const displayName = c.display_name || username;
+          const avatarUrl   = c.avatar || c.avatar_url || "";
+
+          tr.dataset.userId   = String(userId);
+          tr.dataset.username = username;
+
+          const initials = (displayName || username || "?")
+            .trim()
+            .charAt(0)
+            .toUpperCase();
+
+          tr.innerHTML = `
+            <td class="collab-main">
+              <div class="collab-avatar">
+                ${
+                  avatarUrl
+                    ? `<img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(displayName)}">`
+                    : `<span>${escapeHtml(initials)}</span>`
+                }
+              </div>
+              <div class="collab-text">
+                <div class="collab-name">${escapeHtml(displayName)}</div>
+                <div class="collab-username">@${escapeHtml(username)}</div>
+              </div>
+            </td>
+            <td class="collab-role">
+              ${escapeHtml(role === "owner" ? "Propietario" : role)}
+            </td>
+            <td class="collab-actions">
+              <button type="button"
+                      class="btn btn-small btnDanger"
+                      data-action="remove-collab">
+                Quitar
+              </button>
+            </td>
+          `;
+
+          tbody.appendChild(tr);
+        });
+
+      } catch (e) {
+        console.error("MURO: error cargando colaboradores:", e);
+        msg.textContent = "No se pudieron cargar los colaboradores.";
+        msg.classList.add("error");
+      }
+    }
+
+    async function addCollaboratorFor(playlistId, username) {
+      const csrf = getCSRF();
+      const payload = { username, role: "editor" };
+
+      try {
+        const res = await fetch(
+          `/playlist/${encodeURIComponent(playlistId)}/collaborators/add/`,
+          {
+            method: "POST",
+            headers: {
+              ...H,
+              "Content-Type": "application/json",
+              "X-CSRFToken": csrf || "",
+            },
+            credentials: "same-origin",
+            body: JSON.stringify(payload),
+          }
+        );
+
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok || (data && data.error)) {
+          msg.textContent =
+            (data && data.error) ||
+            "No se pudo añadir el colaborador (permiso denegado o error).";
+          msg.classList.add("error");
+          return false;
+        }
+
+        msg.textContent = "Colaborador añadido correctamente.";
+        msg.classList.remove("error");
+        return true;
+      } catch (e) {
+        console.error("MURO: error añadiendo colaborador:", e);
+        msg.textContent = "No se pudo añadir el colaborador.";
+        msg.classList.add("error");
+        return false;
+      }
+    }
+
+    async function removeCollaboratorFor(playlistId, userId, username) {
+      const ok = await confirmWithModal(
+        `¿Quitar a “${username || "este usuario"}” de la playlist?`
+      );
+      if (!ok) return;
+
+      const csrf = getCSRF();
+      try {
+        const res = await fetch(
+          `/playlist/${encodeURIComponent(
+            playlistId
+          )}/collaborators/remove/${encodeURIComponent(userId)}/`,
+          {
+            method: "DELETE",
+            headers: {
+              ...H,
+              "X-CSRFToken": csrf || "",
+            },
+            credentials: "same-origin",
+          }
+        );
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok || (data && data.error)) {
+          msg.textContent =
+            (data && data.error) ||
+            "No se pudo quitar al colaborador (permiso denegado o error).";
+          msg.classList.add("error");
+          return;
+        }
+
+        msg.textContent = "Colaborador eliminado.";
+        msg.classList.remove("error");
+        loadCollaboratorsFor(playlistId);
+      } catch (e) {
+        console.error("MURO: error quitando colaborador:", e);
+        msg.textContent = "No se pudo quitar al colaborador.";
+        msg.classList.add("error");
+      }
+    }
+
+    plSelect.addEventListener("change", () => {
+      const pid = plSelect.value;
+      if (pid) loadCollaboratorsFor(pid);
+    });
+
+    if (IS_OWNER) {
+      addBtn.addEventListener("click", async () => {
+        const pid = plSelect.value;
+        const username = (userSelect.value || "").trim();
+        if (!pid || !username) {
+          msg.textContent =
+            "Selecciona una playlist y un seguidor de la lista.";
+          msg.classList.add("error");
+          return;
+        }
+
+        msg.textContent = "";
+        msg.classList.remove("error");
+
+        const ok = await addCollaboratorFor(pid, username);
+        if (ok) {
+          userSelect.value = "";
+          loadCollaboratorsFor(pid);
+        }
+      });
+
+      tbody.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-action='remove-collab']");
+        if (!btn) return;
+
+        const row = btn.closest("tr");
+        const pid = plSelect.value;
+        const userId = row?.dataset.userId;
+        const username = row?.dataset.username || "";
+
+        if (!pid || !userId) return;
+        removeCollaboratorFor(pid, userId, username);
+      });
+    }
+
+    // Carga inicial: primera playlist disponible
+    const first = publicPL.find((pl) => pl && typeof pl.id !== "undefined");
+    if (first) {
+      plSelect.value = String(first.id);
+      loadCollaboratorsFor(first.id);
+    }
+
+    // Hook opcional: preselecciona seguidor desde la lista de seguidores
+    window.__MDF_MURO_SET_COLLAB_USER = function (username) {
+      if (!username || !IS_OWNER) return;
+
+      const opt = Array.from(userSelect.options).find(
+        (o) => o.value === username
+      );
+      if (opt) {
+        userSelect.value = username;
+      }
+
+      try {
+        const tabBtn = document.querySelector(
+          '.tab-btn[role="tab"][data-tab="colaboradores"]'
+        );
+        if (tabBtn) tabBtn.click();
+      } catch {}
+      userSelect.focus?.();
+    };
+  }
+
+  // Pestañas del muro (Canciones / Playlists / Seguidores / Colaboradores)
+  function setupMuroTabs() {
+    const rootPage = document.getElementById("muro-content");
+    if (!rootPage) return;
+
+    const tablist = rootPage.querySelector('.tabs[role="tablist"]');
+    if (!tablist) return;
+
+    const panels = rootPage.querySelectorAll('.tab[role="region"]');
+
+    function activate(name) {
+      if (!name) name = "canciones";
+
+      tablist.querySelectorAll('.tab-btn[role="tab"]').forEach((btn) => {
+        const on = btn.dataset.tab === name;
+        btn.classList.toggle("active", on);
+        btn.setAttribute("aria-selected", on ? "true" : "false");
+        btn.tabIndex = on ? 0 : -1;
+      });
+
+      panels.forEach((panel) => {
+        const show = panel.id === "tab-" + name;
+        panel.classList.toggle("active", show);
+        panel.hidden = !show;
+      });
+
+      // Al entrar en Seguidores, carga la lista si es necesario
+      if (name === "seguidores") {
+        setupFollowersList();
+      }
+
+      // Al entrar en Colaboradores, inicializa la pestaña
+      if (name === "colaboradores") {
+        setupCollaboratorsTab();
+      }
+
+      try {
+        const u = new URL(window.location.href);
+        u.hash = name;
+        history.replaceState(null, "", u);
+      } catch {
+        // Ignora errores al actualizar la URL
+      }
+    }
+
+    tablist.addEventListener("click", (e) => {
+      const btn = e.target.closest('.tab-btn[role="tab"]');
+      if (!btn) return;
+      e.preventDefault();
+      const t = btn.dataset.tab || "canciones";
+      activate(t);
+    });
+
+    const initial =
+      (window.location.hash || "").replace("#", "") || "canciones";
+    activate(initial);
+  }
+
   // Inicialización principal del muro
   function initMuro() {
     window.__MDF_FORMS_HIDE_BAR__ = false;
@@ -1113,8 +1672,8 @@
     }
 
     setupFollowButton();
-    setupFollowersList();
     setupArtistPlaylistViewer();
+    setupMuroTabs();
   }
 
   if (document.readyState === "loading") {

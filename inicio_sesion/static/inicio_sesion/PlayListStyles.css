@@ -1,186 +1,684 @@
-/* Botones reutilizables (rosa) */
-.btnRoundPlaylist{
-    width:55px;
-    height: 20px;
-    background-color:#ff0066;
-    color:#fff;
-    border:none;
-    border-radius:4px;
-    font-size: 11px;
-    cursor:pointer;
-}
-.btnRoundPlaylist:hover{
-    background-color: #fa5b9a;
-}
+/* ==========================================================================
+   Melodify — Playlists: botones, tarjetas y formularios
+   ========================================================================== */
 
-
-.btnRoundFollow{
-    width:55px;
-    height: 20px;
-    background-color:transparent;
-    color:#fff;
-    border-radius:5px;
-    font-size: 10px;
-    cursor:pointer;
+/* Botones principales de playlist */
+.btnRoundPlaylist {
+  width: 55px;
+  height: 20px;
+  background-color: #ff0066;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
 }
-.btnRoundFollow:hover{
-    background-color: #60bad9;
+.btnRoundPlaylist:hover {
+  background-color: #fa5b9a;
 }
 
-
+.btnRoundFollow {
+  width: 55px;
+  height: 20px;
+  background-color: transparent;
+  color: #fff;
+  border-radius: 5px;
+  font-size: 10px;
+  cursor: pointer;
+}
+.btnRoundFollow:hover {
+  background-color: #60bad9;
+}
 
 .btnAddPlaylist {
-    width: 35px;
-    height: 35px;
-    border-radius: 50%;
-    background: #ff0066; /* verde Spotify-like */
-    color: white;
-    border: none;
-    font-size: 13px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-    transition: all 0.2s ease;
-    margin: 20px 0 30px 0;
-    /* Centrar si es el único elemento o ajustar según tu layout */
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  background: #ff0066;
+  color: #fff;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s ease;
+  margin: 20px 0 30px 0;
 }
 
 .btnAddPlaylist:hover {
-    background:  #fa5b9a;
-    transform: scale(1.05);
+  background: #fa5b9a;
+  transform: scale(1.05);
 }
 
-
-.songItem{
-    width: 400px;
-    display: grid;
-    grid-template-columns: 72px 1fr auto;
-    align-items: center;
-    gap: 14px;
-    padding: 12px 14px;
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    margin: 10px 0;
-    transition: background .2s, border-color .2s, transform .12s, box-shadow .2s;
-    cursor: pointer;
+/* Ítems de canción en listas */
+.songItem {
+  width: 400px;
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin: 10px 0;
+  transition: background 0.2s, border-color 0.2s, transform 0.12s, box-shadow 0.2s;
+  cursor: pointer;
 }
 .songItem:hover {
-    background: #232323;
-    border-color: #333;
-    box-shadow: 0 2px 14px rgba(0,0,0,.25);
+  background: #232323;
+  border-color: #333;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.25);
 }
 
 .songItem.selected {
-    background: linear-gradient(180deg, var(--glow-bg-1), var(--glow-bg-2));
-    border-color: var(--glow-border);
-    box-shadow:
-            0 0 0 1px rgba(122,60,255,.35) inset,
-            0 0 18px var(--glow-outer);
+  background: linear-gradient(180deg, var(--glow-bg-1), var(--glow-bg-2));
+  border-color: var(--glow-border);
+  box-shadow:
+    0 0 0 1px rgba(122, 60, 255, 0.35) inset,
+    0 0 18px var(--glow-outer);
 }
 
-
-
-
-
-/* style alerta que aparece al dar click en el boton + para agregar un playlist nuevo */
-
-
-/* Contenedor del formulario emergente */
+/* Popup básico crear playlist */
 .playlist-form {
-    position: absolute;
-    background-color: #282828;
-    border: 1px solid #444;
-    border-radius: 8px;
-    padding: 16px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    min-width: 220px;
-    font-size: 14px;
+  position: absolute;
+  background-color: #282828;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 220px;
+  font-size: 14px;
 }
 
-/* Campo de texto */
 .playlist-form input[type="text"] {
-    padding: 8px 12px;
-    border: 1px solid #555;
-    border-radius: 4px;
-    background-color: #1a1a1a;
-    color: white;
-    outline: none;
-    width: 100%;
-    box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background-color: #1a1a1a;
+  color: #fff;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-/* Contenedor de botones */
 .playlist-form .form-buttons {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-/* Botón "Crear" */
 .playlist-form .btn-create {
-    padding: 6px 12px;
-    background-color: #ff0066;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
+  padding: 6px 12px;
+  background-color: #ff0066;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
-/* Botón "Cancelar" */
 .playlist-form .btn-cancel {
-    padding: 6px 12px;
-    background-color: #555;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
+  padding: 6px 12px;
+  background-color: #555;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
-/* Hover opcional */
 .playlist-form .btn-create:hover {
-    background-color: #fa5b9a;
+  background-color: #fa5b9a;
 }
 .playlist-form .btn-cancel:hover {
-    background-color: #666;
+  background-color: #666;
 }
 
-
-/* efecto glow para el nombre de la playlist*/
-
-
-/* Nombre con efecto glow moderno y más grande */
+/* Título de playlist con efecto glow */
 .glow-namePL {
-    margin-bottom: 12px;
-    margin-top: 65px;
-    font-size: 30px;                    /* Más grande */
-    font-weight: 800;
-    color: #ffffff;
-    letter-spacing: 1.2px;
-
-    /* Efecto glow azul neón (brilla hermoso en fondos oscuros) */
-    text-shadow:
-            0 0 10px rgba(140, 0, 255, 0.8),
-            0 0 20px rgba(159, 2, 211, 0.8),
-            0 0 40px rgba(110, 0, 154, 0.8),
-            0 0 60px rgba(61, 1, 96, 0.8);
-
-    transition: all 0.4s ease;
-    user-select: none;                  /* Evita que se seleccione al hacer doble clic */
+  margin-bottom: 12px;
+  margin-top: 65px;
+  font-size: 30px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 1.2px;
+  text-shadow:
+    0 0 10px rgba(140, 0, 255, 0.8),
+    0 0 20px rgba(159, 2, 211, 0.8),
+    0 0 40px rgba(110, 0, 154, 0.8),
+    0 0 60px rgba(61, 1, 96, 0.8);
+  transition: all 0.4s ease;
+  user-select: none;
 }
 
-/* Efecto más intenso al pasar el mouse */
 .glow-namePL:hover {
-    text-shadow:
-            0 0 15px rgba(59, 130, 246, 1),
-            0 0 30px rgba(59, 130, 246, 0.9),
-            0 0 50px rgba(59, 130, 246, 0.7),
-            0 0 80px rgba(59, 130, 246, 0.5);
-    transform: translateY(-3px);
+  text-shadow:
+    0 0 15px rgba(59, 130, 246, 1),
+    0 0 30px rgba(59, 130, 246, 0.9),
+    0 0 50px rgba(59, 130, 246, 0.7),
+    0 0 80px rgba(59, 130, 246, 0.5);
+  transform: translateY(-3px);
+}
+
+/* Tarjeta de playlist */
+.mdf-pl-card {
+  position: relative;
+  padding: 1.1rem;
+  border-radius: 24px;
+  background: radial-gradient(circle at top left, #3e1455 0, #181322 40%, #120f1c 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.02),
+    0 20px 40px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Portada de playlist */
+.mdf-pl-cover {
+  position: relative;
+  border: none;
+  padding: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  background: transparent;
+  line-height: 0;
+}
+
+.mdf-pl-cover img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Indicadores de privacidad */
+.mdf-pl-lock-btn,
+.mdf-pl-lock-indicator {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 999px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(12, 10, 20, 0.82);
+  color: #ffd68a;
+  font-size: 0.95rem;
+}
+
+.mdf-pl-lock-indicator {
+  pointer-events: none;
+}
+
+/* Botón de like */
+.mdf-pl-like-btn {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 999px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(12, 10, 20, 0.8);
+  color: #ffffffb3;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    transform 0.12s ease,
+    box-shadow 0.18s ease,
+    color 0.18s ease;
+}
+
+.mdf-pl-like-btn--active {
+  color: #ff5fa8;
+  box-shadow: 0 0 14px rgba(255, 95, 168, 0.65);
+}
+
+.mdf-pl-like-btn:hover {
+  background: rgba(12, 10, 20, 0.95);
+  transform: translateY(-1px);
+}
+
+/* Contenido de la tarjeta */
+.mdf-pl-body {
+  padding-top: 0.4rem;
+  padding-bottom: 0.1rem;
+}
+
+.mdf-pl-name {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fdf2ff;
+}
+
+.mdf-pl-meta {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.mdf-pl-meta + .mdf-pl-meta {
+  margin-top: 0.1rem;
+}
+
+/* Acciones del dueño */
+.mdf-pl-owner-actions {
+  margin-top: 0.65rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.mdf-pl-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+  color: #f8eaff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition:
+    background 0.16s ease,
+    transform 0.12s ease,
+    box-shadow 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.mdf-pl-icon-btn--danger {
+  color: #ff6b9d;
+  border-color: rgba(255, 107, 157, 0.4);
+}
+
+.mdf-pl-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.7);
+}
+
+.mdf-pl-icon-btn--danger:hover {
+  background: rgba(255, 30, 90, 0.18);
+  box-shadow: 0 0 16px rgba(255, 30, 90, 0.55);
+}
+
+/* Botones compactos en tarjetas */
+.playlist-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.playlist-icon-btn i {
+  pointer-events: none;
+}
+
+.playlist-icon-btn-danger {
+  background-color: #ff006a;
+  border-color: #ff006a;
+}
+
+.playlist-icon-btn-danger:hover {
+  background-color: #ff2b85;
+  border-color: #ff2b85;
+}
+
+/* Botones de acción (editar / borrar) */
+.btnRoundPlaylist--edit,
+.btnRoundPlaylist--delete {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  font-size: 14px;
+}
+
+.btnRoundPlaylist--edit i,
+.btnRoundPlaylist--delete i {
+  pointer-events: none;
+}
+
+.btnRoundPlaylist--edit {
+  background: linear-gradient(135deg, #ffe066, #ffc107);
+  color: #111;
+  box-shadow: 0 0 10px rgba(255, 224, 102, 0.55);
+}
+
+.btnRoundPlaylist--delete {
+  background: linear-gradient(135deg, #ff6b6b, #f03e3e);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(255, 107, 107, 0.55);
+}
+
+.btnRoundPlaylist--edit:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 14px rgba(255, 224, 102, 0.9);
+}
+
+.btnRoundPlaylist--delete:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 14px rgba(255, 107, 107, 0.9);
+}
+
+/* Popup crear / renombrar playlist (versión extendida) */
+.playlist-form {
+  min-width: 260px;
+  max-width: 320px;
+  background: #181818;
+  border-radius: 16px;
+  padding: 14px 16px 10px;
+  border: 1px solid #303030;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.75);
+  color: #f5f5f5;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.playlist-form-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.playlist-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.playlist-form-label {
+  font-size: 0.78rem;
+  color: #ddd;
+}
+
+.playlist-form-input,
+.playlist-form-textarea {
+  background: #101010;
+  border-radius: 10px;
+  border: 1px solid #333;
+  padding: 7px 9px;
+  font-size: 0.85rem;
+  color: #f5f5f5;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.playlist-form-textarea {
+  resize: vertical;
+  min-height: 44px;
+}
+
+.playlist-form-input:focus,
+.playlist-form-textarea:focus {
+  border-color: #ff4fa3;
+  box-shadow: 0 0 0 1px rgba(255, 79, 163, 0.5);
+}
+
+/* Portada en miniatura */
+.playlist-form-cover {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 10px;
+}
+
+.playlist-form-cover-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px #2b2b2b;
+}
+
+.playlist-form-cover-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  background: #252525;
+  color: #f5f5f5;
+}
+
+.playlist-form-cover-btn:hover {
+  background: #323232;
+}
+
+/* Botones inferiores */
+.form-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.btn-cancel,
+.btn-create {
+  border-radius: 999px;
+  border: none;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.btn-cancel {
+  background: #404040;
+  color: #f5f5f5;
+}
+
+.btn-cancel:hover {
+  background: #4a4a4a;
+}
+
+.btn-create {
+  background: #ff0a7a;
+  color: #fff;
+  box-shadow: 0 0 18px rgba(255, 10, 122, 0.45);
+}
+
+.btn-create:hover {
+  background: #ff2c8b;
+}
+
+/* ==========================================================================
+   Melodify — Popup inline de nueva playlist / renombrar
+   ========================================================================== */
+
+.playlist-form {
+  min-width: 260px;
+  max-width: 320px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #1d1d1f;
+  border: 1px solid #2d2d30;
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(255, 255, 255, 0.02);
+  color: #f5f5f5;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  animation: pl-popup-in 0.14s ease-out;
+}
+
+.playlist-form__header {
+  margin-bottom: 8px;
+}
+
+.playlist-form__title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.playlist-form__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.playlist-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.playlist-form__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #b3b3b3;
+}
+
+.playlist-form__label--muted {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  color: #888;
+}
+
+.playlist-form__input,
+.playlist-form__textarea {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #3a3a3d;
+  background: #121214;
+  color: #f5f5f5;
+  font-size: 13px;
+  padding: 7px 9px;
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+.playlist-form__input::placeholder,
+.playlist-form__textarea::placeholder {
+  color: #777;
+}
+
+.playlist-form__input:focus,
+.playlist-form__textarea:focus {
+  border-color: #ff4fa3;
+  box-shadow: 0 0 0 1px rgba(255, 79, 163, 0.45);
+  background: #111015;
+}
+
+.playlist-form__input--error {
+  border-color: #ff1744 !important;
+  box-shadow: 0 0 0 1px rgba(255, 23, 68, 0.5);
+}
+
+/* Input de archivo */
+.playlist-form__file-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.playlist-form__file {
+  opacity: 0;
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+}
+
+.playlist-form__file-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid #ff4fa3;
+  background: radial-gradient(circle at top left, #ff4fa3, #7a3cff);
+  color: #fff;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.playlist-form__file-label:hover {
+  filter: brightness(1.05);
+}
+
+.playlist-form__hint {
+  margin: 4px 0 0;
+  font-size: 10px;
+  color: #888;
+}
+
+/* Footer del popup */
+.playlist-form__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.playlist-form .btn-cancel,
+.playlist-form .btn-create {
+  min-width: 90px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.playlist-form .btn-cancel {
+  background: #3a3a3d;
+  color: #f5f5f5;
+}
+
+.playlist-form .btn-cancel:hover {
+  background: #4a4a4e;
+}
+
+.playlist-form .btn-create {
+  background: linear-gradient(135deg, #ff4fa3, #ff2b72);
+  color: #fff;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 8px 18px rgba(255, 79, 163, 0.5);
+}
+
+.playlist-form .btn-create:hover {
+  filter: brightness(1.08);
+}
+
+/* Animación de entrada */
+@keyframes pl-popup-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }

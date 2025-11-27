@@ -13,8 +13,10 @@
 }
 
 /* Estructura base */
-.page-muro html, .page-muro body,
-html.page-muro, body.page-muro {
+.page-muro html,
+.page-muro body,
+html.page-muro,
+body.page-muro {
   background: var(--bg);
   color: #eee;
 }
@@ -100,7 +102,7 @@ header.muro {
   border-radius: 8px;
   background: #2a2a2a;
   object-fit: cover;
-  box-shadow: 0 0 0 1px rgba(0,0,0,.2);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .2);
 }
 
 /* Barra de herramientas */
@@ -168,7 +170,7 @@ header.muro {
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,.5);
+  background: rgba(0, 0, 0, .5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -182,12 +184,12 @@ header.muro {
   pointer-events: auto;
 }
 .modal .dialog {
-  background:#1f1f1f;
-  border:1px solid #2b2b2b;
-  border-radius:12px;
-  padding:16px;
-  max-width:420px;
-  width:92%;
+  background: #1f1f1f;
+  border: 1px solid #2b2b2b;
+  border-radius: 12px;
+  padding: 16px;
+  max-width: 420px;
+  width: 92%;
 }
 .modal .title {
   margin: 0 0 8px;
@@ -229,7 +231,7 @@ select {
 }
 
 /* Progreso de subida (carga individual de canciones) */
-.upload-bar{
+.upload-bar {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
@@ -239,47 +241,47 @@ select {
   border: 1px solid #2b2b2b;
   border-radius: 12px;
   padding: 10px 12px;
-  box-shadow: 0 10px 28px rgba(0,0,0,.45);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .45);
   z-index: 1100;
   display: none;
 }
 .upload-bar.is-visible {
-  display:block;
+  display: block;
 }
 .upload-bar .row {
-  display:flex;
-  align-items:center;
-  gap:10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-.upload-bar .progress{
-  flex:1;
+.upload-bar .progress {
+  flex: 1;
   height: 8px;
-  background:#2b2b2b;
+  background: #2b2b2b;
   border-radius: 999px;
-  overflow:hidden;
+  overflow: hidden;
 }
-.upload-bar .progress > i{
-  display:block;
-  height:100%;
-  width:0%;
+.upload-bar .progress > i {
+  display: block;
+  height: 100%;
+  width: 0%;
   background: linear-gradient(90deg, #7a3cff, #8b5dff);
   transition: width .08s linear;
 }
-.upload-bar .label{
-  font-size:12px;
-  color:#bbb;
-  min-width:64px;
-  text-align:right;
+.upload-bar .label {
+  font-size: 12px;
+  color: #bbb;
+  min-width: 64px;
+  text-align: right;
 }
 
 /* Estado visual de canción en reproducción en el muro */
 .page-muro .song.is-playing {
   border-color: var(--accent, #9c6bff);
   box-shadow:
-    0 0 0 1px rgba(156,107,255,0.45),
-    0 0 24px rgba(156,107,255,0.40);
+    0 0 0 1px rgba(156, 107, 255, 0.45),
+    0 0 24px rgba(156, 107, 255, 0.40);
   background:
-    radial-gradient(circle at 0 0, rgba(156,107,255,0.22), transparent 55%),
+    radial-gradient(circle at 0 0, rgba(156, 107, 255, 0.22), transparent 55%),
     #141414;
 }
 
@@ -292,7 +294,6 @@ select {
 .page-muro .song-title .song-add-btn {
   margin-left: 8px;
 }
-
 
 /* Botones de like y añadir a playlist en el muro */
 .page-muro .song-like-btn,
@@ -323,6 +324,7 @@ select {
   box-shadow: none;
   border-color: var(--btnb);
 }
+
 #artist-playlists-section {
   margin-bottom: 20px;
 }
@@ -371,6 +373,7 @@ select {
     0 0 16px rgba(255, 105, 180, 0.4);
   transform: translateY(-1px);
 }
+
 /* Fila compacta para seguidores + botón */
 .page-muro .muro-stat-row {
   display: flex;
@@ -378,7 +381,7 @@ select {
   gap: 8px;
 }
 
-/* Botón "Ver lista" más sutil y elegante */
+/* Botón "Ver lista" */
 .page-muro .muro-followers-btn {
   padding: 2px 10px;
   font-size: 11px;
@@ -392,4 +395,503 @@ select {
 .page-muro .muro-followers-btn:hover {
   background: rgba(255, 255, 255, 0.14);
   border-color: rgba(255, 255, 255, 0.28);
+}
+
+.page-muro .followers-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.page-muro .followers-list li {
+  padding: 4px 0;
+}
+.page-muro .followers-list li .muted {
+  margin-left: 4px;
+  font-size: 13px;
+  opacity: .8;
+}
+
+/* Modal de confirmación (contexto page-muro) */
+.page-muro .modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease-out;
+  z-index: 9998;
+}
+
+.page-muro .modal.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.page-muro .modal .dialog {
+  background: #181818;
+  border-radius: 12px;
+  padding: 16px 18px;
+  max-width: 360px;
+  width: calc(100% - 32px);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.75);
+  outline: none;
+}
+
+.page-muro .modal .title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.page-muro .modal .actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Botones de subida */
+.page-muro .upload-actions {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 12px;
+  flex-wrap: wrap;
+}
+
+.page-muro .btn-upload-main,
+.page-muro .btn-upload-bulk {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: linear-gradient(135deg, #ff4fa3, #ffb347);
+  color: #050505;
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.65),
+    0 0 16px rgba(255, 79, 163, 0.8);
+  transition:
+    transform .14s ease,
+    box-shadow .14s ease,
+    filter .14s ease;
+}
+
+.page-muro .btn-upload-bulk {
+  background: radial-gradient(circle at 0 0, #ffe45e, #ff4fa3 55%, #7a3cff 100%);
+}
+
+.page-muro .btn-upload-main .icon,
+.page-muro .btn-upload-bulk .icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.page-muro .btn-upload-main:hover,
+.page-muro .btn-upload-bulk:hover {
+  transform: translateY(-1px) scale(1.03);
+  filter: brightness(1.05);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.7),
+    0 0 20px rgba(255, 79, 163, 1);
+}
+
+.page-muro .btn-upload-main:active,
+.page-muro .btn-upload-bulk:active {
+  transform: translateY(0) scale(0.97);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.8),
+    0 0 10px rgba(0, 0, 0, 0.85);
+}
+
+/* Campos de formulario en el muro */
+.page-muro .card label {
+  display: block;
+  font-size: 13px;
+  color: #ddd;
+  margin: 8px 0 4px;
+}
+
+.page-muro .card input[type="text"],
+.page-muro .card select,
+.page-muro .card textarea {
+  width: 100%;
+  max-width: 520px;
+  font: inherit;
+  color: #f5f5f5;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 9px 11px;
+  outline: none;
+  transition:
+    border-color .16s ease,
+    box-shadow .16s ease,
+    background-color .16s ease;
+}
+
+.page-muro .card select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #f5f5f5 50%),
+    linear-gradient(135deg, #f5f5f5 50%, transparent 50%);
+  background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.page-muro .card input[type="text"]:focus,
+.page-muro .card select:focus,
+.page-muro .card textarea:focus {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: var(--accent, #ff4fa3);
+  box-shadow:
+    0 0 0 1px rgba(255, 79, 163, 0.8),
+    0 0 16px rgba(255, 79, 163, 0.6);
+}
+
+/* Inputs de archivo */
+.page-muro .card input[type="file"] {
+  font: inherit;
+  color: #f5f5f5;
+  background: rgba(0, 0, 0, 0.65);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  padding: 4px 10px;
+  max-width: 520px;
+  cursor: pointer;
+  transition:
+    border-color .16s ease,
+    box-shadow .16s ease,
+    background-color .16s ease;
+}
+
+.page-muro .card input[type="file"]::file-selector-button {
+  font: inherit;
+  padding: 6px 14px;
+  margin-right: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  background: linear-gradient(135deg, #ff4fa3, #ffb347);
+  color: #050505;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.8),
+    0 0 14px rgba(255, 79, 163, 0.7);
+  transition:
+    transform .14s ease,
+    box-shadow .14s ease,
+    filter .14s ease;
+}
+
+/* WebKit antiguo */
+.page-muro .card input[type="file"]::-webkit-file-upload-button {
+  font: inherit;
+  padding: 6px 14px;
+  margin-right: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  background: linear-gradient(135deg, #ff4fa3, #ffb347);
+  color: #050505;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.8),
+    0 0 14px rgba(255, 79, 163, 0.7);
+  transition:
+    transform .14s ease,
+    box-shadow .14s ease,
+    filter .14s ease;
+}
+
+.page-muro .card input[type="file"]::file-selector-button:hover,
+.page-muro .card input[type="file"]::-webkit-file-upload-button:hover {
+  transform: translateY(-1px) scale(1.03);
+  filter: brightness(1.04);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.9),
+    0 0 18px rgba(255, 79, 163, 1);
+}
+
+.page-muro .card input[type="file"]::file-selector-button:active,
+.page-muro .card input[type="file"]::-webkit-file-upload-button:active {
+  transform: translateY(0) scale(0.97);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 1),
+    0 0 10px rgba(0, 0, 0, 0.9);
+}
+
+/* Botón Seguir / Siguiendo */
+.page-muro .follow-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f5f5f5;
+  cursor: pointer;
+  outline: none;
+  transition:
+    background-color .16s ease,
+    border-color .16s ease,
+    box-shadow .16s ease,
+    transform .12s ease,
+    color .16s ease;
+}
+
+.page-muro .follow-toggle-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+/* Estado no siguiendo */
+.page-muro .follow-toggle[data-following="0"] {
+  background: linear-gradient(135deg, #ff4fa3, #ffb347);
+  color: #050505;
+  border-color: rgba(0, 0, 0, 0.7);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.8),
+    0 0 14px rgba(255, 79, 163, 0.9);
+}
+
+.page-muro .follow-toggle[data-following="0"] .follow-toggle-icon {
+  background: rgba(0, 0, 0, 0.12);
+}
+.page-muro .follow-toggle[data-following="0"] .follow-toggle-icon::before {
+  content: "👤➕";
+}
+
+/* Estado siguiendo */
+.page-muro .follow-toggle[data-following="1"] {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #f5f5f5;
+  box-shadow: none;
+}
+
+.page-muro .follow-toggle[data-following="1"] .follow-toggle-icon {
+  background: rgba(0, 0, 0, 0.45);
+}
+.page-muro .follow-toggle[data-following="1"] .follow-toggle-icon::before {
+  content: "👤✓";
+}
+
+.page-muro .follow-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 16px rgba(0, 0, 0, 0.4);
+}
+.page-muro .follow-toggle:active {
+  transform: translateY(0) scale(0.96);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
+}
+
+/* Variante pill con icono +/✓ */
+.page-muro .follow-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(90deg, #ff4fa3, #ffb347);
+  color: #121212;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 0 18px rgba(255, 79, 163, 0.7);
+  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+}
+
+.page-muro .follow-toggle::before {
+  /* Icono cuando no se sigue */
+  content: "+";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.85);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.page-muro .follow-toggle.is-following::before {
+  /* Icono cuando se sigue */
+  content: "✓";
+}
+
+.page-muro .follow-toggle-label {
+  white-space: nowrap;
+}
+
+/* Seguidores: cards con avatar */
+.page-muro #tab-seguidores h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.page-muro #muro-followers-count {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.page-muro #muro-followers-list {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.page-muro .muro-follow-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-radius: 999px;
+  background: #171717;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.page-muro .muro-follow-avatar {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: radial-gradient(circle at 30% 0%, #ff4fa3, #3a2d57);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.page-muro .muro-follow-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.page-muro .muro-follow-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.page-muro .muro-follow-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.page-muro .muro-follow-username {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.page-muro .muro-follow-make-collab {
+  flex: 0 0 auto;
+  font-size: 11px;
+}
+
+main[data-is-owner="0"] .muro-follow-make-collab {
+  display: none !important;
+}
+
+/* Colaboradores: tabla con avatar */
+.page-muro .collabs-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+
+.page-muro .collabs-table thead {
+  display: none;
+}
+
+.page-muro .collabs-table tbody tr {
+  background: #171717;
+  border-radius: 999px;
+}
+
+.page-muro .collabs-table tbody tr td {
+  border: none;
+  padding: 8px 12px;
+  vertical-align: middle;
+}
+
+.page-muro .collabs-table .collab-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.page-muro .collabs-table .collab-avatar {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: radial-gradient(circle at 30% 0%, #ff4fa3, #3a2d57);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.page-muro .collabs-table .collab-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.page-muro .collabs-table .collab-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.page-muro .collabs-table .collab-username {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.page-muro .collabs-table .collab-role {
+  font-size: 12px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.page-muro .collabs-table .collab-actions {
+  text-align: right;
+  white-space: nowrap;
 }

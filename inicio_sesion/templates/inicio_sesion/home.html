@@ -6,12 +6,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="username" content="{{ session_user }}">
   <meta name="user-id" content="{{ request.user.id }}">
-    <meta name="api-like-song" content="/api/like/song/__ID__/" />
+  <meta name="api-like-song" content="/api/like/song/__ID__/" />
+  <meta name="csrf-token" content="{{ csrf_token }}">
 
   <title>Melodify</title>
 
   <!-- Fuentes -->
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+
+  <!-- Iconos -->
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+  >
 
   <!-- Estilos generales -->
   <link rel="stylesheet" href="{% static 'inicio_sesion/homeStyle.css' %}?v={% now 'U' %}">
@@ -21,21 +28,27 @@
   <link rel="stylesheet" href="{% static 'reproductor/reproductor.css' %}?v={% now 'U' %}">
   <link rel="stylesheet" href="{% static 'reproductor/barra_reproduccion.css' %}?v={% now 'U' %}">
 
-  <!-- Ruta del módulo principal del reproductor (lo importa homeScript.js) -->
+  <!-- UI de playlists -->
+  <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
+
+  <!-- Módulo principal del reproductor -->
   <script>
     window.REPRODUCTOR_SRC = "{% static 'reproductor/reproductor.js' %}?v={% now 'U' %}";
   </script>
-  <!-- Acciones del reproductor (likes + playlists: borrar, visibilidad, etc.) -->
-  <script type="module" src="{% static 'reproductor/reproductor-actions.js' %}?v={% now 'U' %}"></script>
 
-  <!-- UI de playlists (modales, etc.) -->
+  <!-- Acciones del reproductor (likes, playlists) -->
+  <script
+    type="module"
+    src="{% static 'reproductor/reproductor-actions.js' %}?v={% now 'U' %}"
+  ></script>
+
+  <!-- UI de playlists -->
   <script src="{% static 'inicio_sesion/playListScript.js' %}"></script>
   <script src="{% static 'reproductor/reproductor-playlists.js' %}?v={% now 'U' %}"></script>
-  <link rel="stylesheet" href="{% static 'inicio_sesion/PlayListStyles.css' %}">
 </head>
 
 <body class="page-home">
-  <!-- Header superior (buscador y usuario) -->
+  <!-- Header superior -->
   <div id="header">
     <!-- Buscador global -->
     <div id="search" class="search">
@@ -56,7 +69,7 @@
           required
         />
       </form>
-      <!-- Panel flotante de resultados de búsqueda -->
+      <!-- Panel de resultados de búsqueda -->
       <div id="search-panel" class="search-panel" hidden></div>
     </div>
 
@@ -76,19 +89,23 @@
   <!-- Menú lateral -->
   <div id="menuLateral">
     <div class="logo" id="toggle-menu">
-      <img src="{% static 'inicio_sesion/logo.png' %}" alt="Melodify Logo" class="logo-image">
+      <img
+        src="{% static 'inicio_sesion/logo.png' %}"
+        alt="Melodify Logo"
+        class="logo-image"
+      >
       <span class="logo-text">Melodify</span>
     </div>
 
-    <!-- Home (ruta principal) -->
+    <!-- Vista Home -->
     <a class="menu-item" data-view="home" href="{% url 'home' %}">Home</a>
 
-    <!-- Vistas internas de la SPA -->
+    <!-- Vistas internas SPA -->
     <div class="menu-item" data-view="playlist">PlayList</div>
     <div class="menu-item" data-view="reproductor">Reproductor</div>
     <div class="menu-item" data-view="perfil">Perfil</div>
 
-    <!-- Vistas servidas desde el backend -->
+    <!-- Vistas desde backend -->
     {% if session_role|lower == "artista" %}
       <div class="menu-item" data-view="mi-muro">Muro del artista</div>
     {% endif %}
@@ -116,10 +133,10 @@
     data-url-all-songs-json="{% url 'all_songs_json' %}"
     data-url-muro-publico-template="{% url 'muro_publico' 'ARTISTA_PLACEHOLDER' %}"
   >
-    <!-- Botón hamburguesa (responsive) -->
+    <!-- Botón hamburguesa -->
     <button id="menu-toggle-btn">☰</button>
 
-    <!-- Botón back SPA -->
+    <!-- Botón volver -->
     <a
       id="back-btn"
       class="back"
@@ -140,61 +157,46 @@
 
   <!-- Scripts principales -->
 
-  <!-- Lógica de playlists generadas por el sistema (Top10, Discover, Historial) -->
-  <script defer src="{% static 'reproductor/reproductor-discover.js' %}?v={% now 'U' %}"></script>
+  <!-- Playlists generadas por el sistema (Top10, Discover, Historial) -->
+  <script
+    defer
+    src="{% static 'reproductor/reproductor-discover.js' %}?v={% now 'U' %}"
+  ></script>
 
-  <!-- Barra flotante del reproductor -->
-  <script defer src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"></script>
+  <!-- Barra de reproducción flotante -->
+  <script
+    defer
+    src="{% static 'reproductor/barra_reproduccion.js' %}?v={% now 'U' %}"
+  ></script>
 
   <!-- SPA principal -->
-  <script type="module" src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"></script>
+  <script
+    type="module"
+    src="{% static 'inicio_sesion/homeScript.js' %}?v={% now 'U' %}"
+  ></script>
 
-  <!-- Logout y control de navegación/caché -->
+  <!-- Control de navegación y caché del navegador -->
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const logoutLink = document.getElementById('menu-logout');
-      const logoutUrl  = "{% url 'logout' %}";
-
-      if (logoutLink) {
-        logoutLink.addEventListener('click', function(e) {
-          e.preventDefault();
-
-          if (confirm('¿Seguro que deseas cerrar sesión?')) {
-            const form  = document.createElement('form');
-            form.method = 'POST';
-            form.action = logoutUrl;
-
-            const csrfInput = document.createElement('input');
-            csrfInput.type  = 'hidden';
-            csrfInput.name  = 'csrfmiddlewaretoken';
-            csrfInput.value = '{{ csrf_token }}';
-            form.appendChild(csrfInput);
-
-            document.body.appendChild(form);
-            form.submit();
-          }
-
-          const userMenu = document.getElementById('user-menu');
-          if (userMenu) userMenu.classList.remove('show');
-        });
-      }
-
-      if (performance.navigation && performance.navigation.type === 2) {
+    document.addEventListener("DOMContentLoaded", function () {
+      if (
+        window.performance &&
+        performance.navigation &&
+        performance.navigation.type === 2
+      ) {
         window.location.href = "{% url 'home' %}";
       }
-      window.onpageshow = function(ev) {
+      window.onpageshow = function (ev) {
         if (ev.persisted) {
           window.location.reload();
         }
       };
-
       if (window.history.replaceState) {
         window.history.replaceState(null, null, window.location.href);
       }
     });
   </script>
 
-  <!-- Script de búsqueda y autosuggest -->
+  <!-- Búsqueda y autosuggest -->
   <script src="{% static 'inicio_sesion/searchHandler.js' %}?v={% now 'U' %}"></script>
 </body>
 </html>

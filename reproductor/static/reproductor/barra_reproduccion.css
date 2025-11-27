@@ -2,7 +2,7 @@
    Melodify — Barra de reproducción global y vista de reproductor
    ========================================================================== */
 
-/* Tema y parámetros del efecto de glow */
+/* Paleta de colores y parámetros del efecto de glow */
 :root {
   --bg: #121212;
   --card: #1b1b1b;
@@ -16,8 +16,8 @@
   --glow-border: #6f58ff;
   --glow-outer: rgba(122, 60, 255, 0.25);
 
-  /* Ganancia visual general del glow */
-  --viz-k: 3.6;
+  /* Intensidad global del glow */
+  --viz-k: 4.5;
 }
 
 /* --------------------------------------------------------------------------
@@ -27,7 +27,7 @@
   position: fixed;
   bottom: 16px;
 
-  /* Posicionamiento base respecto a la sidebar */
+  /* Offset relativo a la sidebar */
   --sidebar-open: 248px;
   --sidebar-collapsed: 72px;
   left: calc(var(--sidebar-open) + 16px);
@@ -54,7 +54,7 @@
     0 10px 28px rgba(0, 0, 0, 0.45),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset;
 
-  /* Variables que el JS actualiza en tiempo real */
+  /* Variables actualizadas desde JS en tiempo real */
   --viz-int: 0;
   --viz-hue: 270;
 
@@ -70,7 +70,7 @@
   left: calc(var(--sidebar-collapsed) + 16px);
 }
 
-/* Ajuste de posición en pantallas medias/pequeñas (ancho completo) */
+/* Ajuste de posición en pantallas medias/pequeñas */
 @media (max-width: 960px) {
   ._mdf-player-bar,
   ._mdf-player-bar.menuLateral-collapsed {
@@ -600,7 +600,7 @@ canvas._mdf-spikes {
    Modo móvil (barra de reproducción compacta)
    -------------------------------------------------------------------------- */
 @media (max-width: 640px) {
-  /* Recorte más agresivo de título y artista */
+  /* Recorte de título y artista en móvil */
   ._mdf-player-title {
     max-width: 7ch;
   }
@@ -609,9 +609,7 @@ canvas._mdf-spikes {
     max-width: 10ch;
   }
 
-  /* Layout en dos filas:
-     - Fila 1: portada + metadatos + controles
-     - Fila 2: tiempos, seek y volumen a ancho completo */
+  /* Layout en dos filas en móvil */
   ._mdf-player-bar {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto auto;
@@ -629,7 +627,7 @@ canvas._mdf-spikes {
     gap: 6px;
   }
 
-  /* Botón de velocidad visible también en móvil */
+  /* Botón de velocidad visible en móvil */
   ._mdf-speed {
     display: inline-flex;
     padding: 0 8px;
@@ -662,14 +660,14 @@ canvas._mdf-spikes {
 /* ----------------------------------------
    Alineación con sidebar (desktop)
    ---------------------------------------- */
-._mdf-player-bar{
+._mdf-player-bar {
   --sidebar-open: 248px;
   --sidebar-collapsed: 72px;
 }
 
 /* >= 961px: barra dentro del área de contenido */
-@media (min-width: 961px){
-  ._mdf-player-bar{
+@media (min-width: 961px) {
+  ._mdf-player-bar {
     left: calc(var(--sidebar-open, 248px) + 16px);
     right: 16px;
     transform: none;
@@ -677,15 +675,15 @@ canvas._mdf-spikes {
     max-width: 1180px;
     margin: 0;
   }
-  ._mdf-player-bar.menuLateral-collapsed{
+  ._mdf-player-bar.menuLateral-collapsed {
     left: calc(var(--sidebar-collapsed, 72px) + 16px);
   }
 }
 
 /* <= 960px: barra casi a todo el ancho del viewport */
-@media (max-width: 960px){
+@media (max-width: 960px) {
   ._mdf-player-bar,
-  ._mdf-player-bar.menuLateral-collapsed{
+  ._mdf-player-bar.menuLateral-collapsed {
     left: 16px;
     right: 16px;
     transform: none;
@@ -697,10 +695,9 @@ canvas._mdf-spikes {
 /* ----------------------------------------
    Layout compacto para móvil (<640px)
    ---------------------------------------- */
-@media (max-width: 640px){
-
-  /* Misma anchura, pero 2 filas */
-  ._mdf-player-bar{
+@media (max-width: 640px) {
+  /* Barra en dos filas */
+  ._mdf-player-bar {
     height: auto;
     padding: 8px 10px;
     gap: 6px;
@@ -709,34 +706,31 @@ canvas._mdf-spikes {
     grid-template-rows: auto auto;
   }
 
-  ._mdf-now{
+  ._mdf-now {
     min-width: 0;
   }
 
-  /* Recortes agresivos en móvil */
-  ._mdf-player-title{
-    max-width: 7ch;   /* ajusta 6–8ch si quieres */
+  ._mdf-player-title {
+    max-width: 7ch;
   }
-  ._mdf-player-artist{
+  ._mdf-player-artist {
     max-width: 10ch;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  /* Controles centrados en la primera fila */
-  ._mdf-ctrls{
+  ._mdf-ctrls {
     justify-content: center;
     gap: 6px;
   }
 
-  ._mdf-speed{
+  ._mdf-speed {
     display: inline-flex;
     padding: 0 8px;
   }
 
-  /* Tiempos + seek + volumen en la segunda fila */
-  ._mdf-right{
+  ._mdf-right {
     grid-column: 1 / -1;
     grid-row: 2;
     min-width: 0;
@@ -745,17 +739,254 @@ canvas._mdf-spikes {
     gap: 6px;
   }
 
-  ._mdf-time{
+  ._mdf-time {
     min-width: auto;
     font-size: 11px;
   }
 
-  ._mdf-player-seek{
+  ._mdf-player-seek {
     flex: 1 1 auto;
     min-width: 0;
   }
 
-  ._mdf-vol{
+  ._mdf-vol {
     width: 70px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Botón flotante: mostrar/ocultar barra (ojo)
+   -------------------------------------------------------------------------- */
+
+/* Botón contenedor */
+#mdf-bar-toggle.mdf-bar-toggle {
+  position: fixed;
+  right: 1.6rem;
+  bottom: 5.2rem;
+  z-index: 1200; /* por encima de la barra (1000) */
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+
+  background: #111;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 8px 20px rgba(0, 0, 0, 0.65);
+  transition:
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.12s ease,
+    opacity 0.18s ease;
+}
+
+#mdf-bar-toggle.mdf-bar-toggle:hover {
+  background: #151515;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 10px 24px rgba(0, 0, 0, 0.7);
+}
+
+/* Oculto cuando no hay barra/audio */
+#mdf-bar-toggle.mdf-toggle-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px) scale(0.9);
+}
+
+/* Icono de ojo con animaciones de parpadeo */
+
+/* Globo ocular */
+#mdf-bar-toggle .mdf-eye-icon {
+  position: relative;
+  width: 26px;
+  height: 18px;
+  border-radius: 999px;
+  box-sizing: border-box;
+  overflow: hidden;
+
+  background:
+    radial-gradient(circle at 50% 45%,
+      #ffffff 0%,
+      #f0f0f0 60%,
+      #d8d8d8 100%);
+  border: 1.5px solid var(--accent, #f5f5f5);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  transform-origin: center;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+/* Iris + pupila */
+#mdf-bar-toggle .mdf-eye-ball {
+  position: relative;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 30%,
+      #ffffff 0%,
+      #ffffff 26%,
+      var(--accent-2, #9a88ff) 27%,
+      var(--accent-2, #9a88ff) 65%,
+      #000000 66%,
+      #000000 100%);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.55);
+
+  transition:
+    transform 0.18s ease,
+    opacity 0.18s ease,
+    filter 0.18s ease;
+}
+
+/* Brillo en la pupila */
+#mdf-bar-toggle .mdf-eye-ball::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.75);
+}
+
+/* Párpados superior e inferior */
+#mdf-bar-toggle .mdf-eye-icon::before,
+#mdf-bar-toggle .mdf-eye-icon::after {
+  content: "";
+  position: absolute;
+  left: -8%;
+  width: 116%;
+  height: 120%;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(122, 60, 255, 0.95) 0%,
+      rgba(70, 30, 140, 0.95) 50%,
+      rgba(30, 10, 70, 1) 100%
+    );
+  transform-origin: center;
+  pointer-events: none;
+}
+
+/* Ojo abierto: párpados fuera de la vista */
+#mdf-bar-toggle .mdf-eye-icon::before {
+  transform: translateY(-110%);
+}
+#mdf-bar-toggle .mdf-eye-icon::after {
+  transform: translateY(110%);
+}
+
+/* Parpadeo suave con la barra visible */
+#mdf-bar-toggle:not(.is-closed) .mdf-eye-icon::before {
+  animation: mdf-eyelid-top 6s ease-in-out infinite;
+}
+#mdf-bar-toggle:not(.is-closed) .mdf-eye-icon::after {
+  animation: mdf-eyelid-bottom 6s ease-in-out infinite;
+}
+
+/* Aumento de brillo en hover */
+#mdf-bar-toggle:hover .mdf-eye-ball {
+  filter: brightness(1.12);
+}
+
+/* Pupila animada cuando está reproduciendo */
+#mdf-bar-toggle.is-playing:not(.is-closed) .mdf-eye-ball {
+  animation: mdf-eye-look 3.4s ease-in-out infinite;
+}
+
+/* --------------------------------------------------------------------------
+   Estado cerrado (barra oculta)
+   -------------------------------------------------------------------------- */
+#mdf-bar-toggle.is-closed .mdf-eye-icon {
+  transform: scaleY(0.55);
+  background:
+    radial-gradient(circle at 50% 50%,
+      rgba(122, 60, 255, 0.16) 0%,
+      rgba(46, 20, 79, 1) 55%,
+      rgba(10, 3, 25, 1) 100%);
+  border-color: var(--accent, #b88bff);
+  box-shadow:
+    0 0 0 1px rgba(184, 139, 255, 0.5),
+    0 0 10px rgba(184, 139, 255, 0.65);
+}
+
+#mdf-bar-toggle.is-closed .mdf-eye-ball {
+  opacity: 0;
+  transform: translateY(2px) scale(0.35);
+  filter: blur(0.4px);
+  animation: none;
+}
+
+/* Línea del párpado en estado cerrado */
+#mdf-bar-toggle.is-closed .mdf-eye-icon::before {
+  animation: none;
+  top: 50%;
+  left: 8%;
+  width: 84%;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent, #b88bff);
+  transform: translateY(-50%);
+  box-shadow:
+    0 0 3px rgba(0, 0, 0, 0.9),
+    0 0 8px rgba(184, 139, 255, 1);
+}
+
+/* Párpado inferior oculto en cerrado */
+#mdf-bar-toggle.is-closed .mdf-eye-icon::after {
+  animation: none;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Animaciones del icono de ojo
+   -------------------------------------------------------------------------- */
+@keyframes mdf-eyelid-top {
+  0%, 88%, 100% {
+    transform: translateY(-110%);
+  }
+  92%, 96% {
+    transform: translateY(-10%);
+  }
+}
+
+@keyframes mdf-eyelid-bottom {
+  0%, 88%, 100% {
+    transform: translateY(110%);
+  }
+  92%, 96% {
+    transform: translateY(10%);
+  }
+}
+
+/* Movimiento de la pupila */
+@keyframes mdf-eye-look {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-1px, -0.5px);
+  }
+  50% {
+    transform: translate(-1.8px, 0.6px);
+  }
+  75% {
+    transform: translate(-0.8px, -0.4px);
   }
 }

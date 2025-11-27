@@ -15,11 +15,14 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.http import require_http_methods
+from django.db.models.deletion import ProtectedError
+from django.db.utils import OperationalError
+import logging
 
 from inicio_sesion.auth_helpers import _get_user_role, _is_admin, _require_session_user
 from inicio_sesion.models import ArtistProfile, LikeMedia, Song, Users
 
-# Importaciones opcionales (si existen los modelos)
+# Importaciones opcionales de modelos adicionales
 try:
     from inicio_sesion.models import Album
 except Exception:
@@ -28,6 +31,8 @@ try:
     from inicio_sesion.models import Playlist
 except Exception:
     Playlist = None
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -93,7 +98,7 @@ def _is_fetch(request) -> bool:
 
 
 def _redirect_login_clean(request):
-    """Redirige a login consumiendo mensajes previos de la sesión."""
+    """Redirige a login limpiando mensajes previos de la sesión."""
     for _ in _msgs.get_messages(request):
         pass
     return redirect("login")
@@ -147,7 +152,6 @@ def gestion_dashboard(request):
     if error:
         return error
 
-    # --- Filtros de catálogo (artist y q desde el formulario / querystring) ---
     artist_filter = (request.GET.get("artist") or "").strip()
     q = (request.GET.get("q") or "").strip()
 
@@ -171,7 +175,6 @@ def gestion_dashboard(request):
         "genre",
     ).order_by("-created_at")
 
-    # Marcamos likes para el usuario actual
     songs = _attach_is_liked(request, songs_qs)
 
     admins = Users.objects.filter(type__iexact="administrador").order_by("user")
@@ -185,13 +188,11 @@ def gestion_dashboard(request):
     albums = Album.objects.all().order_by("-id") if Album else []
     playlists = Playlist.objects.all().order_by("-id") if Playlist else []
 
-    # Estado de deshacer (solo si pertenece al usuario actual)
     undo_data = request.session.get("gestion_undo")
     if undo_data and undo_data.get("actor") != username:
         undo_data = None
     undo_label = request.session.get("gestion_undo_label") if undo_data else None
 
-    # Metadatos del usuario admin en sesión
     role = "administrador"
     avatar_url = ""
     artist_description = ""
@@ -228,7 +229,6 @@ def gestion_dashboard(request):
         "avatar_url": avatar_url,
         "artist_description": artist_description,
         "created_at": created_at,
-        # Para que el template pueda rellenar data-filter-*
         "artist_filter": artist_filter,
         "q": q,
     }
@@ -310,7 +310,7 @@ def registrar_artista(request):
 
 @require_http_methods(["POST"])
 def registrar_admin(request):
-    """Alta de usuario con rol «Administrador» (opcionalmente vía fetch con JSON)."""
+    """Alta de usuario con rol «Administrador» (también vía fetch con JSON)."""
     session_user, error = _require_admin(request)
     if error:
         return error
@@ -320,7 +320,7 @@ def registrar_admin(request):
     avatar = request.FILES.get("avatar")
 
     def _json(ok: bool, **extra):
-        """Normaliza la respuesta JSON cuando la petición es fetch()."""
+        """Genera la respuesta JSON cuando la petición es fetch()."""
         if _is_fetch(request):
             if ok:
                 extra.setdefault("undo_label", request.session.get("gestion_undo_label", ""))
@@ -441,7 +441,7 @@ def activar_usuario(request, username: str):
 
 @require_http_methods(["GET", "POST"])
 def editar_usuario(request, username: str):
-    """Edición de datos de un usuario: nombre, contraseña, rol, avatar y perfil de artista."""
+    """Edición de un usuario: nombre, contraseña, rol, avatar y perfil de artista."""
     session_user, error = _require_admin(request)
     if error:
         return error
@@ -458,7 +458,6 @@ def editar_usuario(request, username: str):
         remove_avatar = (request.POST.get("remove_avatar") or "") == "1"
         avatar_file = request.FILES.get("avatar")
 
-        # Reglas sobre superadmin
         if target_is_super and not session_is_super:
             new_password = ""
             new_role = (u.type or "").lower()
@@ -480,7 +479,6 @@ def editar_usuario(request, username: str):
 
         try:
             with transaction.atomic():
-                # Cambio de username propagando ownership de canciones
                 if new_user != u.user:
                     if Users.objects.filter(user=new_user).exclude(pk=u.pk).exists():
                         _msg_error(request, "Ese nombre de usuario ya existe.")
@@ -508,7 +506,6 @@ def editar_usuario(request, username: str):
 
                 u.save()
 
-                # Perfil de artista según rol actual
                 if not target_is_super:
                     if (u.type or "").lower() == "artista":
                         try:
@@ -536,56 +533,101 @@ def editar_usuario(request, username: str):
 
 @require_http_methods(["POST"])
 def eliminar_usuario(request, username: str):
-    """Elimina una cuenta. Para artistas, aplica soft-delete a canciones públicas."""
+    """
+    Elimina una cuenta. Para artistas, puede hacer soft-delete de canciones públicas.
+    Deja un estado de deshacer en sesión y responde JSON si la petición es fetch().
+    """
     session_user, error = _require_admin(request)
     if error:
         return error
 
     u = get_object_or_404(Users, user=username)
-    if u.is_superadmin:
-        _msg_error(request, "La cuenta principal no puede eliminarse.")
+
+    if getattr(u, "is_superadmin", False):
+        msg = "La cuenta principal no puede eliminarse."
+        _msg_error(request, msg)
+        if _is_fetch(request):
+            return JsonResponse({"ok": False, "error": msg}, status=403)
         return redirect("gestion")
+
     if session_user == username:
-        _msg_error(request, "No es posible eliminar la propia cuenta.")
+        msg = "No es posible eliminar la propia cuenta."
+        _msg_error(request, msg)
+        if _is_fetch(request):
+            return JsonResponse({"ok": False, "error": msg}, status=400)
         return redirect("gestion")
+
+    role_lower = (u.type or "").lower()
+
+    undo_payload = {
+        "kind": "restore_deleted_user",
+        "username": u.user,
+        "password": u.password,
+        "type": u.type,
+        "was_active": bool(u.is_active),
+        "actor": session_user,
+    }
+
+    songs_ids = []
+    if role_lower == "artista":
+        try:
+            songs_ids = list(
+                Song.objects.filter(
+                    owner_user=username,
+                    visibility="public",
+                ).values_list("id", flat=True)
+            )
+        except Exception:
+            logger.exception("eliminar_usuario: error obteniendo songs_ids")
+            songs_ids = []
 
     try:
         with transaction.atomic():
-            role_lower = (u.type or "").lower()
-            songs_ids = list(
-                Song.objects.filter(owner_user=username, visibility="public").values_list(
-                    "id", flat=True
-                )
-            )
-            description = ""
-            if role_lower == "artista":
+            if songs_ids:
+                undo_payload["song_ids"] = songs_ids
                 try:
-                    description = (u.artist_profile.description or "").strip()
-                except ArtistProfile.DoesNotExist:
-                    description = ""
-            avatar_name = u.avatar.name if getattr(u, "avatar", None) else ""
+                    Song.objects.filter(id__in=songs_ids).update(visibility="removed")
+                except Exception:
+                    logger.exception(
+                        "eliminar_usuario: error marcando canciones como removed"
+                    )
+                    undo_payload.pop("song_ids", None)
 
-            undo_payload = {
-                "kind": "restore_deleted_user",
-                "username": u.user,
-                "password": u.password,
-                "type": u.type,
-                "was_active": bool(u.is_active),
-                "avatar": avatar_name,
-                "description": description,
-                "song_ids": songs_ids,
-                "actor": session_user,
-            }
+            try:
+                u.delete()
+            except ProtectedError:
+                msg = (
+                    "No se puede eliminar la cuenta porque tiene elementos asociados "
+                    "(playlists, seguidores, etc.). Desactívala en su lugar."
+                )
+                _msg_error(request, msg)
+                if _is_fetch(request):
+                    return JsonResponse({"ok": False, "error": msg}, status=400)
+                return redirect("gestion")
+            except OperationalError:
+                logger.exception("eliminar_usuario: OperationalError en delete()")
+                msg = (
+                    "No se puede eliminar la cuenta porque la base de datos "
+                    "sigue haciendo referencia a una tabla antigua de seguidores "
+                    "('Followers'). Desactiva la cuenta en su lugar o corrige las "
+                    "migraciones de seguidores."
+                )
+                _msg_error(request, msg)
+                if _is_fetch(request):
+                    return JsonResponse({"ok": False, "error": msg}, status=400)
+                return redirect("gestion")
 
-            if role_lower == "artista" and songs_ids:
-                Song.objects.filter(id__in=songs_ids).update(visibility="removed")
+            _msg_success(request, f"Cuenta '{username}' eliminada.")
+            _put_undo(request, f"Se eliminó “{username}”.", undo_payload)
 
-            u.delete()
+    except Exception as e:
+        logger.exception("eliminar_usuario: error inesperado")
+        msg = f"No se pudo eliminar la cuenta: {e.__class__.__name__}: {e}"
+        _msg_error(request, msg)
+        if _is_fetch(request):
+            return JsonResponse({"ok": False, "error": msg}, status=500)
+        return redirect("gestion")
 
-        _msg_success(request, f"Cuenta '{username}' eliminada.")
-        _put_undo(request, f"Se eliminó “{username}”.", undo_payload)
-    except Exception:
-        _msg_error(request, "No se pudo eliminar la cuenta.")
     if _is_fetch(request):
         return JsonResponse(
             {
@@ -706,7 +748,6 @@ def revertir_accion(request):
                 resp["catalogo_html"] = _catalogo_html(request)
 
             elif kind == "admin_seed_songs":
-                # Deshacer siembra masiva de canciones para un artista
                 artist_username = data.get("artist_username") or ""
                 song_ids = data.get("song_ids") or []
 
@@ -721,7 +762,6 @@ def revertir_accion(request):
                         )
                     )
                     count = len(songs)
-                    # Soft-delete: las canciones dejan de ser públicas
                     for s in songs:
                         s.visibility = "removed"
                         s.save(update_fields=["visibility"])
@@ -732,7 +772,6 @@ def revertir_accion(request):
                     )
                     _clear_undo(request)
 
-                # Actualizamos catálogo tras modificar visibilidad
                 resp["catalogo_html"] = _catalogo_html(request)
 
             else:
@@ -755,7 +794,7 @@ def revertir_accion(request):
 # =============================================================================
 @require_http_methods(["GET"])
 def catalogo_admin_fragment(request):
-    """Devuelve el HTML parcial del catálogo filtrado por artista y/o texto de búsqueda."""
+    """Devuelve el HTML parcial del catálogo filtrado por artista y texto de búsqueda."""
     _, error = _require_admin(request)
     if error:
         return error
@@ -790,10 +829,7 @@ def catalogo_admin_fragment(request):
 
 
 def _attach_is_liked(request, songs):
-    """
-    Marca cada canción con el atributo booleano `is_liked` para el usuario
-    actual de la sesión.
-    """
+    """Marca cada canción con el atributo booleano `is_liked` para el usuario de sesión."""
     songs = list(songs)
 
     for s in songs:
@@ -887,6 +923,57 @@ def catalogo_admin_json(request):
 # =============================================================================
 # Borrado múltiple de canciones (botón «Eliminar seleccionadas»)
 # =============================================================================
+@require_http_methods(["POST"])
+def eliminar_cancion_admin(request, song_id: int):
+    """
+    Soft-delete de una sola canción desde el panel de Gestión.
+    Marca visibility="removed" y guarda acción de deshacer en sesión.
+    """
+    session_user, error = _require_admin(request)
+    if error:
+        return error
+
+    song = get_object_or_404(Song, id=song_id)
+    prev_visibility = song.visibility or "public"
+    title = song.title
+
+    try:
+        with transaction.atomic():
+            song.visibility = "removed"
+            song.save(update_fields=["visibility"])
+
+            _put_undo(
+                request,
+                f"Se eliminó “{title}”.",
+                {
+                    "kind": "restore_song_visibility",
+                    "song_id": song.id,
+                    "prev_visibility": prev_visibility,
+                    "actor": session_user,
+                },
+            )
+
+    except Exception:
+        _msg_error(request, "No se pudo eliminar la canción.")
+        if _is_fetch(request):
+            return JsonResponse(
+                {"ok": False, "error": "No se pudo eliminar la canción."},
+                status=500,
+            )
+        return redirect("gestion")
+
+    if _is_fetch(request):
+        return JsonResponse(
+            {
+                "ok": True,
+                "undo_label": request.session.get("gestion_undo_label", ""),
+                "catalogo_html": _catalogo_html(request),
+            }
+        )
+
+    return redirect("gestion")
+
+
 @require_http_methods(["POST"])
 def eliminar_canciones_multiples(request):
     """Soft-delete de varias canciones, dejando estado de deshacer en sesión."""

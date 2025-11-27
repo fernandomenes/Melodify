@@ -1,9 +1,8 @@
 // static/gestion/gestion.js
 // ============================================================================
-// Melodify – Panel de Gestión (administrador)
-// Header, menú lateral, pestañas, catálogo, formularios y likes/playlists.
+// Melodify – Panel de gestión (administrador)
+// Header, menú lateral, pestañas, catálogo, formularios, deshacer y playlists.
 // ============================================================================
-
 (function () {
   "use strict";
 
@@ -13,11 +12,10 @@
   // ---------------------------------------------------------------------------
   // Utilidades básicas
   // ---------------------------------------------------------------------------
-  const $ = (sel, ctx = document) => ctx.querySelector(sel);
+  const $  = (sel, ctx = document) => ctx.querySelector(sel);
   const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
   const $all = $$;
 
-  // Cabecera común para peticiones AJAX
   const H = { "X-Requested-With": "fetch" };
 
   function getCookie(name) {
@@ -54,6 +52,7 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
   }
+
   function hideGestionLikeButtons() {
     document
       .querySelectorAll(
@@ -62,6 +61,128 @@
       .forEach((el) => {
         el.style.display = "none";
       });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Diálogo global de confirmación (mdfConfirm)
+  // ---------------------------------------------------------------------------
+  if (typeof window.mdfConfirm !== "function") {
+    window.mdfConfirm = function (message, opts = {}) {
+      return new Promise((resolve) => {
+        const prev = document.querySelector(".mdf-dialog-backdrop");
+        if (prev) prev.remove();
+
+        const backdrop = document.createElement("div");
+        backdrop.className = "mdf-dialog-backdrop";
+        Object.assign(backdrop.style, {
+          position: "fixed",
+          inset: "0",
+          background: "rgba(0,0,0,0.55)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: "9999",
+        });
+
+        const dialog = document.createElement("div");
+        dialog.className = "mdf-dialog";
+        if (opts.className) dialog.classList.add(opts.className);
+        Object.assign(dialog.style, {
+          minWidth: "260px",
+          maxWidth: "360px",
+          background: "#181818",
+          borderRadius: "14px",
+          padding: "18px 20px",
+          border: "1px solid rgba(255,255,255,0.12)",
+          boxShadow: "0 18px 40px rgba(0,0,0,0.7)",
+          color: "#f5f5f5",
+          fontFamily:
+            "system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+        });
+        if (opts.danger) {
+          dialog.style.border = "1px solid #ff4fa3";
+          dialog.style.boxShadow =
+            "0 0 0 1px rgba(255,79,163,0.7),0 18px 40px rgba(0,0,0,0.7)";
+        }
+
+        const titleEl = document.createElement("h3");
+        titleEl.className = "mdf-dialog-title";
+        titleEl.textContent = opts.title || "Confirmar acción";
+        Object.assign(titleEl.style, {
+          margin: "0 0 6px",
+          fontSize: "15px",
+          fontWeight: "600",
+        });
+
+        const textEl = document.createElement("p");
+        textEl.className = "mdf-dialog-message";
+        textEl.textContent = message || "";
+        Object.assign(textEl.style, {
+          margin: "0 0 14px",
+          fontSize: "13px",
+          color: "#dddddd",
+        });
+
+        const actions = document.createElement("div");
+        actions.className = "mdf-dialog-actions";
+        Object.assign(actions.style, {
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: "8px",
+        });
+
+        const cancelBtn = document.createElement("button");
+        cancelBtn.type = "button";
+        cancelBtn.textContent = opts.cancelText || "Cancelar";
+        cancelBtn.className = "btn btnSecondary";
+        Object.assign(cancelBtn.style, {
+          fontSize: "13px",
+          padding: "6px 12px",
+        });
+
+        const okBtn = document.createElement("button");
+        okBtn.type = "button";
+        okBtn.textContent = opts.confirmText || "Aceptar";
+        okBtn.className = "btn" + (opts.danger ? " btnDanger" : "");
+        Object.assign(okBtn.style, {
+          fontSize: "13px",
+          padding: "6px 12px",
+        });
+
+        actions.appendChild(cancelBtn);
+        actions.appendChild(okBtn);
+        dialog.appendChild(titleEl);
+        dialog.appendChild(textEl);
+        dialog.appendChild(actions);
+        backdrop.appendChild(dialog);
+        document.body.appendChild(backdrop);
+
+        const cleanup = (value) => {
+          resolve(value);
+          backdrop.remove();
+          document.removeEventListener("keydown", onKey);
+        };
+
+        const onKey = (ev) => {
+          if (ev.key === "Escape") {
+            ev.preventDefault();
+            cleanup(false);
+          } else if (ev.key === "Enter") {
+            ev.preventDefault();
+            cleanup(true);
+          }
+        };
+
+        document.addEventListener("keydown", onKey);
+        cancelBtn.addEventListener("click", () => cleanup(false));
+        okBtn.addEventListener("click", () => cleanup(true));
+        backdrop.addEventListener("click", (ev) => {
+          if (ev.target === backdrop) cleanup(false);
+        });
+
+        setTimeout(() => okBtn.focus(), 10);
+      });
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -219,7 +340,7 @@
       },
     };
 
-    dispatch("melodify:audioReady", { audio });
+    window.MDFCore = core;
     window.__MDF_FORMS_HIDE_BAR__ = false;
     document.dispatchEvent(new CustomEvent("melodify:bar:shouldShow"));
   })();
@@ -228,12 +349,12 @@
   // Header: avatar, nombre y menú perfil/logout
   // ---------------------------------------------------------------------------
   function applyHeaderIdentity() {
-    const mc = $("#main-content");
+    const mc   = $("#main-content");
     const name = $("#username");
     const icon = $("#user-trigger .user-icon");
 
     const USERNAME = (mc?.dataset.username || "Usuario").trim();
-    const AVATAR = (mc?.dataset.avatar || "").trim();
+    const AVATAR   = (mc?.dataset.avatar || "").trim();
 
     if (name) name.textContent = USERNAME || "Usuario";
 
@@ -250,9 +371,9 @@
 
   function initHeaderMenu() {
     const trigger = $("#user-trigger");
-    const menu = $("#user-menu");
-    const perfil = $("#menu-perfil");
-    const logout = $("#menu-logout");
+    const menu    = $("#user-menu");
+    const perfil  = $("#menu-perfil");
+    const logout  = $("#menu-logout");
     const homeURL = window.MELODIFY_HOME_URL || "/home/";
 
     if (trigger && menu) {
@@ -297,7 +418,6 @@
             return;
           }
         } catch {
-          // Fallback a GET
         }
         location.href = logoutUrl;
       });
@@ -305,14 +425,14 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Toggle del menú lateral (comportamiento similar a Home / Muro)
+  // Menú lateral
   // ---------------------------------------------------------------------------
   function initSideToggle() {
-    const btnToggle = $("#menu-toggle-btn");
-    const logoToggle = $("#toggle-menu");
+    const btnToggle   = $("#menu-toggle-btn");
+    const logoToggle  = $("#toggle-menu");
     const menuLateral = $("#menuLateral");
     const mainContent = $("#main-content");
-    const header = $("#header");
+    const header      = $("#header");
 
     if (!menuLateral || !mainContent) return;
 
@@ -337,7 +457,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Mensajes inline + barra de deshacer
+  // Mensajes inline y barra de deshacer
   // ---------------------------------------------------------------------------
   function showInlineError(msg) {
     const box = $("#inline-msg");
@@ -376,7 +496,7 @@
     wrap.innerHTML = html.trim();
 
     const fresh = wrap.querySelector("#tab-usuarios");
-    const old = $("#tab-usuarios");
+    const old   = $("#tab-usuarios");
 
     if (fresh && old) old.replaceWith(fresh);
 
@@ -392,7 +512,7 @@
     wrap.innerHTML = html.trim();
 
     const fresh = wrap.querySelector("#catalogo-grid") || wrap.firstElementChild;
-    const old = cont.querySelector("#catalogo-grid");
+    const old   = cont.querySelector("#catalogo-grid");
 
     if (fresh) {
       if (old) old.replaceWith(fresh);
@@ -513,63 +633,6 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Modal de confirmación (borrado individual / múltiple)
-  // ---------------------------------------------------------------------------
-  const modal = $("#confirm-modal");
-  const txt = $("#confirm-text");
-
-  let pendingForm = null;
-  let pendingBulkIds = null;
-
-  function openModal(message) {
-    if (!modal) return false;
-    if (txt) txt.textContent = message || "¿Eliminar este elemento?";
-    modal.classList.add("show");
-    modal.setAttribute("aria-hidden", "false");
-    setTimeout(() => $("#confirm-accept")?.focus(), 0);
-    return true;
-  }
-
-  function closeModal() {
-    if (!modal) return;
-    modal.classList.remove("show");
-    modal.setAttribute("aria-hidden", "true");
-  }
-
-  modal?.addEventListener("click", (e) => {
-    if (e.target === modal) closeModal();
-  });
-
-  document.addEventListener("click", async (e) => {
-    const accept = e.target.closest?.("#confirm-accept");
-    if (accept) {
-      e.preventDefault();
-      e.stopPropagation();
-      try {
-        if (pendingForm) {
-          await doDelete(pendingForm);
-          pendingForm = null;
-        } else if (pendingBulkIds && pendingBulkIds.length) {
-          await doBulkDelete(pendingBulkIds);
-          pendingBulkIds = null;
-        }
-      } finally {
-        closeModal();
-      }
-      return;
-    }
-
-    const cancel = e.target.closest?.("#confirm-cancel");
-    if (cancel) {
-      e.preventDefault();
-      e.stopPropagation();
-      pendingForm = null;
-      pendingBulkIds = null;
-      closeModal();
-    }
-  });
-
-  // ---------------------------------------------------------------------------
   // Borrado múltiple de canciones (Catálogo)
   // ---------------------------------------------------------------------------
   async function doBulkDelete(ids) {
@@ -632,7 +695,9 @@
 
       if (ct.includes("application/json")) {
         const j = await res.json();
+
         if (j.ok === false) {
+          console.error("Error al eliminar usuario:", j.error);
           showInlineError(j.error || "No se pudo completar la acción.");
           return;
         }
@@ -649,7 +714,8 @@
       }
 
       location.reload();
-    } catch {
+    } catch (err) {
+      console.error("Fallo de red en doDelete:", err);
       location.reload();
     }
   }
@@ -660,7 +726,7 @@
   const selected = new Set();
 
   function updateBulkUI() {
-    const btn = $("#bulk-delete");
+    const btn   = $("#bulk-delete");
     const count = selected.size;
 
     if (btn) btn.disabled = count === 0;
@@ -720,145 +786,26 @@
     e.preventDefault();
     if (selected.size === 0) return;
 
-    const n = selected.size;
+    const n   = selected.size;
     const ids = Array.from(selected);
     const noun = n === 1 ? "canción seleccionada" : "canciones seleccionadas";
 
-    if (openModal(`¿Eliminar ${n} ${noun}?`)) {
-      pendingBulkIds = ids;
-      return;
-    }
+    const ok = await (typeof window.mdfConfirm === "function"
+      ? window.mdfConfirm(`¿Eliminar ${n} ${noun}?`, {
+          title: "Eliminar canciones",
+          danger: true,
+          confirmText: "Eliminar",
+          cancelText: "Cancelar",
+        })
+      : Promise.resolve(window.confirm(`¿Eliminar ${n} ${noun}?`)));
 
-    if (!window.confirm(`¿Eliminar ${n} ${noun}?`)) return;
+    if (!ok) return;
     await doBulkDelete(ids);
   });
 
   // ---------------------------------------------------------------------------
-  // Intercepción de formularios con soporte de deshacer
+  // Validación del ID de usuario
   // ---------------------------------------------------------------------------
-  document.addEventListener(
-    "submit",
-    async (e) => {
-      const form = e.target;
-      if (!(form instanceof HTMLFormElement)) return;
-
-      const href = form.action || "";
-
-      if (form.classList.contains("js-delete-form")) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-
-        const t = form.dataset.title || "este elemento";
-        pendingForm = form;
-
-        if (!openModal(`¿Eliminar “${t}”?`)) {
-          if (window.confirm(`¿Eliminar “${t}”?`)) {
-            await doDelete(form);
-          }
-        }
-        return;
-      }
-
-      const isUndo =
-        href.includes("/revertir_accion") || href.endsWith("/gestion/undo/");
-      if (isUndo) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-
-        try {
-          const fd = new FormData(form);
-          const res = await fetch(href, {
-            method: "POST",
-            body: fd,
-            headers: { ...H, "X-CSRFToken": getCSRF() },
-            redirect: "follow",
-            credentials: "same-origin",
-          });
-
-          const ct = (res.headers.get("content-type") || "").toLowerCase();
-          if (ct.includes("application/json")) {
-            const j = await res.json();
-            hideUndo();
-            if (j.usuarios_html) replaceUsuariosTab(j.usuarios_html);
-            if (j.catalogo_html) replaceCatalogo(j.catalogo_html);
-            return;
-          }
-
-          hideUndo();
-          location.reload();
-        } catch {
-          hideUndo();
-          location.reload();
-        }
-        return;
-      }
-
-      const isEliminar =
-        href.includes("/gestion/usuarios/eliminar/") ||
-        href.includes("/gestion/canciones/eliminar/");
-      const isToggle =
-        href.includes("/gestion/usuarios/desactivar/") ||
-        href.includes("/gestion/usuarios/activar/");
-      const isRegister = /\/gestion\/registrar[-_](?:artista|admin)\/?$/i.test(href);
-      const isUndoable = isEliminar || isToggle || isRegister;
-
-      if (!isUndoable) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-      clearInlineMsg();
-
-      if (isRegister) {
-        await registerWithProgress(form);
-        return;
-      }
-
-      try {
-        const fd = new FormData(form);
-        const res = await fetch(href, {
-          method: "POST",
-          body: fd,
-          headers: { ...H, "X-CSRFToken": getCSRF() },
-          redirect: "follow",
-          credentials: "same-origin",
-        });
-
-        if (res.status === 204) {
-          hideUndo();
-          return;
-        }
-
-        const ct = (res.headers.get("content-type") || "").toLowerCase();
-        if (ct.includes("application/json")) {
-          const j = await res.json();
-
-          if (j.ok === false) {
-            showInlineError(j.error || "No se pudo completar la acción.");
-            return;
-          }
-
-          if (j.undo_label) showUndo(j.undo_label);
-          if (j.usuarios_html) replaceUsuariosTab(j.usuarios_html);
-          if (j.catalogo_html) replaceCatalogo(j.catalogo_html);
-
-          if (isEliminar && !j.usuarios_html && !j.catalogo_html) {
-            const rowOrCard = form.closest(".js-song-card, tr, .song");
-            if (rowOrCard) rowOrCard.remove();
-          }
-          return;
-        }
-
-        showInlineError("No se pudo completar la acción (valida los campos).");
-      } catch {
-        showInlineError("Error de red.");
-      }
-    },
-    true
-  );
-
   function validateFriendlyUserId(raw) {
     const v = (raw || "").trim();
     if (!v) {
@@ -874,15 +821,15 @@
     }
 
     const letters = v.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ]/g, "");
-    const vowels = v.replace(/[^aeiouáéíóúAEIOUÁÉÍÓÚ]/g, "");
-    const digits = v.replace(/[^0-9]/g, "");
+    const vowels  = v.replace(/[^aeiouáéíóúAEIOUÁÉÍÓÚ]/g, "");
+    const digits  = v.replace(/[^0-9]/g, "");
 
     if (letters.length >= 5 && vowels.length === 0) {
       return "sin vocales (parece código aleatorio)";
     }
 
     const letterRatio = letters.length / v.length;
-    const digitRatio = digits.length / v.length;
+    const digitRatio  = digits.length / v.length;
 
     if (v.length >= 10 && letterRatio < 0.5 && digitRatio > 0.3) {
       return "demasiados números/símbolos";
@@ -904,8 +851,8 @@
   // Registro de artista/admin con barra de progreso
   // ---------------------------------------------------------------------------
   async function registerWithProgress(form) {
-    const bar = document.getElementById("upload-bar");
-    const fill = bar?.querySelector(".progress > i");
+    const bar   = document.getElementById("upload-bar");
+    const fill  = bar?.querySelector(".progress > i");
     const pctEl = document.getElementById("upload-pct");
     const submitB = form.querySelector('button[type="submit"]');
 
@@ -926,8 +873,8 @@
     const pInput = form.querySelector('input[name="password"]');
     const dInput = form.querySelector('textarea[name="description"]');
 
-    const u = uInput?.value?.trim() || "";
-    const p = pInput?.value || "";
+    const u    = uInput?.value?.trim() || "";
+    const p    = pInput?.value || "";
     const desc = dInput?.value || "";
 
     const userErr = validateFriendlyUserId(u);
@@ -956,8 +903,8 @@
 
     clearInlineMsg();
 
-    const fd = new FormData(form);
-    const xhr = new XMLHttpRequest();
+    const fd   = new FormData(form);
+    const xhr  = new XMLHttpRequest();
     const csrf = getCSRF();
 
     xhr.open("POST", form.action, true);
@@ -1019,7 +966,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Toast global para avisos generales y playlists (sin lógica de likes)
+  // Toast global y playlists
   // ---------------------------------------------------------------------------
   function showToast(message) {
     const el = document.getElementById("like-toast");
@@ -1055,10 +1002,7 @@
   window.__melodifyShowToast = showToast;
   window.__melodifyShowPlaylistToast = showPlaylistToast;
 
-  // ---------------------------------------------------------------------------
-  // Playlists desde Gestión (likes deshabilitados)
-  // ---------------------------------------------------------------------------
-
+  // Likes deshabilitados en Gestión
   window.toggleSongLikeFromGestion = function (evt) {
     if (evt) {
       evt.preventDefault();
@@ -1077,7 +1021,6 @@
     const id = String(songId || "").trim();
     if (!id) return;
 
-    // Intentar usar la UI central de playlists
     if (typeof window.openAddToPlaylistForSong === "function") {
       window.openAddToPlaylistForSong(id);
       return;
@@ -1091,11 +1034,9 @@
       return;
     }
 
-    // Fallback simple
     alert("No se encontró la UI para agregar a playlist.");
   };
 
-  // Delegación de clicks solo para el botón "+"
   document.addEventListener("click", (e) => {
     const addBtn = e.target.closest?.(".song-add-btn[data-song-id]");
     if (addBtn) {
@@ -1107,10 +1048,6 @@
     }
   });
 
-
-  // ---------------------------------------------------------------------------
-  // Hooks para playlists (eventos globales)
-  // ---------------------------------------------------------------------------
   document.addEventListener("melodify:playlist:song-added", (ev) => {
     const d = ev.detail || {};
     const name = d.playlistName || d.playlist || d.name || "";
@@ -1124,13 +1061,147 @@
   });
 
   // ---------------------------------------------------------------------------
-  // Filtros del catálogo (artista + texto de búsqueda)
+  // Intercepción de formularios con soporte de deshacer
+  // ---------------------------------------------------------------------------
+  document.addEventListener(
+    "submit",
+    async (e) => {
+      const form = e.target;
+      if (!(form instanceof HTMLFormElement)) return;
+
+      const href = form.action || "";
+
+      // Formularios de borrado
+      if (form.classList.contains("js-delete-form")) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+
+        const t = form.dataset.title || "este elemento";
+
+        const ok = await (typeof window.mdfConfirm === "function"
+          ? window.mdfConfirm(`¿Eliminar “${t}”?`, {
+              title: "Eliminar",
+              danger: true,
+              confirmText: "Eliminar",
+              cancelText: "Cancelar",
+            })
+          : Promise.resolve(window.confirm(`¿Eliminar “${t}”?`)));
+
+        if (!ok) return;
+        await doDelete(form);
+        return;
+      }
+
+      const isUndo =
+        href.includes("/revertir_accion") || href.endsWith("/gestion/undo/");
+      if (isUndo) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+
+        try {
+          const fd = new FormData(form);
+          const res = await fetch(href, {
+            method: "POST",
+            body: fd,
+            headers: { ...H, "X-CSRFToken": getCSRF() },
+            redirect: "follow",
+            credentials: "same-origin",
+          });
+
+          const ct = (res.headers.get("content-type") || "").toLowerCase();
+          if (ct.includes("application/json")) {
+            const j = await res.json();
+            hideUndo();
+            if (j.usuarios_html) replaceUsuariosTab(j.usuarios_html);
+            if (j.catalogo_html) replaceCatalogo(j.catalogo_html);
+            return;
+          }
+
+          hideUndo();
+          location.reload();
+        } catch {
+          hideUndo();
+          location.reload();
+        }
+        return;
+      }
+
+      const isEliminar =
+        href.includes("/gestion/usuarios/eliminar/") ||
+        href.includes("/gestion/canciones/eliminar/");
+      const isToggle =
+        href.includes("/gestion/usuarios/desactivar/") ||
+        href.includes("/gestion/usuarios/activar/");
+      const isRegister = /\/gestion\/registrar[-_](?:artista|admin)\/?$/i.test(
+        href
+      );
+      const isUndoable = isEliminar || isToggle || isRegister;
+
+      if (!isUndoable) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      clearInlineMsg();
+
+      if (isRegister) {
+        await registerWithProgress(form);
+        return;
+      }
+
+      try {
+        const fd = new FormData(form);
+        const res = await fetch(href, {
+          method: "POST",
+          body: fd,
+          headers: { ...H, "X-CSRFToken": getCSRF() },
+          redirect: "follow",
+          credentials: "same-origin",
+        });
+
+        if (res.status === 204) {
+          hideUndo();
+          return;
+        }
+
+        const ct = (res.headers.get("content-type") || "").toLowerCase();
+        if (ct.includes("application/json")) {
+          const j = await res.json();
+
+          if (j.ok === false) {
+            showInlineError(j.error || "No se pudo completar la acción.");
+            return;
+          }
+
+          if (j.undo_label) showUndo(j.undo_label);
+          if (j.usuarios_html) replaceUsuariosTab(j.usuarios_html);
+          if (j.catalogo_html) replaceCatalogo(j.catalogo_html);
+
+          if (isEliminar && !j.usuarios_html && !j.catalogo_html) {
+            const rowOrCard = form.closest(".js-song-card, tr, .song");
+            if (rowOrCard) rowOrCard.remove();
+          }
+          return;
+        }
+
+        showInlineError("No se pudo completar la acción (valida los campos).");
+      } catch {
+        showInlineError("Error de red.");
+      }
+    },
+    true
+  );
+
+  // ---------------------------------------------------------------------------
+  // Filtros del catálogo (artista y texto de búsqueda)
   // ---------------------------------------------------------------------------
   function initCatalogFilters() {
-    const main = document.getElementById("main-content");
+    const main      = document.getElementById("main-content");
     const artistSel = document.getElementById("f-artist");
-    const qInput = document.getElementById("f-q");
-    const applyBtn = document.getElementById("f-apply");
+    const qInput    = document.getElementById("f-q");
+    const applyBtn  = document.getElementById("f-apply");
 
     if (!main || (!artistSel && !qInput && !applyBtn)) return;
 
@@ -1147,7 +1218,7 @@
         params.set("q", qInput.value.trim());
       }
 
-      const qs = params.toString();
+      const qs  = params.toString();
       const url = qs ? `${baseUrl}?${qs}` : baseUrl;
 
       try {
@@ -1158,7 +1229,11 @@
         });
 
         if (!res.ok) {
-          console.error("Error al cargar catálogo filtrado:", res.status, res.statusText);
+          console.error(
+            "Error al cargar catálogo filtrado:",
+            res.status,
+            res.statusText
+          );
           window.location.href = url;
           return;
         }
@@ -1196,7 +1271,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Init global
+  // Inicialización global
   // ---------------------------------------------------------------------------
   document.addEventListener("DOMContentLoaded", () => {
     applyHeaderIdentity();

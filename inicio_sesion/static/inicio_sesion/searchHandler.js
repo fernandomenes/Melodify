@@ -1,4 +1,4 @@
-// Melodify — Búsqueda global: deep-link, búsqueda, autosuggest y playlists (SIN likes).
+// Melodify — Búsqueda global: deep-link, búsqueda, autosuggest y playlists.
 
 document.addEventListener("DOMContentLoaded", function () {
   const searchInput = document.getElementById("search-input");
@@ -11,14 +11,18 @@ document.addEventListener("DOMContentLoaded", function () {
   const playlistIdFromURL = params.get("playlist");
   const songFromURL       = params.get("song");
 
+  // Comprobación de ruta /home
+  const pathIsHome = (window.location.pathname || "").startsWith("/home");
+
   // ---------------------------------------------------------------------------
   // Deep-link /home/?view=playlist&playlist=<id>
   // ---------------------------------------------------------------------------
-  if (initialView === "home" && viewParam === "playlist") {
+  if (pathIsHome && viewParam === "playlist" && playlistIdFromURL) {
     setTimeout(() => {
       const mainEl = document.getElementById("main-content");
       if (!mainEl) return;
 
+      // Activar pestaña de playlists en el menú lateral
       const items = document.querySelectorAll("#menuLateral .menu-item");
       items.forEach((it) => it.classList.remove("active"));
       const playlistItem = document.querySelector(
@@ -30,12 +34,41 @@ document.addEventListener("DOMContentLoaded", function () {
 
       try {
         const username = mainEl.dataset.username || "";
+
+        // Inicializar vista de playlists si la API está disponible
         if (typeof initPlayList === "function") {
-          initPlayList(username);
+          try {
+            initPlayList(username);
+          } catch (e) {
+            console.warn("Error en initPlayList(username):", e);
+          }
         }
-        if (playlistIdFromURL && typeof verSongs === "function") {
-          setTimeout(() => verSongs(playlistIdFromURL), 150);
+
+        // Reintentar abrir la playlist hasta que verSongs exista
+        const targetId    = playlistIdFromURL;
+        let attempts      = 0;
+        const maxAttempts = 20; // ~4 segundos si el intervalo es 200 ms
+
+        function tryOpenPlaylist() {
+          if (typeof verSongs === "function") {
+            try {
+              verSongs(targetId);
+            } catch (e) {
+              console.warn("Error al abrir playlist via verSongs:", e);
+            }
+            return;
+          }
+          if (attempts++ < maxAttempts) {
+            setTimeout(tryOpenPlaylist, 200);
+          } else {
+            console.warn(
+              "verSongs no disponible para deep-link de playlist tras varios intentos."
+            );
+          }
         }
+
+        // Pequeño margen para que cargue playListScript.js
+        setTimeout(tryOpenPlaylist, 300);
       } catch (err) {
         console.warn("Error al abrir playlist desde la URL:", err);
       }
@@ -45,34 +78,45 @@ document.addEventListener("DOMContentLoaded", function () {
   // ---------------------------------------------------------------------------
   // Deep-link /home/?view=reproductor&song=...
   // ---------------------------------------------------------------------------
-  if (initialView === "home" && viewParam === "reproductor") {
+  if (pathIsHome && viewParam === "reproductor" && songFromURL) {
     setTimeout(() => {
       const repItem = document.querySelector(
         '#menuLateral .menu-item[data-view="reproductor"]'
       );
       if (repItem) repItem.click();
 
-      if (!songFromURL) return;
-
       const titleFromURL  = params.get("title")  || "";
       const artistFromURL = params.get("artist") || "";
       const coverFromURL  = params.get("cover")  || "";
 
-      setTimeout(() => {
-        if (window.MDFCore && typeof window.MDFCore.playExternalSong === "function") {
+      // Intentar varias veces por si MDFCore tarda en cargar
+      let attempts      = 0;
+      const maxAttempts = 15; // ~3 segundos si el intervalo es 200 ms
+
+      function tryPlayFromURL() {
+        if (
+          window.MDFCore &&
+          typeof window.MDFCore.playExternalSong === "function"
+        ) {
           window.MDFCore.playExternalSong(
             songFromURL,
             titleFromURL,
             artistFromURL,
             coverFromURL
           );
+          return;
         }
-      }, 500);
+        if (attempts++ < maxAttempts) {
+          setTimeout(tryPlayFromURL, 200);
+        }
+      }
+
+      setTimeout(tryPlayFromURL, 200);
     }, 0);
   }
 
   // ---------------------------------------------------------------------------
-  // Submit de búsqueda (header)
+  // Envío de búsqueda (header)
   // ---------------------------------------------------------------------------
   if (searchInput && searchForm) {
     searchInput.addEventListener("keydown", function (e) {
@@ -100,7 +144,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // ---------------------------------------------------------------------------
-  // Autocompletado ligero (panel flotante)
+  // Autocompletado (panel flotante)
   // ---------------------------------------------------------------------------
   let searchTimeout;
   if (searchInput) {
@@ -137,7 +181,7 @@ document.addEventListener("DOMContentLoaded", function () {
     let html = "";
 
     // -----------------------------------------------------------------------
-    // Canciones 
+    // Canciones
     // -----------------------------------------------------------------------
     if (results.canciones && results.canciones.length > 0) {
       html += '<div class="search-section"><h4>Canciones</h4>';
@@ -230,26 +274,48 @@ document.addEventListener("DOMContentLoaded", function () {
 function playSearchResult(audioUrl, title, artist, coverUrl = "") {
   hideSearchPanel();
 
-  if (window.MDFCore && typeof window.MDFCore.playSong === "function") {
-    window.MDFCore.playSong(audioUrl, title, artist, coverUrl);
+  if (!audioUrl) {
+    console.warn("playSearchResult: audioUrl vacío");
     return;
   }
 
-  const main     = document.getElementById("main-content");
-  const baseHome = (main && main.dataset && main.dataset.urlHome) || "/home/";
+  // Reproducción usando el reproductor global en la página actual
+  if (window.MDFCore && typeof window.MDFCore.playExternalSong === "function") {
+    try {
+      window.MDFCore.playExternalSong(
+        audioUrl,
+        title || "Sin título",
+        artist || "",
+        coverUrl || ""
+      );
+    } catch (e) {
+      console.warn("Error usando MDFCore.playExternalSong:", e);
+    }
+    // No se redirige; se reproduce en la misma página
+    return;
+  }
 
-  const url = new URL(baseHome, window.location.origin);
-  url.searchParams.set("view", "reproductor");
-  url.searchParams.set("song", audioUrl);
-  if (title)   url.searchParams.set("title", title);
-  if (artist)  url.searchParams.set("artist", artist);
-  if (coverUrl) url.searchParams.set("cover", coverUrl);
+  // Fallback cuando MDFCore no está disponible
+  try {
+    const main = document.getElementById("main-content");
+    const baseHome =
+      (main && main.dataset && main.dataset.urlHome) || "/home/";
 
-  window.location.href = url.toString();
+    const url = new URL(baseHome, window.location.origin);
+    url.searchParams.set("view", "reproductor");
+    url.searchParams.set("song", audioUrl);
+    if (title)    url.searchParams.set("title", title);
+    if (artist)   url.searchParams.set("artist", artist);
+    if (coverUrl) url.searchParams.set("cover", coverUrl);
+
+    window.location.href = url.toString();
+  } catch (e) {
+    console.warn("Fallback de redirect en buscar falló:", e);
+  }
 }
 
 // ============================================================================
-// Lazy loader de scripts de playlists (+ botón desde search)
+// Carga diferida de scripts de playlists
 // ============================================================================
 
 const PLAYLISTS_CANDIDATES = [
@@ -322,9 +388,52 @@ function viewArtist(username) {
 function viewPlaylist(playlistId) {
   hideSearchPanel();
 
-  const main     = document.getElementById("main-content");
-  const baseHome = (main && main.dataset && main.dataset.urlHome) || "/home/";
+  const main       = document.getElementById("main-content");
+  const pathIsHome = (window.location.pathname || "").startsWith("/home");
 
+  // Vista interna si ya estamos en /home
+  if (pathIsHome && main) {
+    // Activar pestaña de playlists en el menú lateral
+    const items = document.querySelectorAll("#menuLateral .menu-item");
+    items.forEach((it) => it.classList.remove("active"));
+    const playlistItem = document.querySelector(
+      '#menuLateral .menu-item[data-view="playlist"]'
+    );
+    if (playlistItem) playlistItem.classList.add("active");
+
+    main.dataset.view = "playlist";
+
+    try {
+      const username = main.dataset.username || "";
+      if (typeof initPlayList === "function") {
+        try {
+          initPlayList(username);
+        } catch (e) {
+          console.warn("Error en initPlayList(username) desde viewPlaylist:", e);
+        }
+      }
+
+      if (typeof verSongs === "function") {
+        // Pequeño retraso por si la lista tarda en renderizar
+        setTimeout(() => {
+          try {
+            verSongs(playlistId);
+          } catch (e) {
+            console.warn("Error al abrir playlist desde search (misma página):", e);
+          }
+        }, 200);
+      }
+
+      // No se redirige si se maneja en la vista actual
+      return;
+    } catch (err) {
+      console.warn("Error en viewPlaylist sin recarga:", err);
+      // Si algo falla, se usa redirect como fallback
+    }
+  }
+
+  // Deep-link a /home/ cuando la vista actual no es /home
+  const baseHome = (main && main.dataset && main.dataset.urlHome) || "/home/";
   const url = new URL(baseHome, window.location.origin);
   url.searchParams.set("view", "playlist");
   url.searchParams.set("playlist", String(playlistId));

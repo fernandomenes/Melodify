@@ -34,7 +34,10 @@
           </td>
           <td class="muted">{{ u.created_at|date:"Y-m-d H:i" }}</td>
           <td class="row-actions">
-            <a href="{% url 'editar_usuario' u.user %}">Editar</a>
+            <a href="{% url 'editar_usuario' u.user %}"
+               class="btn btnEdit">
+              Editar
+            </a>
 
             {# Botón redondo "sembrar canciones" (plantita) #}
             <a href="{% url 'gestion_sembrar_canciones_artista' artist_username=u.user %}"
@@ -47,12 +50,12 @@
             {% if u.is_active %}
               <form method="post" action="{% url 'desactivar_usuario' u.user %}">
                 {% csrf_token %}
-                <button class="btn" type="submit">Desactivar</button>
+                <button class="btn btnToggleOff" type="submit">Desactivar</button>
               </form>
             {% else %}
               <form method="post" action="{% url 'activar_usuario' u.user %}">
                 {% csrf_token %}
-                <button class="btn" type="submit">Activar</button>
+                <button class="btn btnToggleOn" type="submit">Activar</button>
               </form>
             {% endif %}
 
@@ -61,7 +64,7 @@
                   class="js-delete-form"
                   data-title="{{ u.user }}">
               {% csrf_token %}
-              <button class="btn" type="submit">Eliminar</button>
+              <button class="btn btnDanger" type="submit">Eliminar</button>
             </form>
           </td>
         </tr>
@@ -104,24 +107,29 @@
           </td>
           <td class="muted">{{ u.created_at|date:"Y-m-d H:i" }}</td>
           <td class="row-actions">
-            <a href="{% url 'editar_usuario' u.user %}">Editar</a>
+            <a href="{% url 'editar_usuario' u.user %}"
+               class="btn btnEdit">
+              Editar
+            </a>
+
             {% if u.is_active %}
               <form method="post" action="{% url 'desactivar_usuario' u.user %}">
                 {% csrf_token %}
-                <button class="btn" type="submit">Desactivar</button>
+                <button class="btn btnToggleOff" type="submit">Desactivar</button>
               </form>
             {% else %}
               <form method="post" action="{% url 'activar_usuario' u.user %}">
                 {% csrf_token %}
-                <button class="btn" type="submit">Activar</button>
+                <button class="btn btnToggleOn" type="submit">Activar</button>
               </form>
             {% endif %}
+
             <form method="post"
                   action="{% url 'eliminar_usuario' u.user %}"
                   class="js-delete-form"
                   data-title="{{ u.user }}">
               {% csrf_token %}
-              <button class="btn" type="submit">Eliminar</button>
+              <button class="btn btnDanger" type="submit">Eliminar</button>
             </form>
           </td>
         </tr>
@@ -164,24 +172,29 @@
           </td>
           <td class="muted">{{ u.created_at|date:"Y-m-d H:i" }}</td>
           <td class="row-actions">
-            <a href="{% url 'editar_usuario' u.user %}">Editar</a>
+            <a href="{% url 'editar_usuario' u.user %}"
+               class="btn btnEdit">
+              Editar
+            </a>
+
             {% if u.is_active %}
               <form method="post" action="{% url 'desactivar_usuario' u.user %}">
                 {% csrf_token %}
-                <button class="btn" type="submit">Desactivar</button>
+                <button class="btn btnToggleOff" type="submit">Desactivar</button>
               </form>
             {% else %}
               <form method="post" action="{% url 'activar_usuario' u.user %}">
                 {% csrf_token %}
-                <button class="btn" type="submit">Activar</button>
+                <button class="btn btnToggleOn" type="submit">Activar</button>
               </form>
             {% endif %}
+
             <form method="post"
                   action="{% url 'eliminar_usuario' u.user %}"
                   class="js-delete-form"
                   data-title="{{ u.user }}">
               {% csrf_token %}
-              <button class="btn" type="submit">Eliminar</button>
+              <button class="btn btnDanger" type="submit">Eliminar</button>
             </form>
           </td>
         </tr>

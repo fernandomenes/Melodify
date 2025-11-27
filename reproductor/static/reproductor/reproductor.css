@@ -1,4 +1,4 @@
-/* Melodify Player: tema, barra y vista Reproductor */
+/* Melodify – Reproductor: tema, barra y vista */
 
 /* Variables de tema */
 :root{
@@ -8,7 +8,7 @@
   --glow-border:#6f58ff; --glow-outer:rgba(122,60,255,.25);
 }
 
-/* Barra del reproductor (flotante) */
+/* Barra del reproductor */
 ._mdf-player-bar{
   position:fixed;
   left:50%;
@@ -33,7 +33,7 @@
 }
 ._mdf-player-bar.is-visible{ display:grid; }
 
-/* Columna izquierda (portada + meta) */
+/* Columna izquierda: portada y metadatos */
 ._mdf-now{
   display:flex;
   align-items:center;
@@ -55,7 +55,7 @@
   flex:1;
 }
 
-/* Título y autor truncados */
+/* Título y autor */
 ._mdf-player-title{
   font-weight:700;
   white-space:nowrap;
@@ -71,7 +71,7 @@
   text-overflow:ellipsis;
 }
 
-/* Columna central (controles principales) */
+/* Controles principales */
 ._mdf-ctrls{
   display:flex;
   align-items:center;
@@ -129,7 +129,7 @@
   font-weight:600;
 }
 
-/* Columna derecha (tiempo, seek y volumen) */
+/* Columna derecha: tiempo, seek y volumen */
 ._mdf-right{
   display:flex;
   align-items:center;
@@ -153,7 +153,7 @@
   display:inline-block;
 }
 
-/* Sliders (seek/volume) */
+/* Sliders: progreso y volumen */
 ._mdf-player-seek,
 ._mdf-vol{
   -webkit-appearance:none;
@@ -220,7 +220,7 @@
   transition:stroke-dashoffset .12s linear;
 }
 
-/* Listado de canciones y vista Reproductor */
+/* Listado de canciones y vista principal del reproductor */
 .songs-wrap{
   width:min(1180px, 92vw);
   margin:8px 0 120px;
@@ -279,7 +279,7 @@
   justify-self:end;
 }
 
-/* Botón de reproducción tipo pill */
+/* Botón de reproducción en lista */
 .song-actions .play-pill{
   display:inline-flex;
   align-items:center;
@@ -296,7 +296,7 @@
   font-size:.85rem;
 }
 
-/* Canción activa */
+/* Canción en reproducción */
 .song-item.is-playing{
   background:linear-gradient(180deg, var(--glow-bg-1), var(--glow-bg-2));
   border-color:var(--glow-border);
@@ -318,7 +318,7 @@
 .rep-left{ min-width:0; }
 .rep-right{ min-width:0; }
 
-/* Paneles laterales (Top10, géneros, playlists, etc.) */
+/* Paneles laterales del reproductor */
 .rep-panel{
   background:var(--card);
   border:1px solid var(--line);
@@ -394,7 +394,7 @@
   border-radius:999px!important;
 }
 
-/* Listas de reproducción (Top10, Discover, etc.) */
+/* Listas de reproducción laterales */
 .rep-list{
   list-style:none;
   margin:0;
@@ -448,14 +448,14 @@
   margin:8px 0 120px;
 }
 
-/* Mostrar/ocultar barra del reproductor */
+/* Estado oculto de la barra del reproductor */
 .mdf-bar--hidden{
   transform:translateY(110%);
   opacity:0;
   pointer-events:none;
 }
 
-/* Botón flotante para la barra */
+/* Botón flotante para mostrar/ocultar barra */
 #mdf-bar-toggle{
   position:fixed;
   right:16px;
@@ -477,7 +477,7 @@
   background:#101010;
 }
 
-/* Reflow de la barra en tablet/móvil */
+/* Áreas de grid para la barra del reproductor */
 ._mdf-player-bar{ grid-template-areas:"now ctr right"; }
 ._mdf-now{   grid-area:now; }
 ._mdf-ctrls{ grid-area:ctr; }
@@ -488,7 +488,7 @@
   min-width:clamp(260px, 44vw, 420px);
 }
 
-/* ≤ 960px: 2 filas */
+/* ≤ 960px: 2 filas en la barra */
 @media (max-width:960px){
   ._mdf-player-bar{
     grid-template-columns:1fr auto;
@@ -524,12 +524,12 @@
   }
 }
 
-/* ≤ 400px: ocultar volumen */
+/* ≤ 400px: oculta control de volumen */
 @media (max-width:400px){
   ._mdf-vol{ display:none !important; }
 }
 
-/* Botón de “like” por canción */
+/* Botón de like por canción */
 .song-like-btn {
   border: 1px solid #444;
   background: #1f1f1f;
@@ -545,7 +545,7 @@
   color: #ff0066;
 }
 
-/* Botón "agregar a playlist" */
+/* Botón para agregar a playlist dentro del título */
 .rep-left .song-title,
 .home-all-songs .song-title {
   display: inline-flex;
@@ -602,7 +602,7 @@
   box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
 }
 
-/* Diálogo genérico Melodify (confirmación) */
+/* Diálogo genérico */
 .mdf-dialog-backdrop {
   position: fixed;
   inset: 0;
@@ -765,7 +765,7 @@
   background: #232323;
 }
 
-/* Botón "+ Nueva" en panel de playlists */
+/* Botón “+ Nueva” en panel de playlists */
 .rep-add-playlist-btn {
   padding: 6px 12px;
   border-radius: 999px;
@@ -886,4 +886,8 @@
   margin: 0 0 4px;
   font-size: 14px;
   font-weight: 600;
+}
+
+#main-content[data-view="reproductor"] [data-add-songs-pl] {
+  display: none !important;
 }

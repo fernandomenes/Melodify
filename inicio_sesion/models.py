@@ -1,13 +1,6 @@
 """
-Modelos principales de Melodify:
-
-- Users / ArtistProfile: usuarios y perfil adicional de artista.
-- Song: canciones (audio + portada + visibilidad).
-- PlayList / PlayListSong: tablas legadas de playlists (no gestionadas por migraciones).
-- LikeMedia: likes genéricos sobre distintos tipos de objeto (Song, PlayList, ...).
-- FollowArtist: relación de seguimiento entre usuarios y artistas.
-- PlaylistCollaborator: colaboradores de playlists (editor / viewer).
-- Followers: tabla legada de seguidores (no gestionada por migraciones).
+Modelos principales de Melodify: usuarios, perfiles de artista, canciones,
+playlists, likes y relaciones de seguimiento/colaboración.
 """
 
 from django.core.validators import FileExtensionValidator, MaxLengthValidator
@@ -23,13 +16,10 @@ from django.contrib.contenttypes.models import ContentType
 
 class Users(models.Model):
     """
-    Modelo de usuario de la plataforma.
+    Usuario de la plataforma.
 
-    El campo `type` se usa como rol lógico:
-
-    - "Administrador"
-    - "Artista"
-    - "Usuario"
+    El campo `type` representa el rol lógico:
+    "Administrador", "Artista" o "Usuario".
     """
     user = models.CharField(max_length=100, unique=True)
     password = models.CharField(max_length=100)
@@ -40,7 +30,6 @@ class Users(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     # Cuenta protegida en la interfaz de gestión
-    # (no se elimina/renombra/desactiva desde el panel).
     is_superadmin = models.BooleanField(default=False)
 
     class Meta:
@@ -52,9 +41,7 @@ class Users(models.Model):
 
 class ArtistProfile(models.Model):
     """
-    Perfil adicional para usuarios con rol de artista.
-
-    Permite almacenar una breve descripción (hasta 200 caracteres).
+    Perfil adicional asociado a un usuario con rol de artista.
     """
     user = models.OneToOneField(
         Users,
@@ -81,13 +68,7 @@ class ArtistProfile(models.Model):
 
 class Song(models.Model):
     """
-    Canción disponible para reproducción y gestión dentro de la plataforma.
-
-    Campos destacados:
-    - owner_user: username del dueño (Users.user).
-    - audio_file / cover_image: archivos subidos al storage configurado.
-    - audio_sha256: hash del audio para evitar duplicados por usuario.
-    - visibility: "public" o "removed" (no se borra físicamente).
+    Canción disponible para reproducción en la plataforma.
     """
     title = models.CharField(max_length=200)
     artist_display_name = models.CharField(max_length=200)
@@ -119,7 +100,7 @@ class Song(models.Model):
         blank=True,
     )
 
-    # Hash del audio (para evitar duplicados por usuario)
+    # Hash del audio para evitar duplicados por usuario
     audio_sha256 = models.CharField(
         max_length=64,
         blank=True,
@@ -154,18 +135,13 @@ class Song(models.Model):
 
 
 # ======================================================================
-# Playlists (tablas externas / legadas, no gestionadas por migraciones)
+# Playlists (tablas externas / legadas, managed=False)
 # ======================================================================
 
 
 class PlayList(models.Model):
     """
-    Tabla legada de playlists (managed=False).
-
-    Se asume:
-    - idUser: id entero del usuario dueño (tabla Users).
-    - name: nombre visible de la playlist.
-    - isprivate: True → sólo el dueño y colaboradores la ven/usan.
+    Playlist de usuario (tabla externa sin gestión de migraciones).
     """
     id = models.AutoField(primary_key=True)
     idUser = models.IntegerField()
@@ -184,11 +160,7 @@ class PlayList(models.Model):
 
 class PlayListSong(models.Model):
     """
-    Relación many-to-many (tabla intermedia) entre PlayList y Song.
-
-    - playlist_id: id entero de PlayList.
-    - song_id: id entero de Song.
-    - position: orden dentro de la playlist.
+    Relación many-to-many entre PlayList y Song (tabla intermedia legada).
     """
     playlist_id = models.IntegerField()
     song_id = models.IntegerField()
@@ -213,11 +185,7 @@ class PlayListSong(models.Model):
 
 class LikeMedia(models.Model):
     """
-    Registro de "likes" genérico para distintos tipos de objeto.
-
-    - user: FK a Users.
-    - content_type + object_id -> GenericForeignKey al objeto likeado
-      (por ejemplo Song, PlayList u otros modelos que se deseen).
+    Registro de likes genéricos sobre distintos tipos de objeto.
     """
     user = models.ForeignKey(
         Users,
@@ -247,9 +215,6 @@ class LikeMedia(models.Model):
 class FollowArtist(models.Model):
     """
     Relación de seguimiento entre usuarios y artistas.
-
-    - follower: usuario que sigue.
-    - artist:   usuario con rol de artista que es seguido.
     """
     follower = models.ForeignKey(
         Users,
@@ -277,21 +242,15 @@ class FollowArtist(models.Model):
 
 class PlaylistCollaborator(models.Model):
     """
-    Colaboradores de playlists.
-
-    - playlist_id: id entero de la playlist (PlayList usa managed=False).
-    - user: FK a Users del colaborador.
-    - role:
-        * 'editor': puede agregar/quitar canciones, renombrar, etc.
-        * 'viewer': sólo ve la playlist en su lista (sin edición).
+    Colaborador asociado a una playlist externa.
     """
     playlist_id = models.IntegerField(db_index=True)
     user = models.ForeignKey(
         Users,
         on_delete=models.CASCADE,
         related_name="playlist_collaborations",
-        null=True,  
-        blank=True,  
+        null=True,
+        blank=True,
     )
     role = models.CharField(
         max_length=16,
@@ -314,23 +273,26 @@ class PlaylistCollaborator(models.Model):
 
 class Followers(models.Model):
     """
-    Tabla legada de seguidores (no gestionada por migraciones).
-
-    Se mantiene para compatibilidad con la BD existente.
+    Modelo para la tabla legada de seguidores (managed=False).
     """
     seguidor = models.ForeignKey(
-        "Users",
-        related_name="following",
-        on_delete=models.CASCADE,
+        Users,
+        related_name="legacy_following",
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
     )
     seguido = models.ForeignKey(
-        "Users",
-        related_name="followers",
-        on_delete=models.CASCADE,
+        Users,
+        related_name="legacy_followers",
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
     )
     followed_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "Followers"
         unique_together = ("seguidor", "seguido")
-        managed = False   
+        managed = False
+
+    def __str__(self) -> str:
+        return f"{self.seguidor_id} sigue a {self.seguido_id}"

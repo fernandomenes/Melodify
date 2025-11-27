@@ -1,6 +1,6 @@
-// static/reproductor/reproductor-actions.js
 // ============================================================================
 // Reproductor — Acciones de likes y playlists.
+// Expone la API global window.MDFActions y puntos de integración con MDFCore.
 // ============================================================================
 
 import {
@@ -405,7 +405,6 @@ async function addSongToPlaylistCore(plKeyRaw, song) {
   );
   const songsNow = Array.isArray(plCurrent?.songs) ? plCurrent.songs : [];
 
-
   if (
     currentPlKey &&
     String(currentPlKey) === String(plKey) &&
@@ -430,11 +429,17 @@ async function addSongToPlaylistCore(plKeyRaw, song) {
 
     const backRoot = _inferBackRootForCurrentView();
 
+    // En el modo reproductor la alta masiva se gestiona desde la vista de playlists.
+    const main = document.getElementById("main-content");
+    const view =
+      (main?.dataset.view || main?.dataset.initialView || "").trim();
+    const allowAddFromPlayer = view !== "reproductor";
+
     mdfCore.renderLeftSongs(songsNow, plCurrent?.name || "Playlist", {
       countsMode: null,
       playlistId: plKey,
       allowRemoveFromPlaylist: canEdit,
-      allowAddToPlaylist: canAddSongs,
+      allowAddToPlaylist: allowAddFromPlayer ? canAddSongs : false,
       backRoot,
     });
   }
@@ -534,13 +539,17 @@ async function removeSongFromCurrentPlaylist(idSongRaw, plKeyRaw) {
     const songs = Array.isArray(plCurrent?.songs) ? plCurrent.songs : [];
 
     const backRoot = _inferBackRootForCurrentView();
+    const main = document.getElementById("main-content");
+    const view =
+      (main?.dataset.view || main?.dataset.initialView || "").trim();
+    const allowAddFromPlayer = view !== "reproductor";
 
     if (mdfCore && typeof mdfCore.renderLeftSongs === "function") {
       mdfCore.renderLeftSongs(songs, plCurrent?.name || "Playlist", {
         countsMode: null,
         playlistId: plKey,
         allowRemoveFromPlaylist: true,
-        allowAddToPlaylist: true,
+        allowAddToPlaylist: allowAddFromPlayer,
         backRoot,
       });
     }
@@ -859,7 +868,6 @@ async function deletePlaylist(plKeyRaw) {
         credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
-          "X-CSRFToken": csrftoken,
         },
       }
     );
@@ -934,7 +942,7 @@ async function createPlaylistFromPlayer(name, { isPrivate = false } = {}) {
       credentials: "same-origin",
       body: JSON.stringify({ isprivate: true }),
     });
-    if (!r2.ok) console.warn("No se pudo marcar como privada (continúo)");
+    if (!r2.ok) console.warn("No se pudo marcar como privada");
   }
 
   emitPlaylistsChangedCore();
@@ -1128,7 +1136,7 @@ const MDFActions = {
 
 window.MDFActions = Object.assign(window.MDFActions || {}, MDFActions);
 
-// Integración con MDFCore si ya está definido
+// Integración con MDFCore si está definido
 if (window.MDFCore && typeof window.MDFCore === "object") {
   window.MDFCore.syncLikeModelFromClient = syncLikeModelFromClient;
   window.MDFCore.toggleLikeFromReproductor = (evt, idSong) =>

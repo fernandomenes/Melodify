@@ -128,7 +128,7 @@
                   <td class="muted ellipsis" data-label="Fecha" title="{{ s.created_at|date:'Y-m-d H:i' }}">{{ s.created_at|date:"Y-m-d H:i" }}</td>
                   <td data-label="Acción">
                     <div class="row-actions">
-                      <a class="btn" href="{% url 'editar_cancion' s.id %}">Editar</a>
+<a class="btn btnEdit" href="{% url 'editar_cancion' s.id %}">Editar</a>
                       <form method="post" action="{% url 'eliminar_cancion' s.id %}" onsubmit="return confirm('¿Eliminar esta canción?');" style="display:inline;">
                         {% csrf_token %}
                         <button class="btn btn-danger" type="submit">Eliminar</button>

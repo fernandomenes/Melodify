@@ -53,7 +53,7 @@
   cursor: not-allowed;
 }
 
-/* Enfoque visible para acciones de peligro (uso con teclado) */
+/* Enfoque visible para acciones de peligro*/
 #tab-catalogo #bulk-delete:focus-visible,
 #catalogo-grid .js-delete-form button:focus-visible,
 #tab-usuarios .js-delete-form button:focus-visible,
@@ -204,6 +204,20 @@
     radial-gradient(circle at 0 0, rgba(154, 173, 221, 0.22), transparent 55%),
     #141414;
 }
+/* Fila de acciones de tabla (Editar / Sembrar / Activar / Eliminar) */
+.row-actions {
+  white-space: nowrap;
+}
+.row-actions form {
+  display: inline;
+  margin: 0 4px;
+}
+.row-actions a {
+  margin: 0 4px;
+  text-decoration: none;
+  color: inherit;
+}
+
 /* Botón redondo "sembrar canciones" (icono planta) en lista de artistas */
 #tab-usuarios .btnSeed {
   display: inline-flex;
@@ -228,5 +242,81 @@
 
 #tab-usuarios .btnSeed:focus-visible {
   outline: 2px solid #6fe26f;
+  outline-offset: 1px;
+}
+
+/* Botón "Editar" azul en las tablas de gestión */
+.btn.btnEdit {
+  background: rgba(90, 140, 255, 0.10);
+  border-color: rgba(90, 140, 255, 0.55);
+  color: #b6ceff;
+  font-weight: 500;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+}
+
+.btn.btnEdit:hover {
+  background: rgba(90, 140, 255, 0.18);
+  border-color: rgba(90, 140, 255, 0.95);
+  color: #e5ecff;
+  box-shadow:
+    0 0 0 1px rgba(90, 140, 255, 0.7),
+    0 10px 26px rgba(0,0,0,0.85);
+  transform: translateY(-1px);
+}
+
+.btn.btnEdit:focus-visible {
+  outline: 2px solid rgba(90, 140, 255, 0.95);
+  outline-offset: 1px;
+}
+
+/* Botón "Desactivar" (amarillo / warning) */
+.btn.btnToggleOff {
+  background: rgba(255, 193, 7, 0.08);
+  border-color: rgba(255, 193, 7, 0.55);
+  color: #ffe9a6;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+}
+
+.btn.btnToggleOff:hover {
+  background: rgba(255, 193, 7, 0.16);
+  border-color: rgba(255, 193, 7, 0.9);
+  color: #fff6d5;
+  box-shadow:
+    0 0 0 1px rgba(255, 193, 7, 0.7),
+    0 10px 26px rgba(0,0,0,0.85);
+  transform: translateY(-1px);
+}
+
+.btn.btnToggleOff:focus-visible {
+  outline: 2px solid rgba(255, 193, 7, 0.9);
+  outline-offset: 1px;
+}
+
+/* Botón "Activar" (verde / positivo) */
+.btn.btnToggleOn {
+  background: rgba(46, 204, 113, 0.08);
+  border-color: rgba(46, 204, 113, 0.55);
+  color: #b6f5cf;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+}
+
+.btn.btnToggleOn:hover {
+  background: rgba(46, 204, 113, 0.18);
+  border-color: rgba(46, 204, 113, 0.9);
+  color: #e6fff1;
+  box-shadow:
+    0 0 0 1px rgba(46, 204, 113, 0.7),
+    0 10px 26px rgba(0,0,0,0.85);
+  transform: translateY(-1px);
+}
+
+.btn.btnToggleOn:focus-visible {
+  outline: 2px solid rgba(46, 204, 113, 0.9);
   outline-offset: 1px;
 }

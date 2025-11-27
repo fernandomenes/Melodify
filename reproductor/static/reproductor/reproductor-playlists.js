@@ -1,9 +1,20 @@
 // static/reproductor/reproductor-playlists.js
-// Gestión de playlists desde el reproductor: creación y asignación de canciones.
+// Gestión de playlists desde el reproductor: creación, selección y asignación de canciones.
+/**
+ * Expone en window.MDFPlaylists:
+ *  - openCreatePlaylistModal()
+ *  - openAddToPlaylistDialog()
+ *  - openAddSongsDialogForPlaylist()
+ *  - performAddSongToPlaylist()
+ *  - performRemoveSongFromPlaylist()
+ *  - bulkAddSongsToPlaylist()
+ *  - bulkRemoveSongsFromPlaylist()
+ */
 
 (function () {
   "use strict";
 
+  // Toast genérico con fallback simple
   function _toast(msg) {
     const message = String(msg || "");
     if (!message) return;
@@ -39,6 +50,7 @@
     }, 1500);
   }
 
+  // Cookie CSRF
   function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== "") {
@@ -54,6 +66,7 @@
     return cookieValue;
   }
 
+  // Username de la sesión (meta/dataset/window)
   function _getUsername() {
     const mc = document.getElementById("main-content");
     return (
@@ -68,6 +81,7 @@
     );
   }
 
+  // URL base para obtener todas las canciones
   function _getAllSongsUrl() {
     const main = document.getElementById("main-content");
     const ds = (main && main.dataset) || {};
@@ -86,7 +100,7 @@
     return `/playlist/${encodeURIComponent(backendId)}/songs/`;
   }
 
-  // Actualiza la playlist activa en el reproductor y en el modelo en memoria
+  // Actualiza la playlist activa en el reproductor y en la caché local
   function _refreshActivePlaylistInReproductor(backendIdRaw) {
     try {
       const backendId = String(backendIdRaw || "").trim();
@@ -154,12 +168,14 @@
             const backBtn =
               leftNode &&
               leftNode.querySelector(".rep-pl-root-back");
+
             let backRoot = null;
             if (backBtn) {
               const rId = backBtn.getAttribute("data-root") || "";
               if (rId === "pl:my-root") backRoot = "my";
               else if (rId === "pl:public-root") backRoot = "public";
             }
+
             const removeTpl =
               (leftNode &&
                 leftNode.dataset &&
@@ -168,12 +184,16 @@
 
             const canEdit = !!removeTpl;
 
+            // En la vista de reproductor no se muestra el botón
+            // "+ Agregar canciones" del encabezado.
+            const allowAddToPlaylist = false;
+
             window.MDFCore.renderLeftSongs(songs, plName, {
               countsMode: null,
               showLikeBtn: true,
               playlistId: playlistDomId,
               allowRemoveFromPlaylist: canEdit,
-              allowAddToPlaylist: canEdit,
+              allowAddToPlaylist,
               backRoot,
               playlistRemoveSongUrlTemplate: removeTpl || null,
             });
@@ -188,6 +208,7 @@
             console.warn("No se pudo actualizar badge de playlist:", e);
           }
 
+          // Sincroniza la lista en memoria (window._playlists)
           try {
             const fullId = `pl:${backendId}`;
             if (Array.isArray(window._playlists)) {
@@ -214,6 +235,7 @@
     }
   }
 
+  // Crea una playlist desde el reproductor
   async function _createPlaylistFromPlayer(name, { isPrivate = false } = {}) {
     const n = String(name || "").trim();
     if (!n) throw new Error("Nombre vacío");
@@ -257,6 +279,7 @@
     return pid;
   }
 
+  // Overlay de creación de playlist
   let _createPlOverlay = null;
 
   function _ensureCreatePlaylistOverlay() {
@@ -557,6 +580,7 @@
     return overlay;
   }
 
+  // Playlists disponibles para el diálogo "Agregar a playlist"
   async function _fetchBasicPlaylists() {
     try {
       const uname = _getUsername();
@@ -816,6 +840,7 @@
     }
   }
 
+  // Abre el diálogo "Agregar a playlist" para una canción concreta
   function openAddToPlaylistForSong(idSongRaw) {
     const idSong = String(idSongRaw || "").trim();
     if (!idSong) return;
@@ -1089,6 +1114,7 @@
     return overlay;
   }
 
+  // Carga de canciones para el overlay "Agregar canciones"
   async function _loadAllSongsForOverlay() {
     if (Array.isArray(_addSongsCache) && _addSongsCache.length) {
       return _addSongsCache;
@@ -1124,6 +1150,7 @@
     return raw;
   }
 
+  // Render de lista en el overlay "Agregar canciones"
   function _renderAddSongsList(overlay, songs, backendId) {
     const listEl = overlay.querySelector(".as-list");
     const searchInput = overlay.querySelector(".as-search");
@@ -1199,6 +1226,7 @@
     applyFilter();
   }
 
+  // Abre el overlay "Agregar canciones" para una playlist
   function _openAddSongsDialogForPlaylist(playlistIdRaw) {
     const plId = String(playlistIdRaw || "").trim();
     if (!plId) return;
@@ -1230,6 +1258,7 @@
     })();
   }
 
+  // Botones con data-add-songs-pl en el DOM
   document.addEventListener("click", (ev) => {
     const btn = ev.target.closest("[data-add-songs-pl]");
     if (!btn) return;
@@ -1247,6 +1276,7 @@
     _openAddSongsDialogForPlaylist(raw);
   });
 
+  // API pública
   const api = {
     openCreatePlaylistModal: _openCreatePlaylistModal,
     openAddToPlaylistDialog: _openAddToPlaylistDialog,
