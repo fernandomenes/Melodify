@@ -259,7 +259,6 @@ def editar_cancion(request, song_id: int):
           ]
         )
 
-      _msg_success(request, "Cambios guardados.")
       return redirect("gestion")
     except Exception:
       _msg_error(request, "No se pudieron guardar los cambios.")

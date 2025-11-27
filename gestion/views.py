@@ -520,7 +520,6 @@ def editar_usuario(request, username: str):
                         except ArtistProfile.DoesNotExist:
                             pass
 
-            _msg_success(request, "Cambios guardados.")
             _clear_undo(request)
             return redirect("gestion")
         except Exception:

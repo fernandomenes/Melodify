@@ -1030,8 +1030,6 @@ def editar_mi_cancion_en_muro(request, song_id: int):
 
                 song.save(update_fields=["title", "cover_image", "genre"])
 
-            if not _is_fetch(request):
-                messages.success(request, "Cambios guardados.")
             return redirect("mi_muro")
         except Exception:
             if not _is_fetch(request):
