@@ -816,10 +816,6 @@
       return "Máximo 27 caracteres para el usuario.";
     }
 
-    if (!/^[a-zA-Z0-9._áéíóúÁÉÍÓÚñÑ]+$/.test(v)) {
-      return "Usa solo letras, números, punto o guion bajo.";
-    }
-
     const letters = v.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ]/g, "");
     const vowels  = v.replace(/[^aeiouáéíóúAEIOUÁÉÍÓÚ]/g, "");
     const digits  = v.replace(/[^0-9]/g, "");
