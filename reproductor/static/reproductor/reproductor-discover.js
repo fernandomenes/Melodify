@@ -331,8 +331,7 @@
       norm.cover_url ||
       norm.cover ||
       "/static/inicio_sesion/img_song.png";
-    norm.audioUrl =
-      norm.audioUrl || norm.audio_url || norm.audio || "";
+    norm.audioUrl = norm.audioUrl || norm.audio_url || norm.audio || "";
     norm.genre = norm.genre || norm.genero || "";
 
     if (!norm.audioUrl) return;
@@ -558,24 +557,35 @@
     return stamp || y;
   }
 
+  // Top 10 basado SOLO en canciones reproducidas en los últimos 7 días
+  // (incluyendo hoy). Si no hay reproducciones, queda vacío.
   function buildTop10FromPlaylistsFrozen(playlists) {
     const base = _flattenUniqueSongs(playlists);
     const byKey = new Map(base.map((s) => [_songKey(s), s]));
-    const frozen = _getFrozenOrder(todayStamp());
-    const out = [];
-    for (const k of frozen) {
-      const s = byKey.get(k);
-      if (s) out.push(s);
+
+    // Reproducciones de los últimos 7 días (incluye hoy)
+    const recent = _sumRecentPlaysByKeyInclToday(7) || {};
+    const scored = [];
+
+    for (const [k, count] of Object.entries(recent)) {
+      const plays = Number(count || 0);
+      if (!plays) continue;
+      const song = byKey.get(k);
+      if (!song) continue;
+      scored.push({ key: k, song, score: plays });
     }
-    if (out.length < 10) {
-      for (const s of base) {
-        const k = _songKey(s);
-        if (!k || frozen.includes(k)) continue;
-        out.push(s);
-        if (out.length >= 10) break;
-      }
+
+    // Sin reproducciones recientes → playlist vacía
+    if (!scored.length) {
+      return { id: "pl:top10", name: "Top 10 personal", songs: [] };
     }
-    return { id: "pl:top10", name: "Top 10 personal", songs: out };
+
+    // Ordenamos por nº de reproducciones (más a menos)
+    scored.sort((a, b) => b.score - a.score);
+
+    const songs = scored.slice(0, 10).map((x) => x.song);
+
+    return { id: "pl:top10", name: "Top 10 personal", songs };
   }
 
   // ---------------------------- Discover Weekly ----------------------------
@@ -639,7 +649,7 @@
     let progressed = true;
     while (progressed) {
       progressed = false;
-      for (const [g, arr] of buckets.entries()) {
+      for (const [, arr] of buckets.entries()) {
         if (!arr.length) continue;
         out.push(arr.shift());
         progressed = true;
@@ -648,13 +658,31 @@
     return out;
   }
 
+  // Discover Weekly: SOLO canciones con reproducciones recientes (7 días).
   function buildDiscoverWeekly({ playlists, likes = [], size = 30 }) {
-    const cachedKeys = (_loadDiscover() || []).map((k) => String(k));
     const base = _flattenUniqueSongs(playlists);
     const byKey = new Map(base.map((s) => [_songKey(s), s]));
+
+    // Reproducciones de los últimos 7 días (incluyendo hoy)
+    const recentPlays = _sumRecentPlaysByKeyInclToday(7) || {};
+    const playedKeys = Object.keys(recentPlays).filter(
+      (k) => Number(recentPlays[k] || 0) > 0
+    );
+
+    // Si no hay ninguna canción reproducida → Discover vacío
+    if (!playedKeys.length) {
+      return { id: "pl:discover", name: "Discover Weekly", songs: [] };
+    }
+
+    // Cache semanal: solo conservamos claves que sigan teniendo reproducciones
+    const cachedKeysRaw = _loadDiscover() || [];
+    const cachedKeys = cachedKeysRaw.filter((k) =>
+      playedKeys.includes(String(k))
+    );
     const cachedSongs = cachedKeys
       .map((k) => byKey.get(k))
       .filter(Boolean);
+
     if (cachedSongs.length >= Math.min(12, size * 0.4)) {
       return {
         id: "pl:discover",
@@ -666,13 +694,16 @@
     const likeSet = new Set(
       (likes || []).map((s) => _songKey(s)).filter(Boolean)
     );
+
     const universe = _dedup(
-      [...(base || []), ...(likes || [])],
+      playedKeys
+        .map((k) => byKey.get(k))
+        .filter(Boolean),
       (s) => _songKey(s)
     );
 
-    const recentPlays = _sumRecentPlaysByKey(7);
     const genreW = _genreWeightsFromLikes(likes || []);
+
     const scored = (universe || [])
       .map((s) => {
         const k = _songKey(s);
@@ -682,13 +713,15 @@
         const playsScore = Math.log(1 + plays) * 1.5;
         const likeBonus = likeSet.has(k) ? 2.0 : 0;
         const genreBonus = genreW.get(g) || (g ? 0.5 : 0);
-        const exploreBoost = likeBonus ? 0 : 0.3;
         const jitter = Math.random() * 0.4;
-        const score =
-          playsScore + likeBonus + genreBonus + exploreBoost + jitter;
+        const score = playsScore + likeBonus + genreBonus + jitter;
         return { s, score, isLike: likeSet.has(k) };
       })
       .filter(Boolean);
+
+    if (!scored.length) {
+      return { id: "pl:discover", name: "Discover Weekly", songs: [] };
+    }
 
     scored.sort((a, b) => b.score - a.score);
 
@@ -1118,8 +1151,32 @@
     }
 
     const header = document.querySelector(".rep-left .rep-stats");
+
     if (!header) {
       _refreshTop10ViewIfActive();
+
+      const activeDiscover = document.querySelector(
+        '#rep-playlists li.active[data-pl="pl:discover"]'
+      );
+      if (
+        activeDiscover &&
+        window.MDFDiscover &&
+        typeof window.MDFDiscover.renderDiscoverView === "function"
+      ) {
+        window.MDFDiscover.renderDiscoverView();
+      }
+
+      const activeHistory = document.querySelector(
+        '#rep-playlists li.active[data-pl="pl:history"]'
+      );
+      if (
+        activeHistory &&
+        window.MDFDiscover &&
+        typeof window.MDFDiscover.renderHistoryView === "function"
+      ) {
+        window.MDFDiscover.renderHistoryView();
+      }
+
       return;
     }
 
@@ -1127,6 +1184,7 @@
     const totalNode = header.querySelector(".rep-total");
 
     if (scope === "week") {
+      // Header de Discover Weekly
       const stats = _computeWeeklyStats({
         playlists: window._playlists || [],
         likes: window._likes || [],
@@ -1135,7 +1193,19 @@
         totalNode.innerHTML =
           `<strong>Reproducciones (7d):</strong> ${stats.totalPlays}`;
       }
+
+      const activeDiscover = document.querySelector(
+        '#rep-playlists li.active[data-pl="pl:discover"]'
+      );
+      if (
+        activeDiscover &&
+        window.MDFDiscover &&
+        typeof window.MDFDiscover.renderDiscoverView === "function"
+      ) {
+        window.MDFDiscover.renderDiscoverView();
+      }
     } else if (scope === "day") {
+      // Header de Top 10 (hoy)
       const statsDay = _computeDailyStats({
         playlists: window._playlists || [],
       });
@@ -1180,6 +1250,17 @@
     }
 
     _refreshTop10ViewIfActive();
+
+    const activeHistory = document.querySelector(
+      '#rep-playlists li.active[data-pl="pl:history"]'
+    );
+    if (
+      activeHistory &&
+      window.MDFDiscover &&
+      typeof window.MDFDiscover.renderHistoryView === "function"
+    ) {
+      window.MDFDiscover.renderHistoryView();
+    }
   });
 
   // ---------------------------- API pública --------------------------------
